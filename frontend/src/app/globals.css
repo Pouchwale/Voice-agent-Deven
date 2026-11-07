@@ -1,0 +1,283 @@
+@import "tailwindcss";
+
+/*
+ * Theme: blue + white only (sampled from the brand logo) on cool neutrals.
+ * No warm hues: errors/warnings use ink text + icons on neutral panels, not colour.
+ * The default Tailwind palette is removed so only these tokens can be used.
+ */
+@theme {
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-transparent: transparent;
+
+  /* neutrals */
+  --color-canvas: #f5f8fb; /* page background, row hover */
+  --color-surface: #ffffff; /* cards */
+  --color-line: #e2e8f0; /* borders, dividers, gridlines */
+  --color-subtle: #f1f5f9; /* quiet fills, error panels, skeletons */
+  --color-subtle-fg: #475569; /* text on subtle (cold tier) */
+  --color-muted: #64748b; /* secondary text */
+  --color-faint: #94a3b8; /* neutral chart series, "not configured" icons */
+  --color-fg: #0f172a; /* body text */
+
+  /* brand + action blue */
+  --color-brand: #0095d5; /* exact logo blue: brand surfaces, large accents, hot tier */
+  --color-primary: #0077b3; /* buttons, links, focus, blue text on white */
+  --color-primary-hover: #00649a;
+  --color-primary-tint: #e6f4fb;
+  --color-primary-tint-strong: #cce9f7;
+  --color-navy: #0b3b5c; /* darkest emphasis, chart "hot" series, offline banner */
+
+  --shadow-*: initial;
+  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+  --shadow-lg: 0 10px 24px -6px rgb(15 23 42 / 0.12), 0 4px 8px -4px rgb(15 23 42 / 0.08);
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), var(--font-devanagari), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-hanken), var(--font-devanagari), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+:root {
+  --sidebar-w: 232px;
+  color-scheme: light;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-fg);
+  font-family: var(--font-inter), var(--font-devanagari), ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Devanagari needs a little more line height so matras don't clip. */
+.text-mixed {
+  line-height: 1.6;
+  /* summaries / transcripts can hold long unbroken tokens (URLs, numbers): wrap instead of overflowing */
+  overflow-wrap: anywhere;
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-primary-tint-strong);
+}
+
+@layer components {
+  /* Button base; variants are set with utilities in components/ui/Button.tsx */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 14px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    white-space: nowrap;
+    user-select: none;
+    transition:
+      background-color 120ms ease-out,
+      border-color 120ms ease-out,
+      color 120ms ease-out;
+  }
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .field {
+    width: 100%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: var(--color-fg);
+    transition:
+      border-color 120ms ease-out,
+      box-shadow 120ms ease-out;
+  }
+  .field::placeholder {
+    color: var(--color-muted);
+  }
+  .field:focus,
+  .field:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-tint-strong);
+  }
+  .field[aria-invalid="true"] {
+    border-color: var(--color-fg);
+  }
+  .field[aria-invalid="true"]:focus {
+    box-shadow: 0 0 0 3px var(--color-subtle);
+  }
+  .field:disabled {
+    background: var(--color-canvas);
+    color: var(--color-muted);
+  }
+
+  .field-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: var(--color-fg);
+  }
+
+  .range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 20px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .range::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(var(--color-primary), var(--color-primary)) 0 / var(--fill, 50%) 100% no-repeat,
+      var(--color-line);
+  }
+  .range::-moz-range-track {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--color-line);
+  }
+  .range::-moz-range-progress {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--color-primary);
+  }
+  .range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -5px;
+    border-radius: 999px;
+    background: var(--color-surface);
+    border: 2px solid var(--color-primary);
+  }
+  .range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--color-surface);
+    border: 2px solid var(--color-primary);
+  }
+  .range:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 999px;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 14px;
+  }
+  .data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--color-canvas);
+    text-align: left;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-muted);
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--color-line);
+    white-space: nowrap;
+  }
+  .data-table tbody td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--color-line);
+    vertical-align: middle;
+  }
+  .data-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  .data-table tbody tr.row-link {
+    cursor: pointer;
+  }
+  .data-table tbody tr:hover td {
+    background: var(--color-canvas);
+  }
+  .data-table tbody tr[data-selected="true"] td {
+    background: var(--color-primary-tint);
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .skeleton {
+    background: var(--color-subtle);
+    border-radius: 6px;
+    animation: vx-pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes vx-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes vx-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes vx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.live-dot {
+  animation: vx-blink 1.6s ease-in-out infinite;
+}
+
+.spin {
+  animation: vx-spin 0.9s linear infinite;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,154 @@
+// Prisma mirror of the backend SQLite database (backend/data/voice_agent.db).
+// The FastAPI backend (SQLAlchemy) owns and migrates the schema. Use Prisma for READING (reports,
+// scripts, integrations). Write through the backend API instead: Prisma stores DateTime as integer
+// milliseconds, which the backend reads fine but which sorts/filters apart from the backend's
+// RFC 3339 text in date-range queries (analytics, reports).
+// Do NOT run `prisma migrate` against it — use `npx prisma db pull` to re-sync and `npx prisma generate`.
+// Not representable in Prisma (kept by the backend): partial unique index uq_calls_active_lead
+// (at most one live call per lead).
+//
+// Conventions shared with the backend:
+//   * DateTime columns: RFC 3339 UTC text written by the backend.
+//   * Json-ish columns (extra, qualification, key_points, objections, metrics, data) are TEXT holding JSON -> String.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL") // e.g. file:../../backend/data/voice_agent.db
+}
+
+model Lead {
+  id           Int            @id @default(autoincrement())
+  name         String         @default("")
+  phone        String         @unique(map: "ix_leads_phone")
+  company      String?
+  city         String?
+  email        String?
+  source       String?
+  notes        String?
+  status       String         @default("new")      // new | queued | calling | called | failed | dnc
+  interest     String         @default("unknown")  // unknown | cold | warm | hot  (board stage is derived: unknown + attempts=0 -> new, unknown + attempts>0 -> no_answer)
+  rating       Int?                                // 1..10
+  attempts     Int            @default(0)
+  lastCalledAt DateTime?      @map("last_called_at")
+  lastSummary  String?        @map("last_summary")
+  extra        String?                             // JSON
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at")
+  calls        Call[]
+  campaigns    CampaignLead[]
+
+  @@index([status], map: "ix_leads_status")
+  @@index([interest], map: "ix_leads_interest")
+  @@index([rating], map: "ix_leads_rating")
+  @@index([lastCalledAt], map: "ix_leads_last_called_at")
+  @@index([createdAt], map: "ix_leads_created_at")
+  @@map("leads")
+}
+
+model Campaign {
+  id                Int            @id @default(autoincrement())
+  name              String
+  status            String         @default("draft") // draft | running | paused | completed
+  concurrency       Int            @default(2)
+  maxAttempts       Int            @default(2) @map("max_attempts")
+  retryDelayMin     Int            @default(30) @map("retry_delay_min")
+  respectCallWindow Boolean        @default(true) @map("respect_call_window")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  startedAt         DateTime?      @map("started_at")
+  completedAt       DateTime?      @map("completed_at")
+  items             CampaignLead[]
+  calls             Call[]
+
+  @@index([status], map: "ix_campaigns_status")
+  @@map("campaigns")
+}
+
+model CampaignLead {
+  id            Int       @id @default(autoincrement())
+  campaignId    Int       @map("campaign_id")
+  leadId        Int       @map("lead_id")
+  status        String    @default("pending") // pending | dialing | done | failed | skipped
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime? @map("next_attempt_at")
+  lastCallUuid  String?   @map("last_call_uuid")
+  campaign      Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead          Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, leadId], map: "sqlite_autoindex_campaign_leads_1")
+  @@index([campaignId, status], map: "ix_campaign_leads_campaign_status")
+  @@index([leadId], map: "ix_campaign_leads_lead_id")
+  @@map("campaign_leads")
+}
+
+model Call {
+  id             Int              @id @default(autoincrement())
+  uuid           String           @unique(map: "ix_calls_uuid")
+  providerCallId String?          @map("provider_call_id")
+  leadId         Int?             @map("lead_id")
+  campaignId     Int?             @map("campaign_id")
+  channel        String           @default("phone")    // phone | browser
+  direction      String           @default("outbound")
+  status         String           @default("queued")   // queued | initiated | ringing | in_progress | completed | no_answer | busy | failed | canceled
+  endReason      String?          @map("end_reason")   // agent_ended | user_hangup | silence_timeout | max_duration | manual_hangup | error | no_answer | busy
+  fromNumber     String?          @map("from_number")
+  toNumber       String?          @map("to_number")
+  startedAt      DateTime?        @map("started_at")
+  answeredAt     DateTime?        @map("answered_at")
+  endedAt        DateTime?        @map("ended_at")
+  durationSec    Float?           @map("duration_sec")
+  recordingPath  String?          @map("recording_path")
+  recordingUrl   String?          @map("recording_url")
+  analysisStatus String           @default("pending") @map("analysis_status") // pending | done | failed | skipped
+  summary        String?
+  rating         Int?                                 // 1..10
+  interest       String           @default("unknown") // unknown | cold | warm | hot
+  qualified      Boolean?
+  sentiment      String?
+  nextAction     String?          @map("next_action")
+  callbackTime   String?          @map("callback_time")
+  qualification  String?                              // JSON [{question, answer, status}]
+  keyPoints      String?          @map("key_points")  // JSON string[]
+  objections     String?                              // JSON string[]
+  metrics        String?                              // JSON {avg_latency_ms, turns, user_words, agent_words}
+  error          String?
+  createdAt      DateTime         @default(now()) @map("created_at")
+  lead           Lead?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  campaign       Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  turns          TranscriptTurn[]
+
+  @@index([providerCallId], map: "ix_calls_provider_call_id")
+  @@index([leadId], map: "ix_calls_lead_id")
+  @@index([campaignId], map: "ix_calls_campaign_id")
+  @@index([status], map: "ix_calls_status")
+  @@index([rating], map: "ix_calls_rating")
+  @@index([interest], map: "ix_calls_interest")
+  @@index([createdAt], map: "ix_calls_created")
+  @@map("calls")
+}
+
+model TranscriptTurn {
+  id          Int      @id @default(autoincrement())
+  callId      Int      @map("call_id")
+  role        String   // agent | user | system
+  text        String
+  offsetMs    Int      @default(0) @map("offset_ms")
+  interrupted Boolean  @default(false)
+  latencyMs   Int?     @map("latency_ms")
+  createdAt   DateTime @default(now()) @map("created_at")
+  call        Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@index([callId, id], map: "ix_turns_call")
+  @@map("transcript_turns")
+}
+
+model AgentSettings {
+  id        Int      @id @default(autoincrement()) // single row, id = 1
+  data      String   // JSON (see backend/app/defaults.py)
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@map("agent_settings")
+}

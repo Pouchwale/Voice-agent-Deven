@@ -1,0 +1,172 @@
+# Voice Agent — AI Outbound Calling in Hinglish
+
+The voice agent calls your lead lists in natural **Hinglish** (Indian accent, Hindi + English), asks your qualification questions, and sorts every lead into **Cold / Warm / Hot** with a **1–10 rating**, so your BDE team only spends time on the hot ones. Every call's **recording and transcript** is saved for review. Outbound calling only.
+
+```
+Lead list ──► Campaign dialer ──► Vobiz (Indian PSTN) ──► customer's phone
+                                      │  live audio (μ-law 8 kHz, both ways)
+                                      ▼
+            Sarvam Saaras v3 realtime STT ──► GPT-4o-mini ──► Sarvam Bulbul v3 TTS
+                                      │
+                                      ▼
+     SQLite: transcript + recording ──► post-call AI summary, rating /10, Cold / Warm / Hot
+                                      │
+                                      ▼
+   Next.js dashboard: Lead board (Kanban), Analytics, PDF/CSV reports, Live monitor, Settings
+```
+
+| Part | Tech |
+|---|---|
+| Backend | Python 3.13, FastAPI, SQLAlchemy 2 + SQLite (WAL), Prisma-compatible schema |
+| Frontend | Next.js 15 (React 19), Tailwind, anime.js, three.js, SWR. Fonts Inter + Hanken Grotesk, blue/white theme from the PouchWale logo |
+| Telephony | Vobiz: outbound calls, bidirectional media stream, call recording |
+| Speech-to-text | Sarvam **Saaras v3** realtime streaming (`saaras:v3-realtime`, `codemix` = Hindi in Devanagari + English words in English) |
+| Text-to-speech | Sarvam **Bulbul v3** streaming, female voice **`suhani`** (warm, temperature 0.7) |
+| Brain | OpenAI **gpt-4o-mini**, max 120 tokens, temperature 0.6 |
+
+---
+
+## 1. Run it locally
+
+Ports **8100** (backend) and **3100** (frontend) are used so this runs next to your other projects.
+
+```powershell
+.\start-backend.ps1     # creates the venv on first run, then http://localhost:8100
+.\start-tunnel.ps1      # ngrok: https://enjoyable-cubbyhole-straw.ngrok-free.dev -> :8100
+.\start-frontend.ps1    # http://localhost:3100
+```
+
+Manual equivalent:
+```powershell
+cd backend; python -m venv .venv; .\.venv\Scripts\pip install -r requirements.txt
+copy .env.example .env                                   # fill in the keys below
+.\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8100
+cd ..\frontend; npm install; npm run dev                 # :3100
+```
+
+### Keys (`backend/.env`, never in `.env.example`)
+| Variable | What |
+|---|---|
+| `OPENAI_API_KEY` | OpenAI key (gpt-4o-mini) |
+| `SARVAM_API_KEY` | Sarvam AI subscription key (STT + TTS) |
+| `VOBIZ_AUTH_ID`, `VOBIZ_AUTH_TOKEN` | Vobiz console → API credentials |
+| `VOBIZ_FROM_NUMBER` | Your Vobiz Indian DID (caller ID), e.g. `+918071387423` |
+| `PUBLIC_BASE_URL` | Public HTTPS URL of this backend (your ngrok URL) |
+
+Then open **Settings → Test providers**: OpenAI, Sarvam voice (REST + live streaming), Sarvam speech recognition and Vobiz each show pass/fail with latency.
+
+**Try it without a phone:** **Test agent** (top bar) → Start. You talk to the agent through your browser mic with the same brain, voice and silence rules as a real call. Use headphones.
+
+**Voice samples:** `voice-samples/` has the same greeting in 8 Sarvam female voices; change the voice in Settings.
+
+---
+
+## 2. Going live with phone calls (Vobiz)
+
+1. **Public HTTPS URL:** `start-tunnel.ps1` (ngrok) and `PUBLIC_BASE_URL` in `backend/.env`. Vobiz calls the webhooks and opens the audio WebSocket on it.
+2. **Production hosting must be in India** (e.g. AWS `ap-south-1` Mumbai). Vobiz keeps Indian call audio in India ("media anchoring", hangup cause 2070 otherwise). It also lowers reply latency.
+3. **Vobiz account:** India-registered business with KYC done, a rented Indian DID as caller ID (about 2 minutes to activate).
+4. **Compliance (TRAI):** call only consented leads, inside the calling window (default 09:30–19:30 IST). **DNC** leads are never dialed.
+5. Place one call from **Leads → Call now**, watch it on **Live**, then start campaigns.
+
+Every call is recorded twice: a local stereo WAV (left = customer, right = agent, `backend/data/recordings/`) and Vobiz's own recording as a backup.
+
+### Security
+- **The tunnel exposes only Vobiz paths.** `start-tunnel.ps1` uses `ngrok-policy.yml`: anyone opening the ngrok URL sees 404 for the dashboard, API and docs; only `/vobiz/*` (with per-call secret tokens) gets through.
+- **Dashboard login.** On this computer (`localhost`) no login is needed. From any other machine the dashboard asks for `DASHBOARD_PASSWORD` (set it in `backend/.env`; empty = local only). `REQUIRE_LOGIN_LOCAL=true` asks for it on this computer too. Login attempts are rate-limited; requests from other websites are blocked.
+- **Toll-fraud guard.** Only Indian `+91` numbers can be stored or dialed unless `ALLOW_INTERNATIONAL=true`.
+- **Data safety.** CSV exports are protected against spreadsheet formula injection; recording downloads send Vobiz credentials only to Vobiz; uploads and audio frames are size-capped.
+- Keep real keys only in `backend/.env` (never in `.env.example`).
+
+---
+
+## 3. How a call behaves
+
+| Moment | What the agent does |
+|---|---|
+| Customer picks up | Waits ~1 s in case they say "Hello?", then the **permission-first** greeting (synthesised while ringing): "नमस्ते राहुल जी! मैं PouchWale से बोल रही हूँ। क्या अभी दो minute बात कर सकते हैं?" |
+| "Haan, boliye" | One-line reason for the call, then the qualification questions, one at a time |
+| Busy / call later | Asks a convenient time, confirms it, ends politely (callback time saved) |
+| Customer talks | Live transcription; **350 ms** of silence = "done talking" |
+| Slow reply | Short filler ("हम्म…", "अच्छा…", "ओह, got it") so the line never goes dead |
+| Customer interrupts | Stops instantly (barge-in). "haan" / "ji" / "ok" do **not** interrupt |
+| **10 s silence** | "Hello? क्या आप call पर हैं? मेरी आवाज़ आ रही है?" |
+| **3 s more silence** | "आप respond नहीं कर रहे हैं, इसलिए हम अभी call end कर रहे हैं। Thank you!" → hangs up |
+| Done / not interested / wrong number | Short goodbye → hangs up |
+| Max call length (default 5 min) | Closing line → hangs up |
+
+All lines and timings are editable in **Settings**. The agent mirrors the customer's language, stays on your business topic, never invents prices or MOQs (offers an expert call-back), uses no personal name unless you set one, and says honestly it is an AI assistant if asked.
+
+### Reply speed (target under 1.5 s)
+Measured with your real Sarvam key; the LLM figure is the expected range until your OpenAI key is added.
+
+| Step | Time |
+|---|---|
+| Customer stops → final transcript (Saaras v3, 350 ms pause) | ~0.40 s |
+| Hand-off to the brain | 0.04 s |
+| GPT-4o-mini first words (prompt cache + pre-warmed connection, first clause sent early) | ~0.3–0.6 s |
+| First voice audio (Bulbul v3 on a pre-opened socket) | **0.17 s** measured |
+| **Total** | **~0.9–1.2 s** + ~0.2 s phone network |
+
+Every call shows its real average response time on the call summary, and **Analytics** charts it per day against the 1.5 s target.
+
+### Lead scoring after each call (3–5 s)
+- **Hot**: strong interest (need + quantity or timeline soon, asks for quote/sample/expert).
+- **Warm**: normal interest (wants details, timeline later, must check internally).
+- **Cold**: picked up and cut the call, never spoke, not interested, wrong person.
+- Rating 1–10, summary, next action for sales, callback time, key points, objection categories, qualification checklist.
+
+---
+
+## 4. The dashboard
+
+| Page | What it's for |
+|---|---|
+| **Dashboard** | Today's numbers, live calls, top hot leads |
+| **Analytics** | Custom date range: funnel (dialed → picked up → conversation → warm/hot → hot), calls per day, best time to call, interest split, ratings, durations, end reasons, objections, qualification coverage, campaign comparison, response-time trend |
+| **Export report** (on Analytics) | **PDF** (KPIs, charts, hot/warm lead tables, all calls, optional full transcripts, Hindi rendered correctly) · **Calls CSV** (every field + transcript) · **Leads CSV** (with board stage). Any custom date range |
+| **Leads** | Import CSV (columns auto-detected, Indian numbers normalised, Excel-mangled numbers caught), add/edit, export |
+| **Lead board** | Kanban: **New → No answer → Cold → Warm → Hot**. Cards move automatically after each call; your team can drag them (or use the card menu) |
+| **Campaigns** | Auto-dialer: concurrency, retries for no-answer/busy, calling window, pause/resume |
+| **Calls** | Every call: rating ring, interest meter, summary, next action, qualification, recording player, clickable transcript |
+| **Live** | Ongoing calls with live transcript, levels, listen-in, hang-up |
+| **Settings** | Voice, script, knowledge base, questions, objection handling, interest rules, silence timings, fillers, calling window |
+
+Business metrics count real phone calls only; browser test calls are kept out (toggle "Include test calls" in Analytics).
+
+---
+
+## 5. Before the first real campaign
+
+- `Settings → Knowledge base` has `[FILL IN]` placeholders for **MOQ, pricing and lead time**. Until filled, the agent never quotes numbers.
+- Run the **UAT**: `docs/UAT_Test_Cases.xlsx` — 188 test cases across 23 areas (telephony, STT, TTS, conversation, latency, scoring, leads, board, campaigns, analytics, reports, settings, database, security, UI, reliability, compliance). Fill in Status/Tester/Date/Notes; the Summary sheet shows the go-live verdict.
+
+---
+
+## 6. Data, Prisma, tests
+
+- Database: `backend/data/voice_agent.db` (SQLite, WAL). Tables are created/migrated on start.
+- **Prisma:** `frontend/prisma/schema.prisma` mirrors the tables (verified with `prisma db pull`). `DATABASE_URL="file:../../backend/data/voice_agent.db" npx prisma generate`. Don't run `prisma migrate`; the backend owns the schema.
+- API: `docs/API_CONTRACT.md` and `http://localhost:8100/docs`.
+- Automated tests: `cd backend; .\.venv\Scripts\python -m pytest` — simulated calls (greeting → conversation → end, barge-in, fillers, 10 s + 3 s silence hang-up, recording, scoring, picked-up-and-cut → cold), a simulated Vobiz media stream, browser calls, CSV import edge cases, board moves, analytics numbers, PDF/CSV reports, dialer concurrency and retries.
+
+## Project layout
+```
+backend/app/
+  main.py                    FastAPI app, startup (DB + migration, dialer, watchdog)
+  services/session.py        real-time conversation engine (STT → LLM → TTS, barge-in, fillers, silence, spare TTS socket)
+  services/sarvam.py         Saaras v3 realtime STT + Bulbul v3 streaming/REST TTS
+  services/llm.py            GPT-4o-mini streaming, early first-clause chunking, prompt cache
+  services/prompts.py        agent prompt (static part first for caching) + scoring prompt
+  services/vobiz.py          Vobiz REST + answer XML    routers/vobiz.py  webhooks + media stream
+  services/call_manager.py   call lifecycle             services/dialer.py  campaign auto-dialer
+  services/analysis.py       post-call scoring (cold/warm/hot, rating, objections)
+  services/reporting.py      date ranges + analytics    services/pdf_report.py  PDF report
+  routers/leads.py           leads, CSV import, Kanban board
+  routers/analytics.py       analytics + PDF/CSV report downloads
+  assets/                    logo + fonts for the PDF (Inter, Hanken Grotesk, Noto Sans Devanagari; OFL)
+frontend/src/                Next.js dashboard
+frontend/prisma/             Prisma schema (same SQLite DB)
+docs/                        API_CONTRACT.md, UAT_Test_Cases.xlsx
+voice-samples/               Sarvam female voice samples
+```

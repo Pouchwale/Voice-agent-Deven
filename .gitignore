@@ -1,0 +1,13 @@
+# secrets
+backend/.env
+frontend/.env.local
+# data (database + call recordings)
+backend/data/
+# python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# node
+frontend/node_modules/
+frontend/.next/
