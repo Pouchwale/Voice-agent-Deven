@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FunnelX, Headphones, PhoneCall, RefreshCw } from "lucide-react";
+import { FunnelX, Headphones, PhoneCall, PhoneIncoming, PhoneOutgoing, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import useSWR from "swr";
 import { useTestAgent } from "@/components/providers/TestAgentProvider";
@@ -18,9 +18,21 @@ import { useEntrance } from "@/hooks/useEntrance";
 import { keys } from "@/lib/api";
 import { INTEREST_ACTIVE } from "@/lib/theme";
 import { CALLS_PAGE_SIZE } from "@/lib/config";
-import { CALL_STATUSES, CALL_STATUS_LABEL, formatNumber, INTEREST_ALL, INTEREST_LABEL } from "@/lib/format";
-import type { CallListItem, CallStatus, Channel, Interest, Page } from "@/lib/types";
+import {
+  CALL_OUTCOME_LABEL,
+  CALL_STATUSES,
+  CALL_STATUS_LABEL,
+  DIRECTION_LABEL,
+  formatNumber,
+  INTEREST_ALL,
+  INTEREST_LABEL,
+} from "@/lib/format";
+import type { CallDirection, CallListItem, CallOutcome, CallStatus, Channel, Interest, Page } from "@/lib/types";
 import { CallsTable } from "./CallsTable";
+
+const DIRECTIONS: CallDirection[] = ["outbound", "inbound"];
+/** "live" stays reachable from the Live page; this filter is about how finished calls went. */
+const OUTCOMES: Exclude<CallOutcome, "live">[] = ["answered", "missed"];
 
 export function CallsView() {
   const router = useRouter();
@@ -31,6 +43,8 @@ export function CallsView() {
   const status = (CALL_STATUSES as string[]).includes(params.get("status") ?? "") ? (params.get("status") as CallStatus) : "";
   const interest = (INTEREST_ALL as string[]).includes(params.get("interest") ?? "") ? (params.get("interest") as Interest) : "";
   const channel = params.get("channel") === "phone" || params.get("channel") === "browser" ? (params.get("channel") as Channel) : "";
+  const direction = (DIRECTIONS as string[]).includes(params.get("direction") ?? "") ? (params.get("direction") as CallDirection) : "";
+  const outcome = (OUTCOMES as string[]).includes(params.get("outcome") ?? "") ? (params.get("outcome") as CallOutcome) : "";
   const page = Math.max(1, Number(params.get("page")) || 1);
   const urlSearch = params.get("search") ?? "";
 
@@ -57,7 +71,7 @@ export function CallsView() {
   }, [debouncedQ]);
 
   const { data, error, isLoading, isValidating, mutate } = useSWR<Page<CallListItem>>(
-    keys.calls({ search: urlSearch, status, interest, channel, page, page_size: CALLS_PAGE_SIZE }),
+    keys.calls({ search: urlSearch, status, interest, channel, direction, outcome, page, page_size: CALLS_PAGE_SIZE }),
     {
       keepPreviousData: true,
       // keep the log fresh while calls are running / being analysed
@@ -66,7 +80,7 @@ export function CallsView() {
     },
   );
   const rootRef = useEntrance<HTMLDivElement>(!!data);
-  const hasFilters = !!(urlSearch || status || interest || channel);
+  const hasFilters = !!(urlSearch || status || interest || channel || direction || outcome);
 
   // A stale ?page= past the end jumps to the last real page instead of showing "No calls yet".
   const lastPage = data ? Math.max(1, Math.ceil(data.total / (data.page_size || CALLS_PAGE_SIZE))) : 1;
@@ -77,14 +91,14 @@ export function CallsView() {
 
   const clear = () => {
     setQ("");
-    setParams({ search: null, status: null, interest: null, channel: null });
+    setParams({ search: null, status: null, interest: null, channel: null, direction: null, outcome: null });
   };
 
   return (
     <div ref={rootRef}>
       <PageHeader
         title="Calls"
-        description={data ? `${formatNumber(data.total)} ${hasFilters ? "matching calls" : "calls"}, newest first. Click a call for the full summary.` : "Every call the agent made, newest first."}
+        description={data ? `${formatNumber(data.total)} ${hasFilters ? "matching calls" : "calls"}, newest first. Click a call for the full summary.` : "Every call, inbound and outbound, newest first."}
         actions={
           <>
             <Button size="sm" icon={<RefreshCw className={isValidating ? "spin" : undefined} />} onClick={() => void mutate()}>
@@ -98,7 +112,26 @@ export function CallsView() {
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3" data-anim>
-        <SearchInput value={q} onChange={setQ} placeholder="Search lead name, phone, company" label="Search calls" className="w-full sm:w-72" />
+        <SearchInput value={q} onChange={setQ} placeholder="Search name, phone, company" label="Search calls" className="w-full sm:w-72" />
+        <Segmented<CallDirection | "">
+          label="Filter by direction"
+          size="sm"
+          value={direction}
+          onChange={(v) => setParams({ direction: v || null })}
+          options={[
+            { value: "", label: "All" },
+            { value: "outbound", label: DIRECTION_LABEL.outbound, icon: <PhoneOutgoing aria-hidden /> },
+            { value: "inbound", label: DIRECTION_LABEL.inbound, icon: <PhoneIncoming aria-hidden /> },
+          ]}
+        />
+        <Select<CallOutcome | "">
+          aria-label="Filter by outcome"
+          pill
+          className="w-40"
+          value={outcome}
+          onChange={(v) => setParams({ outcome: v || null })}
+          options={[{ value: "", label: "Any outcome" }, ...OUTCOMES.map((o) => ({ value: o, label: CALL_OUTCOME_LABEL[o] }))]}
+        />
         <Select<CallStatus | "">
           aria-label="Filter by call status"
           pill
@@ -145,7 +178,7 @@ export function CallsView() {
             <ErrorState error={error} onRetry={() => void mutate()} title="Couldn't load calls" />
           </div>
         ) : !data || (data.items.length === 0 && data.total > 0) ? (
-          <SkeletonRows rows={8} cols={7} />
+          <SkeletonRows rows={8} cols={9} />
         ) : data.items.length === 0 ? (
           hasFilters ? (
             <EmptyState icon={<FunnelX />} title="No calls match" body="Try different filters." action={<Button icon={<FunnelX />} onClick={clear}>Clear filters</Button>} />

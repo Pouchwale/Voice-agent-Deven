@@ -88,6 +88,7 @@ export function SilenceSection({ form, set, errors }: SectionProps) {
           hint="Default 10"
         />
         <TextField
+          id="silence_prompt_text"
           label="Check-in prompt"
           value={form.silence_prompt_text}
           onChange={(e) => set("silence_prompt_text", e.target.value)}
@@ -106,6 +107,7 @@ export function SilenceSection({ form, set, errors }: SectionProps) {
           hint="Default 3"
         />
         <TextField
+          id="silence_goodbye_text"
           label="Goodbye line"
           value={form.silence_goodbye_text}
           onChange={(e) => set("silence_goodbye_text", e.target.value)}

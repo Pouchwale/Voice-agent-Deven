@@ -95,7 +95,7 @@ export function ExportCard({ params, campaignName, id = "export" }: { params: An
         <DownloadRow
           icon={<FileSpreadsheet />}
           title="Calls (CSV)"
-          description="One row per call with summary, rating, qualification answers and recording link."
+          description="One row per call, inbound and outbound, with the customer's number, summary, rating, qualification answers and recording link."
           href={api.reports.callsCsv({ ...params, include_transcripts: csvTranscripts })}
           option={<Check checked={csvTranscripts} onChange={setCsvTranscripts} label="Include transcripts" />}
           preparing={preparing === "calls"}

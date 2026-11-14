@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createAudioContext, pcm16ToFloat32, PcmPlayer } from "@/lib/audio";
 import { wsUrl } from "@/lib/config";
 import { upsertBubble, type LiveBubble } from "@/lib/live-store";
-import type { AgentState, BrowserCallServerMessage, EndReason } from "@/lib/types";
+import type { AgentState, BrowserCallClientMessage, BrowserCallServerMessage, CallDirection, EndReason } from "@/lib/types";
 
 export type CallPhase = "idle" | "mic" | "connecting" | "live" | "ending" | "ended" | "error";
 
@@ -12,6 +12,8 @@ export interface StartOptions {
   lead_id?: number;
   name?: string;
   company?: string;
+  /** "inbound" rehearses a customer calling us: inbound greeting, purpose and memory. */
+  direction?: CallDirection;
 }
 
 const MIC_CONSTRAINTS: MediaStreamConstraints = {
@@ -247,10 +249,12 @@ export function useBrowserCall() {
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
       ws.onopen = () => {
-        const payload: Record<string, unknown> = { type: "start" };
+        const payload: Extract<BrowserCallClientMessage, { type: "start" }> = { type: "start" };
         if (opts.lead_id) payload.lead_id = opts.lead_id;
         if (opts.name?.trim()) payload.name = opts.name.trim();
         if (opts.company?.trim()) payload.company = opts.company.trim();
+        // Only sent for inbound, so the outbound start message stays exactly as before.
+        if (opts.direction === "inbound") payload.direction = "inbound";
         ws.send(JSON.stringify(payload));
       };
       ws.onmessage = (ev: MessageEvent) => {

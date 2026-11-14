@@ -6,7 +6,7 @@ import { useSWRConfig } from "swr";
 import { keys } from "@/lib/api";
 import { isLoginPath } from "@/lib/auth";
 import { LiveStore, type LiveSnapshot } from "@/lib/live-store";
-import type { Campaign } from "@/lib/types";
+import type { CallListItem, Campaign } from "@/lib/types";
 
 const LiveContext = createContext<LiveStore | null>(null);
 
@@ -22,15 +22,29 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     return () => store.disconnect();
   }, [store, onLogin]);
 
-  // Keep cached call details / lists fresh when the live feed reports changes.
-  useEffect(
-    () =>
-      store.onCallUpdate((call) => {
-        void mutate(keys.call(call.uuid));
-        if (call.lead_id) void mutate(keys.lead(call.lead_id));
-      }),
-    [store, mutate],
-  );
+  // Keep cached call details / lists fresh when the live feed reports changes. (Only mounted SWR keys refetch.)
+  useEffect(() => {
+    let summaryTimer: ReturnType<typeof setTimeout> | null = null;
+    const off = store.onCallUpdate((call) => {
+      void mutate(keys.call(call.uuid));
+      if (call.lead_id) {
+        void mutate(keys.lead(call.lead_id));
+        void mutate(keys.leadTimeline(call.lead_id));
+      }
+      // Inbound KPIs (any range): a phone call in either direction can move them (missed / answered / called back).
+      // Coalesced, so a busy campaign doesn't refetch the summary on every ring. Never the Vobiz setup key.
+      if (call.channel === "phone" && !summaryTimer) {
+        summaryTimer = setTimeout(() => {
+          summaryTimer = null;
+          void mutate((key) => typeof key === "string" && key.startsWith("/api/inbound/summary"));
+        }, 600);
+      }
+    });
+    return () => {
+      off();
+      if (summaryTimer) clearTimeout(summaryTimer);
+    };
+  }, [store, mutate]);
 
   return <LiveContext.Provider value={store}>{children}</LiveContext.Provider>;
 }
@@ -51,4 +65,10 @@ export function useLive(): LiveSnapshot {
 export function useCampaignUpdates(fn: (c: Campaign) => void) {
   const store = useLiveStore();
   useEffect(() => store.onCampaign(fn), [store, fn]);
+}
+
+/** Subscribe to `call.update` events (a call was placed, rang, connected or ended). */
+export function useCallUpdates(fn: (c: CallListItem) => void) {
+  const store = useLiveStore();
+  useEffect(() => store.onCallUpdate(fn), [store, fn]);
 }

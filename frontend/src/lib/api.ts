@@ -4,13 +4,20 @@ import type {
   AgentSettings,
   Campaign,
   CampaignCreate,
+  CampaignCsvCreate,
   CampaignDetail,
+  CampaignFromCsv,
+  CampaignResultFilter,
+  CsvPreview,
   CallDetail,
   CallListItem,
   CallListParams,
   DashboardStats,
   ImportResult,
+  InboundSetup,
+  InboundSummary,
   Lead,
+  LeadTimeline,
   LeadCreate,
   LeadListParams,
   LeadPatch,
@@ -207,14 +214,25 @@ export const keys = {
       status: p.status,
       interest: p.interest,
       channel: p.channel,
+      direction: p.direction,
+      caller_type: p.caller_type,
+      outcome: p.outcome,
+      follow_up: p.follow_up,
+      from: p.from,
+      to: p.to,
       lead_id: p.lead_id,
       page: p.page ?? 1,
       page_size: p.page_size ?? 50,
     })}`,
   activeCalls: "/api/calls/active",
+  leadTimeline: (id: number) => `/api/leads/${id}/timeline`,
+  inboundSummary: (p: { from?: string; to?: string } = {}) => `/api/inbound/summary${qs({ from: p.from, to: p.to })}`,
+  inboundSetup: "/api/inbound/setup",
   call: (uuid: string) => `/api/calls/${encodeURIComponent(uuid)}`,
   campaigns: "/api/campaigns",
   campaign: (id: number) => `/api/campaigns/${id}`,
+  campaignItems: (id: number, p: { result?: CampaignResultFilter | ""; page?: number; page_size?: number } = {}) =>
+    `/api/campaigns/${id}${qs({ result: p.result, page: p.page ?? 1, page_size: p.page_size ?? 50 })}`,
   settings: "/api/settings",
   voices: "/api/settings/voices",
   board: (search: string, limit = 50) => `/api/leads/board${qs({ search, limit })}`,
@@ -253,6 +271,21 @@ export const api = {
     exportUrl: (q: { interest?: string; status?: string } = {}) => apiUrl(`/api/leads/export${qs(q)}`),
     board: (search = "", limit = 50) => request<BoardResponse>(keys.board(search, limit)),
     templateUrl: () => apiUrl("/api/leads/template"),
+    timeline: (id: number) => request<LeadTimeline>(keys.leadTimeline(id)),
+  },
+
+  inbound: {
+    summary: (p: { from?: string; to?: string } = {}) => request<InboundSummary>(keys.inboundSummary(p)),
+    /** Reads the Vobiz application / number status (live Vobiz check, cached ~60 s server-side; check=false skips it). */
+    setup: (check = true) => request<InboundSetup>(`${keys.inboundSetup}${check ? "" : "?check=false"}`, { timeoutMs: 30_000 }),
+    /**
+     * Creates/updates our Vobiz application (answer + hangup URLs) and attaches our number to it.
+     * 409 when the number is currently routed somewhere else, unless force=true (owner confirmed the takeover).
+     */
+    connect: (force = false) =>
+      request<InboundSetup>(`${keys.inboundSetup}${force ? "?force=true" : ""}`, { method: "POST", timeoutMs: 45_000 }),
+    /** Detaches our number from our application (re-attaches the previous application when we know it). */
+    disconnect: () => request<InboundSetup>(keys.inboundSetup, { method: "DELETE", timeoutMs: 45_000 }),
   },
 
   calls: {
@@ -297,6 +330,20 @@ export const api = {
     list: () => request<Campaign[]>(keys.campaigns),
     get: (id: number) => request<CampaignDetail>(keys.campaign(id)),
     create: (body: CampaignCreate) => request<Campaign>("/api/campaigns", { method: "POST", body, timeoutMs: 60_000 }),
+    /** Read-only check of a CSV: every number with its verdict. Nothing is saved. */
+    previewCsv: (file: File, signal?: AbortSignal) => {
+      const form = new FormData();
+      form.append("file", file);
+      return request<CsvPreview>("/api/campaigns/csv/preview", { method: "POST", body: form, signal, timeoutMs: 120_000 });
+    },
+    /** Creates the campaign (and any new leads) from the CSV in one step. */
+    createFromCsv: (file: File, settings: CampaignCsvCreate) => {
+      const form = new FormData();
+      form.append("file", file);
+      for (const [k, v] of Object.entries(settings)) if (v !== undefined) form.append(k, String(v));
+      return request<CampaignFromCsv>("/api/campaigns/csv", { method: "POST", body: form, timeoutMs: 120_000 });
+    },
+    templateUrl: () => apiUrl("/api/campaigns/template"),
     start: (id: number) => request<Campaign>(`${keys.campaign(id)}/start`, { method: "POST" }),
     pause: (id: number) => request<Campaign>(`${keys.campaign(id)}/pause`, { method: "POST" }),
     remove: (id: number) => request<{ ok: true }>(keys.campaign(id), { method: "DELETE" }),

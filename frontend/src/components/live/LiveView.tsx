@@ -134,7 +134,7 @@ export function LiveView() {
             icon={<Radio />}
             tone="primary"
             title="No live calls right now"
-            body="Start a campaign or call a lead and it shows up here instantly. Want to hear the agent first? Run a browser test (no phone cost)."
+            body="Start a campaign, call a lead, or wait for a customer to call your number: every call shows up here instantly. Want to hear the agent first? Run a browser test (no phone cost)."
             action={
               <>
                 <Button variant="primary" icon={<Headphones />} onClick={() => testAgent.open()}>

@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import asyncio
+import re
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
@@ -15,6 +17,8 @@ from ..schemas import CallCreate, call_list_out
 from ..services import vobiz
 from ..services.analysis import analyze_call
 from ..services.call_manager import CallError, manager
+from ..services.reporting import (CALLER_TYPES, OUTCOMES, follow_up_pending_condition, follow_ups,
+                                  ist_day_start, is_outbound, outcome_condition, parse_day)
 from ..services.repo import get_call_detail_dict, run_db, update_call
 from ..services.session import recording_abs_path
 
@@ -30,17 +34,46 @@ async def start_call(body: CallCreate):
         raise HTTPException(e.status_code, str(e)) from e
 
 
+def _choices(value: str | None, allowed: tuple[str, ...], name: str) -> list[str]:
+    """Comma-separated filter values, each checked against `allowed` (422 otherwise)."""
+    picked = [v.strip() for v in (value or "").split(",") if v.strip()]
+    bad = [v for v in picked if v not in allowed]
+    if bad:
+        raise HTTPException(422, f"{name} must be one of: {', '.join(allowed)}")
+    return picked
+
+
+def search_digits(term: str) -> str:
+    """Digits of a searched phone number in the form we store after '+': a trunk '0' (0261 2345678) or an
+    international '00' prefix is dropped, so every way of typing a number finds it."""
+    digits = re.sub(r"\D", "", term)
+    if digits.startswith("00"):
+        return digits[2:]
+    if len(digits) == 11 and digits.startswith("0"):
+        return digits[1:]
+    return digits
+
+
 @router.get("")
 def list_calls(
     search: str | None = None, status: str | None = None, interest: str | None = None,
     channel: str | None = None, lead_id: int | None = None, campaign_id: int | None = None,
+    direction: str | None = None, caller_type: str | None = None, outcome: str | None = None,
+    follow_up: str | None = None, from_: str | None = Query(None, alias="from"), to: str | None = None,
     page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200), db: Session = Depends(get_db),
 ):
     q = select(Call).outerjoin(Lead, Lead.id == Call.lead_id)
-    if search:
-        like = f"%{search.strip()}%"
-        q = q.where(or_(Lead.name.ilike(like), Lead.phone.ilike(like), Lead.company.ilike(like),
-                        Call.summary.ilike(like)))
+    term = (search or "").strip()
+    if term:
+        like = f"%{term}%"
+        match = [Lead.name.ilike(like), Lead.phone.ilike(like), Lead.company.ilike(like), Call.summary.ilike(like)]
+        digits = search_digits(term)
+        if len(digits) >= 4:  # a number: match the CUSTOMER's number by digits (never our own DID)
+            dlike = f"%{digits}%"
+            match += [and_(Call.direction == "inbound", func.replace(Call.from_number, "+", "").like(dlike)),
+                      and_(is_outbound(), func.replace(Call.to_number, "+", "").like(dlike)),
+                      func.replace(Lead.phone, "+", "").like(dlike)]
+        q = q.where(or_(*match))
     if status:
         q = q.where(Call.status.in_(status.split(",")))
     if interest:
@@ -51,10 +84,32 @@ def list_calls(
         q = q.where(Call.lead_id == lead_id)
     if campaign_id:
         q = q.where(Call.campaign_id == campaign_id)
+    directions = _choices(direction, ("inbound", "outbound"), "direction")
+    if len(directions) == 1:
+        q = q.where(Call.direction == "inbound" if directions[0] == "inbound" else is_outbound())
+    if types := _choices(caller_type, CALLER_TYPES, "caller_type"):
+        q = q.where(Call.caller_type.in_(types))
+    if outcomes := _choices(outcome, OUTCOMES, "outcome"):
+        q = q.where(or_(*(outcome_condition(o) for o in outcomes)))
+    if _choices(follow_up, ("pending",), "follow_up"):
+        q = q.where(follow_up_pending_condition())
+    start, end = parse_day(from_, "from"), parse_day(to, "to")
+    if start and end and start > end:
+        raise HTTPException(422, "'from' must be on or before 'to'")
+    if start:
+        q = q.where(Call.created_at >= ist_day_start(start))
+    if end:
+        q = q.where(Call.created_at < ist_day_start(end + timedelta(days=1)))
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     rows = db.scalars(q.options(selectinload(Call.lead)).order_by(Call.id.desc())
                       .offset((page - 1) * page_size).limit(page_size)).all()
-    return {"items": [call_list_out(c) for c in rows], "total": total, "page": page, "page_size": page_size}
+    states = follow_ups(db, rows)  # missed inbound calls: pending | tried | done (one query per page)
+    items = []
+    for c in rows:
+        item = call_list_out(c)
+        item["follow_up"] = states.get(c.uuid)
+        items.append(item)
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/active")

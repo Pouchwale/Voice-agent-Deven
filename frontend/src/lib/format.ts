@@ -1,4 +1,16 @@
-import type { CallStatus, EndReason, Interest, LeadStatus, Stage } from "./types";
+import type {
+  CallDirection,
+  CallerType,
+  CallOutcome,
+  CallReason,
+  CallStatus,
+  CampaignResult,
+  EndReason,
+  FollowUp,
+  Interest,
+  LeadStatus,
+  Stage,
+} from "./types";
 
 const TZ = "Asia/Kolkata";
 
@@ -231,6 +243,18 @@ export const CALL_STATUS_LABEL: Record<CallStatus, string> = {
   canceled: "Canceled",
 };
 
+/** Campaign number results (by the number's latest call). */
+export const CAMPAIGN_RESULT_LABEL: Record<CampaignResult, string> = {
+  waiting: "Waiting",
+  ringing: "Ringing",
+  talking: "On call",
+  picked_up: "Picked up",
+  no_answer: "No answer",
+  busy: "Busy",
+  failed: "Failed",
+  skipped: "Skipped",
+};
+
 export const ACTIVE_CALL_STATUSES: CallStatus[] = ["queued", "initiated", "ringing", "in_progress"];
 export function isCallActive(status: CallStatus): boolean {
   return ACTIVE_CALL_STATUSES.includes(status);
@@ -245,7 +269,63 @@ const END_REASON_LABEL: Record<NonNullable<EndReason>, string> = {
   error: "Error",
   no_answer: "No answer",
   busy: "Busy",
+  inbound_off: "Missed (inbound off)",
+  lines_busy: "Missed (lines busy)",
+  superseded: "Cancelled (customer called in)",
+  offline: "Missed (agent offline)",
 };
+
+/** Chip text for an inbound caller. */
+export const CALLER_TYPE_LABEL: Record<CallerType, string> = {
+  returning: "Returning caller",
+  known: "Existing lead",
+  new: "New caller",
+  international: "International",
+  anonymous: "Hidden number",
+};
+
+export const CALL_REASON_LABEL: Record<CallReason, string> = {
+  enquiry: "Enquiry",
+  callback_of_our_call: "Returned our call",
+  order_or_sample: "Order / sample",
+  complaint: "Complaint",
+  vendor_or_job: "Vendor / job",
+  wrong_number: "Wrong number",
+  other: "Other",
+};
+
+export const FOLLOW_UP_LABEL: Record<FollowUp, string> = {
+  pending: "To call back",
+  tried: "Tried, no answer yet",
+  done: "Spoke since",
+};
+
+export const DIRECTION_LABEL: Record<CallDirection, string> = {
+  inbound: "Inbound",
+  outbound: "Outbound",
+};
+
+/** Text for the inbound outcome predicate (see callOutcome), e.g. in filters. */
+export const CALL_OUTCOME_LABEL: Record<CallOutcome, string> = {
+  answered: "Answered",
+  missed: "Missed",
+  live: "Live",
+};
+
+/** The inbound outcome predicate used everywhere (KPIs, filters, timeline). */
+export function callOutcome(call: { status: CallStatus }): CallOutcome {
+  if (isCallActive(call.status)) return "live";
+  return call.status === "completed" ? "answered" : "missed";
+}
+
+/**
+ * Status text that reads right in both directions: an inbound call that never connected is "Missed",
+ * not "No answer" (which would read as "the customer didn't pick up").
+ */
+export function callStatusLabel(call: { status: CallStatus; direction?: CallDirection }): string {
+  if (call.direction === "inbound" && callOutcome(call) === "missed") return "Missed";
+  return CALL_STATUS_LABEL[call.status] ?? call.status;
+}
 
 export function endReasonLabel(reason: string | null | undefined): string {
   if (!reason) return "—";

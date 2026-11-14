@@ -8,12 +8,15 @@ Pipeline per customer turn:
 Behaviours:
   * barge-in: customer talking over the agent (2+ words, or a non-backchannel word)
     stops agent audio instantly; short backchannels ("haan", "ji", "ok") don't.
-  * fillers: if the first reply audio is late, a short pre-synthesised filler
-    ("हम्म", "अच्छा", "जी") plays so the line never sounds dead.
+  * fillers: if the first reply audio is late, a short pre-synthesised filler plays so the line
+    never sounds dead: "हम्म, एक second" after a question, "जी, समझ गई" after a statement; never the
+    same one twice in a row, and not on back-to-back replies unless the reply is clearly slow.
+  * natural turn-taking: a customer who trails off mid-sentence ("...और") gets a moment to go on.
   * silence: N s of customer silence -> "are you on the call?" -> M s more ->
     goodbye line -> hang up (end_reason = silence_timeout).
   * the LLM ends the call by appending [END_CALL] to a goodbye line.
-  * hard cap on call length (closing line, then hang up).
+  * hard cap on call length (closing line, then hang up); inbound calls have their own cap and closing line.
+  * inbound calls: the caller expects us to speak first, so the greeting starts almost at once.
 """
 from __future__ import annotations
 
@@ -34,7 +37,8 @@ from . import repo
 from .audio import CallRecorder, EnergyVAD, Resampler, rms_level
 from .events import bus, spawn
 from .llm import SentenceChunker, stream_reply, strip_end_token, warmup
-from .prompts import fill_template, lead_context, static_system_prompt
+from .prompts import (ENGLISH_PREFERRED_NOTE, ENGLISH_TURN_NOTE, fill_template, greeting_for, language_request,
+                      lead_context, spoke_english, static_system_prompt)
 from .sarvam import RealtimeSTT, TTSStream, tts_rest
 
 log = logging.getLogger("session")
@@ -48,9 +52,50 @@ BACKCHANNELS = {
 GREETING_WORDS = {"hello", "helo", "hallo", "hi", "हेलो", "हैलो", "हेल्लो", "हलो", "बोलिए", "बोलो", "हाँ बोलिए", "जी बोलिए"}
 _PUNCT = re.compile(r"[\s\.,!?।'\"…-]+")
 
+# A turn that trails off on one of these is usually not finished ("मुझे pouch चाहिए, और..."): people pause
+# mid-thought on the phone, and jumping in at that moment is the most robotic thing an agent can do.
+_TRAILING_WORDS = {
+    "और", "तो", "कि", "लेकिन", "पर", "मगर", "मतलब", "जैसे", "या", "क्योंकि", "अगर", "जो", "वो", "वह", "यानी",
+    "का", "की", "के", "में", "से", "को", "भी", "हम्म", "अं", "उम",
+    "aur", "toh", "ki", "lekin", "matlab", "jaise", "ya", "kyunki", "agar",
+    "and", "but", "so", "or", "because", "like", "the", "a", "an", "of", "to", "with", "for", "um", "uh",
+}
+UNFINISHED_GRACE_SEC = 0.7  # extra wait for the customer to finish such a sentence
+
+# Before the greeting: on our calls the customer often says "Hello?" first, so we give them a moment. A caller
+# who rang us expects US to speak first: a short window that runs while the greeting is synthesised.
+HELLO_WAIT_SEC = 0.9
+INBOUND_HELLO_WAIT_SEC = 0.3
+
+# Question detection picks a "thinking" filler (हम्म, एक second) over an acknowledgement (जी, समझ गई).
+_QUESTION_WORDS = {"क्या", "कितना", "कितने", "कितनी", "कैसे", "कैसा", "कब", "कहाँ", "कहां", "कौन", "कौनसा", "क्यों",
+                   "kya", "kitna", "kitne", "kaise", "kab", "kahan", "kaun", "kyun", "price", "rate", "cost"}
+_QUESTION_STARTS = {"what", "how", "when", "where", "which", "who", "why", "can", "could", "do", "does", "is",
+                    "are", "will", "would"}
+_THINKING_MARKERS = ("हम्म", "second", "सेकंड", "मिनट", "minute", "देखती", "देखता", "let me")
+
 
 def _norm_words(text: str) -> list[str]:
     return [w for w in _PUNCT.split(text.lower()) if w]
+
+
+def sounds_unfinished(text: str) -> bool:
+    """The customer stopped mid-sentence (trailing comma / "..." / connector like "और", "तो", "and")."""
+    t = text.strip()
+    if not t or t.endswith(("?", "？")):
+        return False
+    if t.endswith((",", "...", "…", "-", "–")):
+        return True
+    words = _norm_words(t)
+    return bool(words) and words[-1] in _TRAILING_WORDS
+
+
+def is_question(text: str) -> bool:
+    t = text.strip()
+    if t.endswith(("?", "？")):
+        return True
+    words = _norm_words(t)
+    return bool(words) and (words[0] in _QUESTION_STARTS or any(w in _QUESTION_WORDS for w in words))
 
 
 def is_backchannel(text: str, *, greeting: bool = False) -> bool:
@@ -104,6 +149,10 @@ class CallSession:
         transport: Transport,
         greeting_pcm: bytes | None = None,
         on_finished: Callable[["CallSession"], Awaitable[None]] | None = None,
+        direction: str = "outbound",
+        memory: str = "",
+        greeting_text: str | None = None,
+        purpose: str | None = None,
     ):
         self.call_id = call_id
         self.uuid = call_uuid
@@ -111,13 +160,20 @@ class CallSession:
         self.cfg = cfg
         self.t = transport
         self.on_finished = on_finished
-        self.greeting_text = fill_template(cfg.get("opening_line", ""), cfg, self.lead).strip()
+        self.direction = direction  # "outbound" (we called) | "inbound" (the customer called us)
+        # "outbound" (cold/qualification call) | "inbound" | "callback" (we return a missed inbound call)
+        self.purpose = purpose or direction
+        self.memory = memory        # what we already know about this customer (services/memory.py)
+        if greeting_text is None:  # callers pass the greeting they prepared; this is the defensive default
+            greeting_text = greeting_for(cfg, self.lead, direction=direction, purpose=self.purpose)
+        self.greeting_text = greeting_text.strip()
         self.greeting_pcm = greeting_pcm
 
         self.history: list[dict] = []
-        # Static prompt first (identical across calls -> OpenAI prompt cache), lead details second.
-        self.system_prompt = static_system_prompt(cfg)
-        self.lead_prompt = lead_context(self.lead)
+        # Static prompt first (identical across calls with the same settings, direction and purpose -> OpenAI
+        # prompt cache), per-call details second (time, customer, memory).
+        self.system_prompt = static_system_prompt(cfg, direction, self.purpose)
+        self.lead_prompt = lead_context(self.lead, memory, direction=direction)
         self.cache_key = "va-" + hashlib.sha1(self.system_prompt.encode("utf-8")).hexdigest()[:16]
         self._spare_tts: TTSStream | None = None
         self._spare_task: asyncio.Task | None = None
@@ -151,6 +207,10 @@ class CallSession:
         self._turn_user_end = 0.0
         self._turn_first_audio = 0.0
         self._filler_played = False
+        self.language_pref: str | None = None  # "english" / "hindi" once the customer asks for a language
+        self._last_reply_had_filler = False  # fillers on back-to-back replies sound like a tic
+        self._recent_fillers: deque[str] = deque(maxlen=2)  # never the same filler twice in a row
+        self._filler_texts: dict[str, str] = {}
         self.latencies: list[int] = []
         self._pending_since = 0.0          # when pending_user got its first unanswered line
         self._last_stt_speech = 0.0        # last time STT itself heard speech (ground truth vs. line noise)
@@ -230,12 +290,15 @@ class CallSession:
         texts: dict[str, str] = {
             "silence_prompt": self.cfg.get("silence_prompt_text", ""),
             "silence_goodbye": self.cfg.get("silence_goodbye_text", ""),
-            "closing": fill_template(self.cfg.get("closing_line", ""), self.cfg, self.lead),
+            "closing": self._closing_text(),
             "error": "माफ़ कीजिए, line पर थोड़ी problem आ रही है। हमारी team आपको जल्दी call back करेगी। धन्यवाद!",
         }
         if self.cfg.get("fillers_enabled", True):
             for i, w in enumerate(self.cfg.get("filler_words") or []):
-                texts[f"filler_{i}"] = w.strip() + "..."
+                word = w.strip().rstrip(".…")
+                if word:
+                    texts[f"filler_{i}"] = word + "..."  # trailing "..." = drawn-out, thinking tone
+                    self._filler_texts[f"filler_{i}"] = word
 
         async def one(key: str, text: str) -> None:
             if not text.strip():
@@ -249,6 +312,9 @@ class CallSession:
 
     # ------------------------------------------------------------------ greeting
     async def _greet(self) -> None:
+        # Inbound: the caller already waits for us, so the short "hello" window starts now and overlaps the
+        # greeting synthesis. Outbound: the customer gets the full window after it (they often say "Hello?").
+        inbound_deadline = time.monotonic() + INBOUND_HELLO_WAIT_SEC if self.direction == "inbound" else None
         try:
             if self.greeting_pcm is None and self.greeting_text:
                 self.greeting_pcm = await tts_rest(self.greeting_text, self.cfg, self.t.out_rate)
@@ -260,10 +326,10 @@ class CallSession:
             return
         # Let the customer say "Hello?" first (common on Indian calls) — but don't wait long.
         await self._set_state("listening")
-        deadline = time.monotonic() + 0.9
+        deadline = inbound_deadline or time.monotonic() + HELLO_WAIT_SEC
         while time.monotonic() < deadline and not self.user_speaking:
             await asyncio.sleep(0.05)
-        if self.user_speaking:
+        if self.user_speaking:  # already talking: let them finish (bounded), then greet
             hard = time.monotonic() + 2.5
             while self.user_speaking and time.monotonic() < hard:
                 await asyncio.sleep(0.05)
@@ -406,6 +472,12 @@ class CallSession:
     async def _debounced_respond(self) -> None:
         try:
             await asyncio.sleep(0.04)
+            if sounds_unfinished(" ".join(self.pending_user)):
+                # trailed off mid-thought ("...और"): give them a moment before jumping in. If they go on,
+                # speech_start holds the reply below and their next final restarts this debounce.
+                grace = time.monotonic() + UNFINISHED_GRACE_SEC
+                while not self.user_speaking and time.monotonic() < grace:
+                    await asyncio.sleep(0.05)
             # customer continued talking: wait (bounded) — a new final restarts this debounce
             deadline = time.monotonic() + 2.5
             while self.user_speaking and time.monotonic() < deadline:
@@ -453,14 +525,29 @@ class CallSession:
         async def on_audio(pcm: bytes) -> None:
             await self._agent_audio(pcm, turn)
 
+        asked = language_request(user_text)
+        if asked:
+            self.language_pref = asked
+        # the language note: sticky once they asked for English, else for an English turn only (the Hindi
+        # greeting otherwise pulls the reply into Hinglish)
+        if self.language_pref == "english":
+            language_note = ENGLISH_PREFERRED_NOTE
+        elif self.language_pref != "hindi" and spoke_english(user_text):
+            language_note = ENGLISH_TURN_NOTE
+        else:
+            language_note = None
         tts, connect_task = self._take_tts(on_audio)
-        filler_task = asyncio.create_task(self._maybe_filler(turn)) if self.cfg.get("fillers_enabled", True) else None
+        # the filler clips are Hindi ("जी, समझ गई"): never in front of an English reply
+        filler_task = (asyncio.create_task(self._maybe_filler(turn, user_text))
+                       if self.cfg.get("fillers_enabled", True) and language_note is None else None)
         end_call = False
         spoken: list[str] = []
         use_rest = False
         try:
             messages = [{"role": "system", "content": self.system_prompt},
                         {"role": "system", "content": self.lead_prompt}, *self.history[-24:]]
+            if language_note:
+                messages.append({"role": "system", "content": language_note})
             chunker = SentenceChunker()
             first = True
             raw = ""
@@ -505,6 +592,7 @@ class CallSession:
         finally:
             if filler_task:
                 filler_task.cancel()
+            self._last_reply_had_filler = self._filler_played
             if not connect_task.done():
                 connect_task.cancel()
             await tts.close()
@@ -548,11 +636,12 @@ class CallSession:
                     await agen.aclose()
                 log.warning("LLM first token > %.0f s on %s (attempt %d)", deadline, self.uuid, attempt + 1)
                 if attempt == 0:
-                    if not self._filler_played and not self._turn_first_audio:
-                        keys = [k for k in self.clips if k.startswith("filler_")]
-                        if keys and turn == self._active_turn:
+                    if not self._filler_played and not self._turn_first_audio and turn == self._active_turn:
+                        user_text = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+                        clip = self._pick_filler(user_text)
+                        if clip:
                             self._filler_played = True
-                            await self._agent_audio(self.clips[random.choice(keys)], turn, count_first=False)
+                            await self._agent_audio(clip, turn, count_first=False)
                     continue
                 raise
             yield first
@@ -612,17 +701,34 @@ class CallSession:
                 return rest if rest else s
         return s
 
-    async def _maybe_filler(self, turn: int) -> None:
+    def _pick_filler(self, user_text: str) -> bytes | None:
+        """A filler that fits the moment: "thinking" (हम्म, एक second) after a question, an
+        acknowledgement (जी, समझ गई) otherwise; never the one used just before."""
+        keys = [k for k in self.clips if k.startswith("filler_")]
+        if not keys:
+            return None
+        thinking = [k for k in keys if any(m in self._filler_texts.get(k, "").lower() for m in _THINKING_MARKERS)]
+        acks = [k for k in keys if k not in thinking]
+        pool = (thinking if is_question(user_text) else acks) or keys
+        last = self._recent_fillers[-1] if self._recent_fillers else None
+        key = random.choice([k for k in pool if k != last] or pool)
+        self._recent_fillers.append(key)
+        return self.clips[key]
+
+    async def _maybe_filler(self, turn: int, user_text: str = "") -> None:
         try:
-            await asyncio.sleep(max(0.2, float(self.cfg.get("filler_delay_ms", 650)) / 1000))
+            delay = max(0.2, float(self.cfg.get("filler_delay_ms", 800)) / 1000)
+            if self._last_reply_had_filler:
+                delay += 0.6  # a filler before every reply is a tic: only for a clearly slow one
+            await asyncio.sleep(delay)
             if turn != self._active_turn or self._turn_first_audio or self.ending:
                 return
-            keys = [k for k in self.clips if k.startswith("filler_")]
-            if not keys:
+            clip = self._pick_filler(user_text)
+            if not clip:
                 return
             self._filler_played = True
             # one atomic send: a chunked filler could interleave with the reply's first audio
-            await self._agent_audio(self.clips[random.choice(keys)], turn, count_first=False)
+            await self._agent_audio(clip, turn, count_first=False)
         except asyncio.CancelledError:
             pass
 
@@ -710,8 +816,17 @@ class CallSession:
         await self._set_state("listening")
 
     # ------------------------------------------------------------------ watchdog
+    def _closing_text(self) -> str:
+        """Said when the call hits its maximum length. Inbound callers get their own line and limit (they
+        chose to call, so a real enquiry may run longer; the line promises an expert call-back)."""
+        key = "inbound_closing_line" if self.direction == "inbound" else "closing_line"
+        return fill_template(self.cfg.get(key) or self.cfg.get("closing_line", ""), self.cfg, self.lead)
+
     async def _watchdog(self) -> None:
-        max_sec = int(self.cfg.get("max_call_sec") or 300)
+        if self.direction == "inbound":
+            max_sec = int(self.cfg.get("inbound_max_call_sec") or 600)
+        else:
+            max_sec = int(self.cfg.get("max_call_sec") or 300)
         timeout = float(self.cfg.get("silence_timeout_sec") or 10)
         final_wait = float(self.cfg.get("silence_final_wait_sec") or 3)
         try:
@@ -777,7 +892,7 @@ class CallSession:
         if self.responding():
             await self.interrupt("ending")
         text = {
-            "closing": fill_template(self.cfg.get("closing_line", ""), self.cfg, self.lead),
+            "closing": self._closing_text(),
             "silence_goodbye": self.cfg.get("silence_goodbye_text", ""),
             "error": "",
         }.get(clip_key, "")
@@ -859,11 +974,18 @@ class CallSession:
         }
         if self.latencies:
             metrics["avg_latency_ms"] = int(sum(self.latencies) / len(self.latencies))
+        status, end_reason = "completed", self.end_reason
+        if self.direction == "inbound" and self.agent_audio_ms == 0 and self.t.channel == "phone":
+            # The caller never heard us (greeting failed, or they hung up first): a missed call the team
+            # calls back, not an answered one. The analysis words the summary from the original reason.
+            # (A browser rehearsal never counts as missed and nobody calls a test back: it stays completed.)
+            status, end_reason = "failed", "error"
+            metrics["session_end_reason"] = self.end_reason
         await repo.run_db(
             lambda: repo.update_call(
                 self.uuid,
-                status="completed",
-                end_reason=self.end_reason,
+                status=status,
+                end_reason=end_reason,
                 ended_at=repo.now(),
                 duration_sec=round(duration, 1),
                 recording_path=rec_path,

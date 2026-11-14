@@ -15,7 +15,7 @@ from ..schemas import lead_stage
 from ..services.agent_config import load_agent_settings
 from ..services.csvsafe import csv_response
 from ..services.pdf_report import build_report
-from ..services.reporting import IST, calls_in_range, compute_analytics, ist, parse_range
+from ..services.reporting import IST, calls_in_range, compute_analytics, customer_number, ist, parse_range
 
 router = APIRouter(tags=["analytics"])
 _pdf_slots = asyncio.Semaphore(1)  # PDF builds are CPU-heavy: one at a time keeps live calls smooth
@@ -47,26 +47,30 @@ def calls_csv(from_: str | None = Query(None, alias="from"), to: str | None = No
     rng = parse_range(from_, to)
     calls = calls_in_range(db, rng, campaign_id, include_tests, with_turns=include_transcripts)
     camp = {cid: name for cid, name in db.execute(select(Campaign.id, Campaign.name)).all()}
-    headers = ["call_id", "date_time_ist", "lead_name", "phone", "company", "city", "campaign", "channel", "status",
-               "end_reason", "duration_sec", "interest", "rating", "qualified", "sentiment", "summary",
-               "next_action", "callback_time", "key_points", "objections", "objection_tags", "qualification",
-               "avg_response_ms", "recording_url"]
+    # direction: inbound = the customer called us; customer_number = their number on this call (the caller on
+    # inbound calls, the dialed number on outbound ones), never our own DID.
+    headers = ["call_id", "date_time_ist", "direction", "caller_type", "lead_name", "phone", "customer_number",
+               "company", "city", "campaign", "channel", "status", "end_reason", "duration_sec", "interest", "rating",
+               "qualified", "sentiment", "call_reason", "summary", "next_action", "callback_time", "key_points",
+               "objections", "objection_tags", "qualification", "avg_response_ms", "recording_url"]
     if include_transcripts:
         headers.append("transcript")
     rows = []
     for c in calls:
         lead = c.lead
+        metrics = c.metrics if isinstance(c.metrics, dict) else {}
+        number = customer_number(c)
         qual = " | ".join(f"{q.get('question')}: {q.get('answer') or '-'} ({q.get('status')})"
-                          for q in (c.qualification or []))
-        row = [c.uuid, _fmt(c.created_at), lead.name if lead else "", lead.phone if lead else (c.to_number or ""),
+                          for q in (c.qualification or []) if isinstance(q, dict))
+        row = [c.uuid, _fmt(c.created_at), c.direction or "outbound", c.caller_type or "",
+               lead.name if lead else "", lead.phone if lead else number, number,
                (lead.company if lead else "") or "", (lead.city if lead else "") or "",
                camp.get(c.campaign_id, "") if c.campaign_id else "", c.channel, c.status, c.end_reason or "",
                c.duration_sec if c.duration_sec is not None else "", c.interest,
                c.rating if c.rating is not None else "", "" if c.qualified is None else ("yes" if c.qualified else "no"),
-               c.sentiment or "", c.summary or "", c.next_action or "", c.callback_time or "",
-               "; ".join(c.key_points or []), "; ".join(c.objections or []),
-               ", ".join((c.metrics or {}).get("objection_tags", [])), qual,
-               (c.metrics or {}).get("avg_latency_ms", ""),
+               c.sentiment or "", metrics.get("call_reason") or "", c.summary or "", c.next_action or "",
+               c.callback_time or "", "; ".join(map(str, c.key_points or [])), "; ".join(map(str, c.objections or [])),
+               ", ".join(map(str, metrics.get("objection_tags") or [])), qual, metrics.get("avg_latency_ms", ""),
                f"/api/calls/{c.uuid}/recording" if (c.recording_path or c.recording_url) else ""]
         if include_transcripts:
             row.append("\n".join(f"[{t.offset_ms // 60000:02d}:{t.offset_ms // 1000 % 60:02d}] "

@@ -16,10 +16,9 @@ export function CampaignProgress({ counts, name }: { counts: CampaignCounts; nam
   }, [pct]);
 
   const parts: { label: string; value: number }[] = [
-    { label: "dialing", value: counts.dialing },
-    { label: "failed", value: counts.failed },
+    { label: "in queue (incl. retries)", value: counts.pending + counts.dialing },
+    { label: "gave up", value: counts.failed },
     { label: "skipped", value: counts.skipped },
-    { label: "pending", value: counts.pending },
   ];
 
   return (
@@ -44,7 +43,11 @@ export function CampaignProgress({ counts, name }: { counts: CampaignCounts; nam
       </div>
       <p className="tabular mt-2 text-[13px] font-medium">
         <span className="font-semibold">
-          {formatNumber(counts.done)} / {formatNumber(counts.total)} done
+          {formatNumber(processed)} / {formatNumber(counts.total)} numbers finished
+        </span>
+        <span className={counts.done === 0 ? "text-muted" : undefined}>
+          {" · "}
+          {formatNumber(counts.done)} reached
         </span>
         {parts.map((p) => (
           <span key={p.label} className={p.value === 0 ? "text-muted" : undefined}>

@@ -32,13 +32,14 @@ export function CallScriptSection({ form, set, errors }: SectionProps) {
     <SettingsSection
       id="script"
       title="Call script"
-      subtitle="How the agent opens, why it is calling, and how it wraps up."
+      subtitle="Outbound calls: how the agent opens, why it is calling, and how it wraps up. Inbound calls are set up under Calling."
       icon={<MessageSquare />}
       tone="subtle"
     >
       <div>
         <TextAreaField
           ref={openingRef}
+          id="opening_line"
           label="Opening line"
           value={form.opening_line}
           onChange={(e) => set("opening_line", e.target.value)}
@@ -77,7 +78,9 @@ export function CallScriptSection({ form, set, errors }: SectionProps) {
       />
 
       <TextAreaField
+        id="closing_line"
         label="Closing line"
+        hint="Said when an outbound call reaches the max call length (inbound calls have their own under Calling)."
         value={form.closing_line}
         onChange={(e) => set("closing_line", e.target.value)}
         rows={2}

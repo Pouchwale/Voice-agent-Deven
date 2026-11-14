@@ -3,9 +3,21 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChartColumn, LayoutDashboard, Megaphone, PhoneCall, Radio, Settings, SquareKanban, Users, X } from "lucide-react";
+import {
+  ChartColumn,
+  LayoutDashboard,
+  Megaphone,
+  PhoneCall,
+  PhoneIncoming,
+  Radio,
+  Settings,
+  SquareKanban,
+  Users,
+  X,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect } from "react";
+import { isInboundPhone } from "@/components/inbound/caller";
 import { useLive } from "@/components/providers/LiveProvider";
 import { SignOutButton } from "./SignOutButton";
 import { cn } from "@/lib/cn";
@@ -17,6 +29,7 @@ const NAV: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/board", label: "Lead board", icon: SquareKanban },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/calls", label: "Calls", icon: PhoneCall },
+  { href: "/inbound", label: "Inbound", icon: PhoneIncoming },
   { href: "/live", label: "Live", icon: Radio },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -30,6 +43,12 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   const pathname = usePathname();
   const live = useLive();
   const liveCount = live.active.length;
+  // Customers on the line with the agent right now (browser rehearsals don't count).
+  const inboundCount = live.active.filter((lc) => isInboundPhone(lc.call)).length;
+  const badges: Record<string, { count: number; label: string }> = {
+    "/live": { count: liveCount, label: "live calls" },
+    "/inbound": { count: inboundCount, label: "live inbound calls" },
+  };
 
   // Esc closes the mobile menu.
   useEffect(() => {
@@ -83,6 +102,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           <ul className="space-y-0.5">
             {NAV.map(({ href, label, icon: Icon }) => {
               const active = isActive(pathname, href);
+              const badge = badges[href];
               return (
                 <li key={href}>
                   <Link
@@ -97,10 +117,10 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                     {active ? <span className="absolute inset-y-2 left-0 w-[3px] rounded-full bg-brand" aria-hidden /> : null}
                     <Icon className="size-4" aria-hidden />
                     <span className="flex-1">{label}</span>
-                    {href === "/live" && liveCount > 0 ? (
+                    {badge && badge.count > 0 ? (
                       <span className="tabular inline-flex min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-xs font-medium text-white">
-                        {liveCount}
-                        <span className="sr-only"> live calls</span>
+                        {badge.count}
+                        <span className="sr-only"> {badge.label}</span>
                       </span>
                     ) : null}
                   </Link>

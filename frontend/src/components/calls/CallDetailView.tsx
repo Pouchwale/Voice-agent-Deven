@@ -21,8 +21,11 @@ import {
   UserRound,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import useSWR, { useSWRConfig } from "swr";
+import { callerTitle, customerNumber, rawCallerId } from "@/components/inbound/caller";
+import { CallerChip, DirectionChip } from "@/components/inbound/chips";
+import { CustomerTimeline } from "@/components/timeline/CustomerTimeline";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Chip, type ChipColor } from "@/components/ui/Badge";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -38,7 +41,6 @@ import { api, ApiError, errorMessage, keys } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { apiUrl } from "@/lib/config";
 import {
-  callTitle,
   endReasonLabel,
   formatDateTime,
   formatDuration,
@@ -97,7 +99,8 @@ export function CallDetailView({ uuid }: { uuid: string }) {
   const router = useRouter();
   const toast = useToast();
   const { mutate: globalMutate } = useSWRConfig();
-  const { callNow, callingId } = useCallNow();
+  const { callNow, callingId, outboundOff, outboundHint } = useCallNow();
+  const callHintId = useId();
   // Poll while the analysis runs (2 s) or the call is still live (5 s; the live feed also refreshes it),
   // but stop after a while so a stuck "pending" doesn't poll forever.
   const [pollEvery, setPollEvery] = useState(0);
@@ -167,9 +170,14 @@ export function CallDetailView({ uuid }: { uuid: string }) {
     }
   }
 
+  // Inbound calls are worked from the Inbound page, so that's where "back" goes for them.
+  const backToInbound = data?.direction === "inbound" && data.channel === "phone";
   const back = (
-    <Link href="/calls" className="mb-3 inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-fg">
-      <ArrowLeft className="size-4" aria-hidden /> All calls
+    <Link
+      href={backToInbound ? "/inbound" : "/calls"}
+      className="mb-3 inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-fg"
+    >
+      <ArrowLeft className="size-4" aria-hidden /> {backToInbound ? "Inbound calls" : "All calls"}
     </Link>
   );
 
@@ -209,11 +217,20 @@ export function CallDetailView({ uuid }: { uuid: string }) {
     : call.has_recording
       ? apiUrl(`/api/calls/${encodeURIComponent(call.uuid)}/recording`)
       : null;
+  const inbound = call.direction === "inbound";
   const title =
     call.lead_name?.trim() ||
     call.lead?.name?.trim() ||
-    (call.channel === "browser" ? "Browser test call" : callTitle({ ...call, lead_phone: call.lead_phone ?? call.to_number }, "Unknown caller"));
-  const callAgainName = call.lead_name?.trim() || (call.lead ? leadName(call.lead) : "lead");
+    (call.channel === "browser"
+      ? "Browser test call"
+      : // the caller chip in the header says "Hidden number", so the title doesn't repeat it
+        callerTitle(call, inbound ? "Unknown caller" : "Unknown lead", "Unknown caller"));
+  // The customer's number: the caller (from_number) on inbound calls, the dialled number on outbound ones.
+  const number = call.channel === "phone" ? customerNumber(call) : null;
+  const hiddenCaller = inbound && call.channel === "phone" && call.caller_type === "anonymous";
+  const rawId = rawCallerId(call);
+  const callAgainName = call.lead_name?.trim() || (call.lead ? leadName(call.lead) : number ? formatPhone(number) : "lead");
+  const dnc = call.lead?.status === "dnc";
   const avgLatency = call.metrics?.avg_latency_ms ?? null;
   const qualification = Array.isArray(call.qualification) ? call.qualification : [];
   const keyPoints = Array.isArray(call.key_points) ? call.key_points : [];
@@ -230,10 +247,18 @@ export function CallDetailView({ uuid }: { uuid: string }) {
           <h1 className="font-heading text-[22px] font-semibold tracking-tight break-words sm:text-2xl">{title}</h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted">
             {call.lead_company ? <span>{call.lead_company}</span> : null}
-            {call.lead_phone ? <span className="tabular">{formatPhone(call.lead_phone)}</span> : null}
+            {number ? (
+              <span className="tabular">{formatPhone(number)}</span>
+            ) : hiddenCaller && rawId ? (
+              <span className="tabular" title="What the network sent as caller ID. It isn't a number we can call.">
+                Caller ID {rawId}
+              </span>
+            ) : null}
             <span>{formatDateTime(call.started_at ?? call.created_at)} IST</span>
             <ChannelIcon channel={call.channel} />
-            <CallStatusChip status={call.status} />
+            <DirectionChip direction={call.direction} />
+            {inbound ? <CallerChip type={call.caller_type} /> : null}
+            <CallStatusChip status={call.status} direction={call.direction} />
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -250,15 +275,31 @@ export function CallDetailView({ uuid }: { uuid: string }) {
               variant="primary"
               icon={<PhoneCall />}
               loading={callingId === call.lead_id}
-              disabled={live}
+              disabled={live || outboundOff || dnc}
+              aria-describedby={outboundHint || dnc ? callHintId : undefined}
+              title={dnc ? "This lead is on the do-not-call list." : (outboundHint ?? undefined)}
               onClick={() => void callNow({ id: call.lead_id!, name: callAgainName })}
             >
-              Call again
+              {inbound && call.channel === "phone" ? "Call back" : "Call again"}
             </Button>
           ) : null}
           <Button variant="danger" icon={<Trash2 />} onClick={() => setDeleting(true)}>
             Delete
           </Button>
+          {call.lead_id && (outboundHint || dnc) ? (
+            <p id={callHintId} className="w-full text-[13px] text-muted">
+              {dnc ? (
+                "This lead is on the do-not-call list."
+              ) : (
+                <>
+                  {outboundHint}{" "}
+                  <Link href="/settings#calling" className="font-medium text-primary hover:underline">
+                    Open Settings
+                  </Link>
+                </>
+              )}
+            </p>
+          ) : null}
         </div>
       </header>
 
@@ -482,6 +523,22 @@ export function CallDetailView({ uuid }: { uuid: string }) {
           )}
         </Card>
       </div>
+
+      {/* Customer timeline: this call in the context of everything else with the customer */}
+      {call.lead_id ? (
+        <Card className="mt-5">
+          <CardHeader
+            title="Customer timeline"
+            subtitle="Every call and campaign with this customer. This call is highlighted."
+            actions={
+              <ButtonLink href={`/leads/${call.lead_id}`} size="sm" variant="ghost" icon={<UserRound />}>
+                Open lead
+              </ButtonLink>
+            }
+          />
+          <CustomerTimeline leadId={call.lead_id} highlightUuid={call.uuid} limit={10} />
+        </Card>
+      ) : null}
 
       <ConfirmDialog
         open={deleting}

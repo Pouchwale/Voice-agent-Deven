@@ -92,6 +92,7 @@ model Call {
   campaignId     Int?             @map("campaign_id")
   channel        String           @default("phone")    // phone | browser
   direction      String           @default("outbound")
+  callerType     String?          @map("caller_type")
   status         String           @default("queued")   // queued | initiated | ringing | in_progress | completed | no_answer | busy | failed | canceled
   endReason      String?          @map("end_reason")   // agent_ended | user_hangup | silence_timeout | max_duration | manual_hangup | error | no_answer | busy
   fromNumber     String?          @map("from_number")

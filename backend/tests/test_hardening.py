@@ -288,7 +288,8 @@ def test_pickup_and_cut_after_hearing_agent_is_cold_but_never_downgrades_hot():
 # ---------------------------------------------------------------- 5. dialer self-healing
 def test_stuck_dialing_items_heal():
     with SessionLocal() as db:
-        camp = Campaign(name="stuck", status="running", concurrency=2, max_attempts=2)
+        # paused: _heal_stuck ignores the status, and a 'running' leftover would be dialed by later tests' apps
+        camp = Campaign(name="stuck", status="paused", concurrency=2, max_attempts=2)
         lead = Lead(name="Stuck", phone="+919800000108")
         db.add_all([camp, lead])
         db.flush()

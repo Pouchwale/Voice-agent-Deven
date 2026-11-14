@@ -8,9 +8,11 @@ import {
   Hourglass,
   ListChecks,
   MessageSquare,
+  PhoneCall,
   RotateCcw,
   Save,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   UserRound,
 } from "lucide-react";
@@ -27,6 +29,7 @@ import { api, errorMessage, keys } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import type { AgentSettings } from "@/lib/types";
 import { AiBrainCard } from "./AiBrainCard";
+import { CallingSection } from "./CallingSection";
 import { CampaignWindowSection, ConversationSection } from "./ConversationSections";
 import { IdentityVoiceSection } from "./IdentityVoiceSection";
 import { coerce, diffSettings, normalize, validate, type SetField } from "./model";
@@ -34,9 +37,12 @@ import { QuestionsSection } from "./QuestionsSection";
 import { CallScriptSection, InterestRulesSection, KnowledgeBaseSection, ObjectionsSection } from "./ScriptSections";
 import { SectionNav, type NavItem } from "./SectionNav";
 import { SilenceSection } from "./SilenceSection";
+import { ToneSection } from "./ToneSection";
 
 const NAV: NavItem[] = [
   { id: "identity", label: "Identity & voice", icon: UserRound },
+  { id: "tone", label: "Tone & accent", icon: SlidersHorizontal },
+  { id: "calling", label: "Calling", icon: PhoneCall },
   { id: "script", label: "Call script", icon: MessageSquare },
   { id: "knowledge", label: "Knowledge base", icon: BookOpen },
   { id: "qualification", label: "Qualification", icon: ListChecks },
@@ -98,6 +104,17 @@ export function SettingsView() {
   const set = useCallback<SetField>((key, value) => {
     setForm((f) => (f ? { ...f, [key]: value } : f));
   }, []);
+
+  // Arriving via a link like /settings#calling ("Outbound calling is off in Settings → Calling"): the sections only
+  // exist once the settings have loaded, after the browser's own jump to the anchor has already missed.
+  const jumped = useRef(false);
+  const ready = !!form;
+  useEffect(() => {
+    if (!ready || jumped.current) return;
+    jumped.current = true;
+    const id = window.location.hash.slice(1);
+    if (id && NAV.some((n) => n.id === id)) document.getElementById(id)?.scrollIntoView({ block: "start" });
+  }, [ready]);
 
   // Warn before leaving the page with unsaved edits.
   useEffect(() => {
@@ -181,8 +198,7 @@ export function SettingsView() {
     }
   }
 
-  const ready = !!form || !!error;
-  const rootRef = useEntrance<HTMLDivElement>(ready);
+  const rootRef = useEntrance<HTMLDivElement>(ready || !!error);
   const sectionProps = form ? { form, set, errors } : null;
 
   return (
@@ -215,6 +231,8 @@ export function SettingsView() {
           ) : (
             <>
               <IdentityVoiceSection {...sectionProps} />
+              <ToneSection {...sectionProps} />
+              <CallingSection {...sectionProps} />
               <CallScriptSection {...sectionProps} />
               <KnowledgeBaseSection {...sectionProps} />
               <QuestionsSection {...sectionProps} />
@@ -261,7 +279,7 @@ export function SettingsView() {
         onClose={() => !resetting && setResetOpen(false)}
         onConfirm={() => void doReset()}
         title="Reset to defaults?"
-        body="Every setting on this page - script, knowledge base, questions, voice and timings - goes back to the default. This can't be undone."
+        body="Every setting on this page - calling switches (both back on), greetings, script, knowledge base, questions, voice, tone and timings - goes back to the default. This can't be undone."
         confirmLabel="Reset everything"
         danger
         busy={resetting}

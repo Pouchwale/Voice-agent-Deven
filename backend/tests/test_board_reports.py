@@ -99,6 +99,8 @@ def test_analytics_numbers(client, data):
     assert (t["hot"], t["warm"], t["cold"]) == (1, 1, 1)
     assert t["avg_latency_ms"] == 1100 and t["p90_latency_ms"] == 1100
     assert [f["count"] for f in a["funnel"]] == [4, 3, 2, 2, 1]
+    assert (t["inbound"], t["inbound_answered"], t["inbound_missed"]) == (0, 0, 0)  # all four calls were outbound
+    assert all(d["inbound"] == 0 for d in a["by_day"])
     assert len(a["by_hour"]) == 24 and len(a["rating_histogram"]) == 10 and len(a["by_day"]) == 30
     assert {o["tag"] for o in a["objections"]} == {"price", "call_later"}
     assert a["interest"] == {"unknown": 1, "cold": 1, "warm": 1, "hot": 1}
@@ -118,6 +120,7 @@ def test_reports_csv_and_pdf(client, data):
     hot = next(x for x in rows if x["interest"] == "hot")
     assert hot["lead_name"] == "राहुल शर्मा" and "हमें stand-up pouch" in hot["transcript"]
     assert "Quantity: 5000 (answered)" in hot["qualification"] and hot["objection_tags"] == "price"
+    assert {x["direction"] for x in rows} == {"outbound"} and all(x["customer_number"] == x["phone"] for x in rows)
 
     leads = list(csv.DictReader(io.StringIO(client.get("/api/reports/leads.csv").content.decode("utf-8-sig"))))
     assert {l["stage"] for l in leads} == {"new", "no_answer", "cold", "warm", "hot"}

@@ -1,6 +1,20 @@
 "use client";
 
-import { ChartColumn, Clock, Download, Flame, MessageSquare, PhoneCall, PhoneOutgoing, Snowflake, Star, Sun, Zap } from "lucide-react";
+import {
+  ChartColumn,
+  Clock,
+  Download,
+  Flame,
+  Hourglass,
+  MessageSquare,
+  PhoneCall,
+  PhoneIncoming,
+  PhoneOutgoing,
+  Snowflake,
+  Star,
+  Sun,
+  Zap,
+} from "lucide-react";
 import { useState } from "react";
 import useSWR from "swr";
 import { SplitBar, FunnelBars, StackedHBars } from "@/components/charts/Bars";
@@ -27,11 +41,16 @@ const seconds = (ms: number | null | undefined) => (ms === null || ms === undefi
 const fmtSec = (n: number) => `${n.toFixed(1)} s`;
 const pct = (num: number, den: number) => (den > 0 ? formatPercent(num / den) : "—");
 
+/** Shown inside outbound-only charts when the range has inbound calls but nothing was dialed. */
+function NoOutbound() {
+  return <p className="py-6 text-center text-sm text-muted">No outbound calls in this range: this chart covers calls we dialed.</p>;
+}
+
 function AnalyticsSkeleton() {
   return (
     <div className="space-y-5" role="status" aria-label="Loading analytics">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {Array.from({ length: 8 }).map((_, i) => (
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+        {Array.from({ length: 10 }).map((_, i) => (
           <Skeleton key={i} className="h-[104px] rounded-xl" />
         ))}
       </div>
@@ -54,24 +73,44 @@ function Sections({ data }: { data: Analytics }) {
   const latency = data.latency_by_day.map((d) => seconds(d.avg_ms));
   const avgS = seconds(t.avg_latency_ms);
   const p90S = seconds(t.p90_latency_ms);
+  // Every ratio below divides counts of the SAME scope (outbound by outbound, all phone calls by all phone
+  // calls), so none can pass 100%. Cold also counts pick-up-and-cut calls, hence "of scored calls".
+  const scored = t.hot + t.warm + t.cold;
+  const rated = data.rating_histogram.reduce((s, r) => s + r.count, 0);
+  const hasOutbound = t.dialed > 0;
 
   return (
     <>
-      {/* 1. KPIs */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <KpiTile label="Dialed" value={t.dialed} icon={<PhoneOutgoing />} caption={`${formatNumber(Math.round(t.talk_minutes))} talk minutes`} />
-        <KpiTile label="Connected" value={t.connected} icon={<PhoneCall />} caption={`${formatPercent(t.connect_rate)} connect rate`} />
-        <KpiTile label="Conversations" value={t.conversations} icon={<MessageSquare />} caption={`${pct(t.conversations, t.connected)} of connected`} />
+      {/* 1. KPIs: dialed / connected = outbound, inbound on its own tile, the rest = every phone call */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+        <KpiTile label="Dialed" value={t.dialed} icon={<PhoneOutgoing />} caption="Outbound calls we placed" />
+        <KpiTile label="Connected" value={t.connected} icon={<PhoneCall />} caption={`${pct(t.connected, t.dialed)} connect rate`} />
+        <KpiTile
+          label="Inbound calls"
+          value={t.inbound}
+          icon={<PhoneIncoming />}
+          caption={`${formatNumber(t.inbound_missed)} missed`}
+          href="/inbound"
+        />
+        <KpiTile label="Conversations" value={t.conversations} icon={<MessageSquare />} caption="Customer spoke, in or out" />
+        <KpiTile
+          label="Talk time"
+          value={t.talk_minutes}
+          format={(n) => formatNumber(Math.round(n))}
+          suffix="min"
+          icon={<Hourglass />}
+          caption={t.avg_duration_sec !== null && t.avg_duration_sec !== undefined ? `Avg call ${formatDuration(t.avg_duration_sec)}` : "No answered calls"}
+        />
         <KpiTile label="Hot" value={t.hot} icon={<Flame />} highlight="brand" caption={`${formatNumber(t.qualified)} qualified`} />
-        <KpiTile label="Warm" value={t.warm} icon={<Sun />} caption={`${pct(t.warm, t.conversations)} of conversations`} />
-        <KpiTile label="Cold" value={t.cold} icon={<Snowflake />} caption={`${pct(t.cold, t.conversations)} of conversations`} />
+        <KpiTile label="Warm" value={t.warm} icon={<Sun />} caption={`${pct(t.warm, scored)} of scored calls`} />
+        <KpiTile label="Cold" value={t.cold} icon={<Snowflake />} caption={`${pct(t.cold, scored)} of scored calls`} />
         <KpiTile
           label="Avg rating"
           value={t.avg_rating}
           format={(n) => n.toFixed(1)}
           suffix="/10"
           icon={<Star />}
-          caption={t.avg_duration_sec !== null && t.avg_duration_sec !== undefined ? `Avg call ${formatDuration(t.avg_duration_sec)}` : "No connected calls"}
+          caption={rated ? `Over ${formatNumber(rated)} rated ${rated === 1 ? "call" : "calls"}` : "No rated calls"}
         />
         <KpiTile
           label="Avg response time"
@@ -88,17 +127,17 @@ function Sections({ data }: { data: Analytics }) {
         <ChartCard
           className="lg:col-span-5"
           title="Funnel"
-          subtitle="Share of dialed calls reaching each step"
+          subtitle="Outbound: share of dialed calls reaching each step"
           table={<ChartTable head={["Step", "Calls", "% of dialed"]} rows={data.funnel.map((f) => [f.label, f.count, pct(f.count, data.funnel[0]?.count ?? 0)])} />}
         >
-          <FunnelBars steps={data.funnel.map((f) => ({ label: f.label, count: f.count }))} />
+          {hasOutbound ? <FunnelBars steps={data.funnel.map((f) => ({ label: f.label, count: f.count }))} /> : <NoOutbound />}
         </ChartCard>
 
         {/* 3. Calls over time */}
         <ChartCard
           className="lg:col-span-7"
           title="Calls over time"
-          subtitle="Per day, IST"
+          subtitle="Per day, IST. Dialed and connected are outbound; inbound counts calls to our number."
           actions={
             <Segmented
               label="Chart view"
@@ -116,6 +155,7 @@ function Sections({ data }: { data: Analytics }) {
               ? [
                   { label: "Dialed", color: THEME.faint, kind: "line" },
                   { label: "Connected", color: THEME.brand, kind: "line" },
+                  { label: "Inbound", color: THEME.navy, kind: "line" },
                 ]
               : [
                   { label: "Cold", color: THEME.faint, kind: "rect" },
@@ -125,18 +165,28 @@ function Sections({ data }: { data: Analytics }) {
           }
           table={
             <ChartTable
-              head={["Day", "Dialed", "Connected", "Hot", "Warm", "Cold", "Avg rating"]}
-              rows={data.by_day.map((d) => [formatDayLabel(d.date), d.dialed, d.connected, d.hot, d.warm, d.cold, d.avg_rating === null ? "—" : d.avg_rating.toFixed(1)])}
+              head={["Day", "Dialed", "Connected", "Inbound", "Hot", "Warm", "Cold", "Avg rating"]}
+              rows={data.by_day.map((d) => [
+                formatDayLabel(d.date),
+                d.dialed,
+                d.connected,
+                d.inbound ?? 0,
+                d.hot,
+                d.warm,
+                d.cold,
+                d.avg_rating === null ? "—" : d.avg_rating.toFixed(1),
+              ])}
             />
           }
         >
           {overTime === "volume" ? (
             <LineChart
-              ariaLabel="Dialed and connected calls per day"
+              ariaLabel="Dialed, connected and inbound calls per day"
               labels={days}
               series={[
                 { key: "dialed", label: "Dialed", color: THEME.faint, values: data.by_day.map((d) => d.dialed) },
                 { key: "connected", label: "Connected", color: THEME.brand, values: data.by_day.map((d) => d.connected) },
+                { key: "inbound", label: "Inbound", color: THEME.navy, values: data.by_day.map((d) => d.inbound ?? 0) },
               ]}
             />
           ) : (
@@ -157,30 +207,38 @@ function Sections({ data }: { data: Analytics }) {
         <ChartCard
           className="lg:col-span-7"
           title="Best time to call"
-          subtitle="Calls dialed per hour (IST), with the share that connected"
-          legend={[
-            { label: "Dialed", color: THEME.primaryTintStrong, kind: "rect", outlined: true },
-            { label: "Connected", color: THEME.brand, kind: "rect" },
-          ]}
+          subtitle="Outbound calls dialed per hour (IST), with the share that connected"
+          legend={
+            hasOutbound
+              ? [
+                  { label: "Dialed", color: THEME.primaryTintStrong, kind: "rect", outlined: true },
+                  { label: "Connected", color: THEME.brand, kind: "rect" },
+                ]
+              : undefined
+          }
           table={<ChartTable head={["Hour (IST)", "Dialed", "Connected", "Connect rate"]} rows={data.by_hour.map((h, i) => [hours[i], h.dialed, h.connected, pct(h.connected, h.dialed)])} />}
         >
-          <MultiColumnChart
-            mode="overlay"
-            ariaLabel="Dialed and connected calls by hour of day"
-            labels={hours}
-            series={[
-              { key: "dialed", label: "Dialed", color: THEME.primaryTintStrong, values: data.by_hour.map((h) => h.dialed), outlined: true },
-              { key: "connected", label: "Connected", color: THEME.brand, values: data.by_hour.map((h) => h.connected) },
-            ]}
-            extraTooltip={(i) => ({ label: "connect rate", value: pct(data.by_hour[i].connected, data.by_hour[i].dialed) })}
-          />
+          {hasOutbound ? (
+            <MultiColumnChart
+              mode="overlay"
+              ariaLabel="Dialed and connected calls by hour of day"
+              labels={hours}
+              series={[
+                { key: "dialed", label: "Dialed", color: THEME.primaryTintStrong, values: data.by_hour.map((h) => h.dialed), outlined: true },
+                { key: "connected", label: "Connected", color: THEME.brand, values: data.by_hour.map((h) => h.connected) },
+              ]}
+              extraTooltip={(i) => ({ label: "connect rate", value: pct(data.by_hour[i].connected, data.by_hour[i].dialed) })}
+            />
+          ) : (
+            <NoOutbound />
+          )}
         </ChartCard>
 
         {/* 5. Interest split */}
         <ChartCard
           className="lg:col-span-5"
           title="Interest split"
-          subtitle="Calls in this range by interest"
+          subtitle="Phone calls in this range by interest, inbound and outbound"
           table={
             <ChartTable
               head={["Interest", "Calls"]}
@@ -203,7 +261,7 @@ function Sections({ data }: { data: Analytics }) {
         <ChartCard
           className="lg:col-span-6"
           title="Call duration"
-          subtitle="Connected calls by length"
+          subtitle="Answered calls by length, inbound and outbound"
           table={<ChartTable head={["Duration", "Calls"]} rows={data.duration_buckets.map((b) => [b.label, b.count])} />}
         >
           <ColumnChart ariaLabel="Calls per duration bucket" data={data.duration_buckets.map((b) => ({ label: b.label, value: b.count }))} valueLabel="calls" />
@@ -281,7 +339,7 @@ function Sections({ data }: { data: Analytics }) {
         <section className="min-w-0 overflow-hidden rounded-xl border border-line bg-white lg:col-span-12">
           <div className="px-4 pt-4 sm:px-5 sm:pt-5">
             <h2 className="font-heading text-base font-semibold">Campaign comparison</h2>
-            <p className="mt-0.5 text-[13px] text-muted">Phone calls per campaign in this range</p>
+            <p className="mt-0.5 text-[13px] text-muted">Outbound calls per campaign in this range</p>
           </div>
           {data.campaigns.length ? (
             <div className="relative mt-3 overflow-x-auto">
@@ -355,7 +413,7 @@ export function AnalyticsView() {
     <div className="min-w-0">
       <PageHeader
         title="Analytics"
-        description="How the agent's calls are performing: connect rate, interest, objections and response time."
+        description="How the agent's calls are performing, inbound and outbound: connect rate, interest, objections and response time."
         actions={
           <Button icon={<Download />} onClick={goToExport}>
             Export
@@ -417,7 +475,8 @@ export function AnalyticsView() {
       ) : (
         <div className={isValidating ? "opacity-70 transition-opacity" : "transition-opacity"}>
           {error ? <ErrorState className="mb-5" compact error={error} onRetry={() => void mutate()} title="Showing the last loaded numbers" /> : null}
-          {data.totals.dialed === 0 ? (
+          {/* Empty only when nothing happened at all: an inbound-only range (outbound switched off) still has data. */}
+          {data.totals.dialed + (data.totals.inbound ?? 0) === 0 ? (
             <div className="rounded-xl border border-line bg-white">
               <EmptyState
                 icon={<ChartColumn />}

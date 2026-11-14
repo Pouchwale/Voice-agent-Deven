@@ -9,14 +9,14 @@ from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import Response
 
 from ..config import get_settings
-from ..defaults import DEFAULT_AGENT_SETTINGS
+from ..defaults import DEFAULT_AGENT_SETTINGS, INBOUND_OFF_ACTIONS, LANGUAGE_MIXES, SPEAKING_TONES
 from ..schemas import VoicePreview
-from ..services import vobiz
+from ..services import inbound_audio, vobiz
 from ..services.agent_config import load_agent_settings, reset_agent_settings, save_agent_settings
 from ..services.audio import wav_bytes
 from ..services.llm import client
-from ..services.sarvam import (BULBUL_V3_VOICES, VALID_VOICES, check_stt_stream, check_tts, check_tts_stream,
-                               tts_rest)
+from ..services.sarvam import (ALL_VOICES, VALID_VOICES, check_stt_stream, check_tts, check_tts_stream,
+                               model_for, tts_rest, voice_for)
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 settings = get_settings()
@@ -24,12 +24,17 @@ settings = get_settings()
 _NUMERIC_LIMITS = {
     "silence_timeout_sec": (3, 60), "silence_final_wait_sec": (1, 30), "filler_delay_ms": (200, 3000),
     "max_call_sec": (30, 1800), "tts_pace": (0.5, 2.0), "tts_temperature": (0.01, 1.0),
+    "inbound_max_call_sec": (60, 3600),
 }
+# Lines spoken on the phone: kept short (a 600-char line is ~40 s of speech).
+_SPOKEN_LINES = ("inbound_greeting", "inbound_greeting_known", "inbound_unavailable_message", "callback_greeting",
+                 "inbound_closing_line")
 
 
 LANGUAGES = ("hi-IN", "en-IN", "bn-IN", "gu-IN", "kn-IN", "ml-IN", "mr-IN", "od-IN", "pa-IN", "ta-IN", "te-IN")
 _TRUE, _FALSE = (True, 1, "true", "1", "yes", "on"), (False, 0, "false", "0", "no", "off")
-_LIST_LIMITS = {"filler_words": (12, 40), "qualification_questions": (15, 300)}  # (items, chars per item)
+_LIST_LIMITS = {"filler_words": (12, 40), "qualification_questions": (15, 300),
+                "pronunciations": (40, 120)}  # (items, chars per item)
 
 
 def _validate(patch: dict[str, Any]) -> dict[str, Any]:
@@ -66,12 +71,24 @@ def _validate(patch: dict[str, Any]) -> dict[str, Any]:
             v = str(v)
             if len(v) > 12000:
                 raise HTTPException(422, f"{k} is too long")
+        if k == "pronunciations":
+            bad = next((line for line in v if "=" not in line or not all(p.strip() for p in line.split("=", 1))), None)
+            if bad is not None:
+                raise HTTPException(422, f"Pronunciation '{bad}' must look like: word = how to say it")
         if k == "voice" and v and v not in VALID_VOICES:
             raise HTTPException(422, f"Unknown voice '{v}'")
         if k == "language_code" and v not in LANGUAGES:
             raise HTTPException(422, f"language_code must be one of {', '.join(LANGUAGES)}")
         if k == "agent_gender" and v not in ("female", "male"):
             raise HTTPException(422, "agent_gender must be female or male")
+        for key, allowed in (("speaking_tone", SPEAKING_TONES), ("language_mix", LANGUAGE_MIXES),
+                             ("inbound_off_action", INBOUND_OFF_ACTIONS)):
+            if k == key and v not in allowed:
+                raise HTTPException(422, f"{k} must be one of {', '.join(allowed)}")
+        if k in _SPOKEN_LINES and len(v) > 600:
+            raise HTTPException(422, f"{k} is too long (max 600 characters: it is spoken on the phone)")
+        if k in _SPOKEN_LINES and not v.strip():
+            raise HTTPException(422, f"{k} can't be empty: callers would hear silence")
         if k in ("call_window_start", "call_window_end"):
             parts = v.split(":")
             if len(parts) != 2 or not all(p.isdigit() for p in parts) or int(parts[0]) > 23 or int(parts[1]) > 59:
@@ -88,12 +105,16 @@ def get_agent_settings():
 
 @router.put("")
 def put_agent_settings(patch: dict[str, Any] = Body(...)):
-    return save_agent_settings(_validate(patch))
+    saved = save_agent_settings(_validate(patch))
+    inbound_audio.schedule_prewarm(saved)  # greetings / unavailable message ready before the next caller
+    return saved
 
 
 @router.post("/reset")
 def reset():
-    return reset_agent_settings()
+    saved = reset_agent_settings()
+    inbound_audio.schedule_prewarm(saved)
+    return saved
 
 
 @router.get("/system")
@@ -105,7 +126,7 @@ def system_info():
         "llm_temperature": settings.llm_temperature,
         "stt_model": settings.sarvam_stt_model,
         "stt_mode": settings.sarvam_stt_mode,
-        "tts_model": settings.sarvam_tts_model,
+        "tts_model": model_for(voice_for(load_agent_settings())),  # the model of the voice in use
         "providers": {"openai": settings.openai_ready, "sarvam": settings.sarvam_ready,
                       "vobiz": settings.vobiz_ready},
         "public_base_url": settings.public_base_url,
@@ -115,7 +136,7 @@ def system_info():
 
 @router.get("/voices")
 def voices():
-    return BULBUL_V3_VOICES
+    return ALL_VOICES
 
 
 @router.post("/preview-voice")
@@ -127,7 +148,13 @@ async def preview_voice(body: VoicePreview):
         cfg["voice"] = body.voice
     if body.pace:
         cfg["tts_pace"] = body.pace
-    text = body.text.strip() or "नमस्ते! हम brands के लिए custom printed packaging pouches बनाते हैं। क्या अभी बात करना convenient रहेगा?"
+    if body.temperature:
+        cfg["tts_temperature"] = body.temperature
+    if body.language_code:
+        if body.language_code not in LANGUAGES:
+            raise HTTPException(422, f"language_code must be one of {', '.join(LANGUAGES)}")
+        cfg["language_code"] = body.language_code
+    text = body.text.strip() or "जी, हम brands के लिए custom printed pouches बनाते हैं। आप किस product के लिए packaging ढूँढ रहे हैं?"
     try:
         pcm = await tts_rest(text, cfg, 24000)
     except Exception as e:  # noqa: BLE001

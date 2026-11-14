@@ -19,12 +19,14 @@ function CardMenu({
   onCall,
   onMove,
   calling,
+  callBlockedReason,
 }: {
   lead: Lead;
   stage: Stage;
   onCall: () => void;
   onMove: (to: Stage) => void;
   calling: boolean;
+  callBlockedReason: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -91,7 +93,8 @@ function CardMenu({
             type="button"
             role="menuitem"
             className={itemCls}
-            disabled={calling || lead.status === "calling" || lead.status === "dnc"}
+            disabled={calling || lead.status === "calling" || lead.status === "dnc" || !!callBlockedReason}
+            aria-describedby={callBlockedReason && lead.status !== "dnc" ? `call-blocked-${lead.id}` : undefined}
             onClick={() => {
               close(false);
               onCall();
@@ -100,6 +103,11 @@ function CardMenu({
             <Phone className="size-3.5 text-primary" aria-hidden />
             {lead.status === "dnc" ? "Do not call" : "Call now"}
           </button>
+          {callBlockedReason && lead.status !== "dnc" ? (
+            <p id={`call-blocked-${lead.id}`} className="px-2.5 pb-1 text-xs text-muted" role="presentation">
+              {callBlockedReason}
+            </p>
+          ) : null}
           <p className="mt-1 border-t border-line px-2.5 pt-1.5 pb-1 text-xs text-muted" role="presentation">
             Move to…
           </p>
@@ -130,6 +138,7 @@ export function BoardCard({
   onCall,
   onMove,
   calling,
+  callBlockedReason = null,
   onDragStateChange,
 }: {
   lead: Lead;
@@ -137,6 +146,8 @@ export function BoardCard({
   onCall: () => void;
   onMove: (to: Stage) => void;
   calling: boolean;
+  /** Why "Call now" is unavailable (e.g. outbound calling switched off), else null. */
+  callBlockedReason?: string | null;
   onDragStateChange: (dragging: { id: number; from: Stage } | null) => void;
 }) {
   const router = useRouter();
@@ -186,7 +197,7 @@ export function BoardCard({
             {Math.round(lead.rating)}/10
           </span>
         ) : null}
-        <CardMenu lead={lead} stage={stage} onCall={onCall} onMove={onMove} calling={calling} />
+        <CardMenu lead={lead} stage={stage} onCall={onCall} onMove={onMove} calling={calling} callBlockedReason={callBlockedReason} />
       </div>
       {place ? <p className="mt-1 truncate text-xs text-muted">{place}</p> : null}
       {lead.last_summary ? <p className="text-mixed mt-1.5 truncate text-[13px] text-subtle-fg" title={lead.last_summary}>{lead.last_summary}</p> : null}

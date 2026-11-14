@@ -22,6 +22,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { CreateCampaignModal } from "@/components/campaigns/CreateCampaignModal";
+import { OutboundOffNotice } from "@/components/campaigns/OutboundOffNotice";
 import { useCallNow } from "@/components/calls/useCallNow";
 import { useTestAgent } from "@/components/providers/TestAgentProvider";
 import { Button, ButtonLink, IconButton } from "@/components/ui/Button";
@@ -100,7 +101,7 @@ export function LeadsView() {
   const toast = useToast();
   const { mutate: globalMutate } = useSWRConfig();
   const testAgent = useTestAgent();
-  const { callNow, callingId } = useCallNow();
+  const { callNow, callingId, outboundOff, outboundHint } = useCallNow();
   const now = useNow(60_000);
 
   // URL is the source of truth for filters, so links like /leads?interest=hot work.
@@ -275,6 +276,12 @@ export function LeadsView() {
         ) : null}
       </div>
 
+      {outboundOff ? (
+        <OutboundOffNotice className="mb-4">
+          Outbound calling is off in Settings, so “Call now” is disabled. Browser tests still work.
+        </OutboundOffNotice>
+      ) : null}
+
       {/* Bulk action bar */}
       {selected.size > 0 ? (
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-full border border-line bg-primary-tint py-2 pr-2 pl-4" role="region" aria-label="Bulk actions">
@@ -405,9 +412,15 @@ export function LeadsView() {
                           <IconButton
                             size="sm"
                             variant="primary"
-                            label={l.status === "dnc" ? `${leadName(l)} is marked do-not-call` : `Call ${leadName(l)} now`}
+                            label={
+                              l.status === "dnc"
+                                ? `${leadName(l)} is marked do-not-call`
+                                : outboundHint
+                                  ? `Can't call ${leadName(l)}: ${outboundHint}`
+                                  : `Call ${leadName(l)} now`
+                            }
                             icon={callingId === l.id ? <LoaderCircle className="spin" /> : <Phone />}
-                            disabled={l.status === "dnc" || l.status === "calling" || callingId === l.id}
+                            disabled={outboundOff || l.status === "dnc" || l.status === "calling" || callingId === l.id}
                             onClick={() => void callNow({ id: l.id, name: leadName(l) })}
                           />
                           <IconButton size="sm" label={`Test ${leadName(l)} in browser`} icon={<Headphones />} onClick={() => testAgent.open({ lead: l })} />

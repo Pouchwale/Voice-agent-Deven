@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 120
     llm_temperature: float = 0.6
     # Post-call summary/scoring needs a bigger budget than a spoken reply (JSON output).
-    analysis_max_tokens: int = 700
+    analysis_max_tokens: int = 900
 
     # --- Sarvam (STT + TTS) ---
     sarvam_api_key: str = ""
@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     vobiz_base_url: str = "https://api.vobiz.ai/api/v1"
     vobiz_from_number: str = ""
     vobiz_record_calls: bool = True
+    # Inbound webhook URLs carry a secret derived from VOBIZ_AUTH_TOKEN and this salt. Change the salt
+    # (e.g. inbound-v2) to revoke a leaked inbound URL, then click "Connect inbound on Vobiz" again.
+    inbound_token_salt: str = "inbound-v1"
+    # Back-fill inbound calls that rang while this backend/tunnel was offline (from Vobiz call records).
+    inbound_cdr_sync: bool = True
 
     @property
     def cors_origin_list(self) -> list[str]:

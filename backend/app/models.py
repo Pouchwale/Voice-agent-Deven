@@ -87,10 +87,17 @@ class Call(Base):
     __tablename__ = "calls"
     __table_args__ = (
         Index("ix_calls_created", "created_at"),
-        # At most ONE live call per lead, enforced by SQLite itself (no double-dial race).
-        # Also created by main._migrate for databases that existed before this index.
+        # At most ONE live PHONE call per lead, enforced by SQLite itself (no double-dial race). Browser
+        # test calls are excluded so a test run never blocks a real customer call (or vice versa).
+        # Also (re)created by main._migrate for databases that existed before this index.
         Index("uq_calls_active_lead", "lead_id", unique=True,
-              sqlite_where=text("lead_id IS NOT NULL AND status IN ('queued','initiated','ringing','in_progress')")),
+              sqlite_where=text("lead_id IS NOT NULL AND channel = 'phone' "
+                                "AND status IN ('queued','initiated','ringing','in_progress')")),
+        # One row per Vobiz inbound call: answer-webhook retries can never create a second row.
+        Index("uq_calls_inbound_provider", "provider_call_id", unique=True,
+              sqlite_where=text("direction = 'inbound' AND provider_call_id IS NOT NULL AND provider_call_id <> ''")),
+        Index("ix_calls_direction", "direction", "id"),
+        Index("ix_calls_from_number", "from_number"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -99,7 +106,10 @@ class Call(Base):
     lead_id: Mapped[int | None] = mapped_column(ForeignKey("leads.id", ondelete="SET NULL"), nullable=True, index=True)
     campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id", ondelete="SET NULL"), nullable=True, index=True)
     channel: Mapped[str] = mapped_column(String(16), default="phone")  # phone|browser
-    direction: Mapped[str] = mapped_column(String(16), default="outbound")
+    direction: Mapped[str] = mapped_column(String(16), default="outbound")  # outbound|inbound
+    # inbound only: returning (spoke with us before) | known (lead existed, never spoke) | new (lead created by
+    # this call) | international (foreign number, no lead) | anonymous (hidden / unusable number)
+    caller_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
     end_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
     from_number: Mapped[str | None] = mapped_column(String(32), nullable=True)

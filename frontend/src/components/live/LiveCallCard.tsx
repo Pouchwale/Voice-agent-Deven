@@ -15,13 +15,15 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { callerTitle, customerNumber, epochMs } from "@/components/inbound/caller";
+import { CallerChip, DirectionChip } from "@/components/inbound/chips";
 import { Chip, type ChipColor } from "@/components/ui/Badge";
 import { Button, IconButton } from "@/components/ui/Button";
 import { CallStatusChip } from "@/components/ui/StatusChip";
 import { useToast } from "@/components/ui/Toast";
 import { useNow } from "@/hooks/useNow";
 import { api, errorMessage } from "@/lib/api";
-import { callTitle, formatDuration, formatPhone, initials } from "@/lib/format";
+import { formatDuration, formatPhone, initials } from "@/lib/format";
 import type { LiveCall } from "@/lib/live-store";
 import type { AgentState, CallListItem } from "@/lib/types";
 import { LevelBars } from "./LevelBars";
@@ -36,32 +38,41 @@ const STATE: Record<AgentState, { label: string; color: ChipColor; icon: ReactNo
   ended: { label: "Ended", color: "white", icon: <PhoneOff aria-hidden /> },
 };
 
-function StateChip({ state, call }: { state: AgentState | null; call: CallListItem }) {
+/** What the agent is doing right now (listening / thinking / speaking…). */
+export function StateChip({ state, call, size = "sm" }: { state: AgentState | null; call: CallListItem; size?: "xs" | "sm" }) {
   // Before the agent reports a state, derive one from the call status.
   const s: AgentState = state ?? (call.status === "in_progress" ? "listening" : "connecting");
   const cfg = STATE[s];
   return (
     <span aria-live="polite">
-      <Chip size="sm" color={cfg.color} icon={cfg.icon}>
+      <Chip size={size} color={cfg.color} icon={cfg.icon}>
         {state === null && call.status !== "in_progress" ? "Connecting" : cfg.label}
       </Chip>
     </span>
   );
 }
 
-function CallTimer({ call }: { call: CallListItem }) {
+/** Running call length (from pick-up, else from the start). `compact` = one inline line for lists. */
+export function CallTimer({ call, compact = false }: { call: CallListItem; compact?: boolean }) {
   const now = useNow(1000);
-  const from = call.answered_at ?? call.started_at ?? call.created_at;
-  const startMs = from ? new Date(from).getTime() : NaN;
+  const startMs = epochMs(call.answered_at ?? call.started_at ?? call.created_at);
   const secs = Number.isFinite(startMs) ? Math.max(0, (now - startMs) / 1000) : null;
+  // An inbound call has been answered by Vobiz before our audio starts: that gap is "picking up", not "dialing".
+  const caption = call.answered_at ? "On call" : call.direction === "inbound" ? "Picking up" : "Since dial";
+  if (compact) {
+    return (
+      <span className="tabular inline-flex items-baseline gap-1.5 text-sm font-semibold">
+        <span aria-label="Call duration">{formatDuration(secs, "0:00")}</span>
+        <span className="text-xs font-medium text-muted">{caption}</span>
+      </span>
+    );
+  }
   return (
     <div className="text-right">
       <p className="tabular text-2xl leading-none font-semibold" aria-label="Call duration">
         {formatDuration(secs, "0:00")}
       </p>
-      <p className="mt-1 text-xs font-semibold text-muted">
-        {call.answered_at ? "On call" : "Since dial"}
-      </p>
+      <p className="mt-1 text-xs font-semibold text-muted">{caption}</p>
     </div>
   );
 }
@@ -86,7 +97,11 @@ export function LiveCallCard({
   const { call, state, transcript } = live;
   const toast = useToast();
   const [hangingUp, setHangingUp] = useState(false);
-  const name = callTitle(call);
+  const inbound = call.direction === "inbound";
+  // Inbound cards carry a caller chip ("Hidden number"), so the name line doesn't repeat it.
+  const name = callerTitle(call, inbound ? "Unknown caller" : "Unknown lead", "Unknown caller");
+  const rawNumber = call.channel === "phone" ? customerNumber(call) : null;
+  const number = rawNumber ? formatPhone(rawNumber) : null;
 
   async function hangup() {
     setHangingUp(true);
@@ -120,8 +135,7 @@ export function LiveCallCard({
             <p className="truncate text-base font-semibold">{name}</p>
           )}
           <p className="truncate text-[13px] font-normal text-muted">
-            {[call.lead_company, call.lead_phone ? formatPhone(call.lead_phone) : null].filter(Boolean).join(" · ") ||
-              "—"}
+            {[call.lead_company, number && number !== name ? number : null].filter(Boolean).join(" · ") || "—"}
           </p>
         </div>
         <CallTimer call={call} />
@@ -131,7 +145,9 @@ export function LiveCallCard({
         <Chip size="xs" color="white" icon={call.channel === "browser" ? <Laptop aria-hidden /> : <Phone aria-hidden />}>
           {call.channel === "browser" ? "Browser" : "Phone"}
         </Chip>
-        <CallStatusChip status={call.status} />
+        {inbound ? <DirectionChip direction="inbound" /> : null}
+        {inbound ? <CallerChip type={call.caller_type} /> : null}
+        <CallStatusChip status={call.status} direction={call.direction} />
         <StateChip state={state} call={call} />
       </div>
 

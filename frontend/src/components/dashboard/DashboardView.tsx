@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Flame, Headphones, PhoneCall, PhoneOutgoing, Radio, RefreshCw, Star, Upload, Users } from "lucide-react";
+import { Clock, Flame, Headphones, PhoneCall, PhoneIncoming, PhoneOutgoing, Radio, RefreshCw, Star, Upload, Users } from "lucide-react";
 import { useState } from "react";
 import useSWR from "swr";
 import { ChartCard, ChartTable } from "@/components/charts/ChartCard";
@@ -30,12 +30,16 @@ const RANGES = [
   { value: "30", label: "30 days" },
 ] as const;
 
+// 7 tiles: the first spans two columns below 2xl, so every breakpoint has full rows (2 / 4 / 7 columns).
+const KPI_GRID = "grid grid-cols-2 gap-4 md:grid-cols-4 2xl:grid-cols-7";
+const KPI_WIDE = "col-span-2 2xl:col-span-1";
+
 function DashboardSkeleton() {
   return (
     <div className="space-y-5" aria-label="Loading dashboard" role="status">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-[112px] rounded-xl" />
+      <div className={KPI_GRID}>
+        {Array.from({ length: 7 }).map((_, i) => (
+          <Skeleton key={i} className={i === 0 ? `h-[112px] rounded-xl ${KPI_WIDE}` : "h-[112px] rounded-xl"} />
         ))}
       </div>
       <div className="grid gap-5 lg:grid-cols-12">
@@ -121,8 +125,9 @@ export function DashboardView() {
       ) : null}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <div className={KPI_GRID}>
         <KpiTile
+          className={KPI_WIDE}
           label="Live calls"
           value={liveCount}
           icon={<Radio />}
@@ -137,7 +142,18 @@ export function DashboardView() {
           value={t.calls_today}
           icon={<PhoneOutgoing />}
           href="/calls"
-          caption={`${formatNumber(t.calls)} in the last ${days} days`}
+          caption={`${formatNumber(t.calls)} dialed in the last ${days} days`}
+        />
+        <KpiTile
+          label="Inbound today"
+          value={t.inbound_today ?? null}
+          icon={<PhoneIncoming />}
+          href="/inbound"
+          caption={
+            typeof t.inbound_missed_today === "number"
+              ? `${formatNumber(t.inbound_missed_today)} missed`
+              : "Customers who called us"
+          }
         />
         <KpiTile
           label="Connect rate"
@@ -169,26 +185,26 @@ export function DashboardView() {
         <ChartCard
           className="lg:col-span-8"
           title="Calls per day"
-          subtitle={`Last ${days} days, IST`}
+          subtitle={`Calls the agent made, last ${days} days, IST`}
           busy={busy}
           legend={[
-            { label: "Total", color: THEME.faint, kind: "line" },
+            { label: "Dialed", color: THEME.faint, kind: "line" },
             { label: "Connected", color: THEME.brand, kind: "line" },
             { label: "Hot", color: THEME.navy, kind: "line" },
           ]}
           table={
             <ChartTable
-              head={["Day", "Total", "Connected", "Hot"]}
+              head={["Day", "Dialed", "Connected", "Hot"]}
               rows={data.calls_by_day.map((d) => [formatDayLabel(d.date), d.total, d.connected, d.hot])}
             />
           }
         >
           {data.calls_by_day.length ? (
             <LineChart
-              ariaLabel="Calls per day: total, connected and hot"
+              ariaLabel="Calls per day: dialed, connected and hot"
               labels={dayLabels}
               series={[
-                { key: "total", label: "Total", color: THEME.faint, values: data.calls_by_day.map((d) => d.total) },
+                { key: "total", label: "Dialed", color: THEME.faint, values: data.calls_by_day.map((d) => d.total) },
                 { key: "connected", label: "Connected", color: THEME.brand, values: data.calls_by_day.map((d) => d.connected) },
                 { key: "hot", label: "Hot", color: THEME.navy, values: data.calls_by_day.map((d) => d.hot) },
               ]}

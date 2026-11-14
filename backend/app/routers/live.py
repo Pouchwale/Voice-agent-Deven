@@ -139,18 +139,24 @@ async def browser_call(ws: WebSocket):
         await ws.send_text(json.dumps({"type": "error", "detail": "First message must be {type:'start'}"}))
         await ws.close()
         return
+    # direction "inbound" = "Customer calls us" rehearsal: inbound greeting, purpose and memory
+    direction = "inbound" if str(start.get("direction") or "").strip().lower() == "inbound" else "outbound"
     try:
         lead_id = int(start["lead_id"]) if start.get("lead_id") else None
-        call, lead = await manager.create_browser_call(lead_id, start.get("name"), start.get("company"))
-    except CallError as e:
-        await ws.send_text(json.dumps({"type": "error", "detail": str(e)}))
+        call, lead = await manager.create_browser_call(lead_id, start.get("name"), start.get("company"),
+                                                       direction=direction)
+    except (CallError, ValueError, TypeError) as e:
+        await ws.send_text(json.dumps({"type": "error", "detail": str(e) if isinstance(e, CallError) else "Bad lead_id"}))
         await ws.close()
         return
 
     transport = BrowserTransport(ws)
+    cfg = load_agent_settings()
     call_id = await run_db(manager.call_id_for, call["uuid"])
-    session = CallSession(call_id=call_id, call_uuid=call["uuid"], lead=lead, cfg=load_agent_settings(),
-                          transport=transport, on_finished=manager.session_finished)
+    extras = await manager.browser_session_extras(call, lead, cfg)
+    session = CallSession(call_id=call_id, call_uuid=call["uuid"], lead=lead, cfg=cfg, transport=transport,
+                          on_finished=manager.session_finished, direction=extras["direction"],
+                          memory=extras["memory"], greeting_text=extras["greeting_text"], purpose=extras["purpose"])
     manager.register(session)
     await transport.send_event({"type": "ready", "uuid": call["uuid"], "input_sample_rate": transport.in_rate,
                                 "output_sample_rate": transport.out_rate})

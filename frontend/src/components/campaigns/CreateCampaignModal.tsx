@@ -1,6 +1,6 @@
 "use client";
 
-import { Filter, ListChecks, Play, Save } from "lucide-react";
+import { FileSpreadsheet, Filter, ListChecks, Play, Save } from "lucide-react";
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 import { Button } from "@/components/ui/Button";
@@ -21,8 +21,10 @@ import {
   ymdIST,
 } from "@/lib/format";
 import type { Campaign, CampaignCreate, CampaignFilter, Interest, LeadStatus } from "@/lib/types";
+import { CsvUploadPanel, useCsvPreview } from "./CsvUpload";
+import { OutboundOffNotice, useOutboundOff } from "./OutboundOffNotice";
 
-type Source = "selected" | "filter";
+type Source = "selected" | "csv" | "filter";
 
 const STATUS_OPTIONS: Option<LeadStatus | "">[] = [
   { value: "", label: "Any status" },
@@ -55,11 +57,15 @@ export function CreateCampaignModal(props: CreateCampaignModalProps) {
 function CreateCampaignForm({ onClose, selectedIds, initialFilter, onCreated }: CreateCampaignModalProps) {
   const toast = useToast();
   const { mutate } = useSWRConfig();
+  const outboundOff = useOutboundOff();
   const hasSelection = !!selectedIds && selectedIds.length > 0;
 
   const [name, setName] = useState(() => `Campaign – ${formatDayLabel(ymdIST())}`);
   const [nameError, setNameError] = useState<string | null>(null);
-  const [source, setSource] = useState<Source>(hasSelection ? "selected" : "filter");
+  const [source, setSource] = useState<Source>(hasSelection ? "selected" : "csv");
+  const csv = useCsvPreview();
+  const csvReady = !!csv.file && !!csv.preview && !csv.loading && csv.preview.summary.callable > 0;
+  const blocked = source === "csv" && !csvReady;
   const [status, setStatus] = useState<LeadStatus | "">(initialFilter?.status && initialFilter.status !== "dnc" ? initialFilter.status : "");
   const [interest, setInterest] = useState<Interest | "">(initialFilter?.interest ?? "");
   const [search, setSearch] = useState(initialFilter?.search ?? "");
@@ -79,6 +85,7 @@ function CreateCampaignForm({ onClose, selectedIds, initialFilter, onCreated }: 
       return;
     }
     if (retryError) return;
+    if (blocked) return;
     setNameError(null);
 
     const body: CampaignCreate = {
@@ -90,7 +97,7 @@ function CreateCampaignForm({ onClose, selectedIds, initialFilter, onCreated }: 
     };
     if (source === "selected" && hasSelection) {
       body.lead_ids = selectedIds;
-    } else {
+    } else if (source === "filter") {
       const filter: CampaignFilter = {};
       if (status) filter.status = status;
       if (interest) filter.interest = interest;
@@ -100,8 +107,23 @@ function CreateCampaignForm({ onClose, selectedIds, initialFilter, onCreated }: 
 
     setBusy(startNow ? "start" : "draft");
     let created: Campaign;
+    let uploadNote = "";
     try {
-      created = await api.campaigns.create(body);
+      if (source === "csv" && csv.file) {
+        const res = await api.campaigns.createFromCsv(csv.file, body);
+        const u = res.upload;
+        const left = [
+          u.duplicate ? `${formatNumber(u.duplicate)} duplicate${u.duplicate === 1 ? "" : "s"} removed` : "",
+          u.invalid ? `${formatNumber(u.invalid)} invalid` : "",
+          u.dnc ? `${formatNumber(u.dnc)} do-not-call skipped` : "",
+        ].filter(Boolean);
+        uploadNote = ` ${formatNumber(u.new)} new leads added.${left.length ? ` ${left.join(", ")}.` : ""}`;
+        // new leads were created: refresh lead lists and dashboard numbers too
+        void mutate((key) => typeof key === "string" && (key.startsWith("/api/leads") || key.startsWith("/api/dashboard")));
+        created = res;
+      } else {
+        created = await api.campaigns.create(body);
+      }
     } catch (err) {
       toast({ tone: "error", title: "Couldn't create campaign", description: errorMessage(err) });
       setBusy(null);
@@ -115,7 +137,7 @@ function CreateCampaignForm({ onClose, selectedIds, initialFilter, onCreated }: 
         toast({
           tone: "success",
           title: `Campaign started: ${result.name}`,
-          description: `${formatNumber(result.counts.total)} leads queued. The agent is dialing.`,
+          description: `${formatNumber(result.counts.total)} numbers queued. The agent is dialing.${uploadNote}`,
           action: { label: "Watch live", href: "/live" },
         });
       } catch (err) {
@@ -129,7 +151,7 @@ function CreateCampaignForm({ onClose, selectedIds, initialFilter, onCreated }: 
       toast({
         tone: "success",
         title: `Draft saved: ${created.name}`,
-        description: `${formatNumber(created.counts.total)} leads ready. Start it from Campaigns.`,
+        description: `${formatNumber(created.counts.total)} numbers ready. Start it from Campaigns.${uploadNote}`,
         action: { label: "Open campaigns", href: "/campaigns" },
       });
     }
@@ -145,10 +167,17 @@ function CreateCampaignForm({ onClose, selectedIds, initialFilter, onCreated }: 
       open
       onClose={onClose}
       title="New campaign"
-      description="The agent dials every lead in the list, qualifies them and scores interest. Do-not-call leads are always skipped."
-      size="lg"
+      description="The agent dials every number in the list, qualifies them and scores interest. Do-not-call leads are always skipped."
+      size={source === "csv" ? "xl" : "lg"}
       footer={
         <>
+          {source === "csv" && csv.preview && !csv.loading ? (
+            <p className="mr-auto hidden text-[13px] font-medium text-muted sm:block">
+              {csvReady
+                ? `${formatNumber(csv.preview.summary.callable)} unique numbers will be called`
+                : "No callable numbers in this file"}
+            </p>
+          ) : null}
           <Button variant="secondary" onClick={onClose} disabled={busy !== null}>
             Cancel
           </Button>
@@ -156,7 +185,7 @@ function CreateCampaignForm({ onClose, selectedIds, initialFilter, onCreated }: 
             variant="secondary"
             icon={<Save />}
             loading={busy === "draft"}
-            disabled={busy !== null && busy !== "draft"}
+            disabled={blocked || (busy !== null && busy !== "draft")}
             onClick={() => void submit(false)}
           >
             Create draft
@@ -165,7 +194,8 @@ function CreateCampaignForm({ onClose, selectedIds, initialFilter, onCreated }: 
             variant="primary"
             icon={<Play />}
             loading={busy === "start"}
-            disabled={busy !== null && busy !== "start"}
+            disabled={blocked || outboundOff || (busy !== null && busy !== "start")}
+            title={outboundOff ? "Outbound calling is off in Settings: save a draft and start it later." : undefined}
             onClick={() => void submit(true)}
           >
             Create &amp; start
@@ -180,6 +210,12 @@ function CreateCampaignForm({ onClose, selectedIds, initialFilter, onCreated }: 
           void submit(false);
         }}
       >
+        {outboundOff ? (
+          <OutboundOffNotice link={false}>
+            Outbound calling is off in Settings, so this campaign can&apos;t start now. Save it as a draft and start it
+            once calling is back on.
+          </OutboundOffNotice>
+        ) : null}
         <TextField
           label="Campaign name"
           value={name}
@@ -191,8 +227,8 @@ function CreateCampaignForm({ onClose, selectedIds, initialFilter, onCreated }: 
         />
 
         <fieldset>
-          <legend className="field-label">Leads to call</legend>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <legend className="field-label">Numbers to call</legend>
+          <div className={cn("grid gap-3", hasSelection ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
             {hasSelection ? (
               <SourceOption
                 checked={source === "selected"}
@@ -203,6 +239,13 @@ function CreateCampaignForm({ onClose, selectedIds, initialFilter, onCreated }: 
               />
             ) : null}
             <SourceOption
+              checked={source === "csv"}
+              onSelect={() => setSource("csv")}
+              icon={<FileSpreadsheet aria-hidden />}
+              title="Upload a CSV file"
+              body="See every number first. Duplicates and invalid numbers are removed."
+            />
+            <SourceOption
               checked={source === "filter"}
               onSelect={() => setSource("filter")}
               icon={<Filter aria-hidden />}
@@ -210,6 +253,12 @@ function CreateCampaignForm({ onClose, selectedIds, initialFilter, onCreated }: 
               body="Every lead that matches right now. No filter = all leads."
             />
           </div>
+
+          {source === "csv" ? (
+            <div className="mt-4">
+              <CsvUploadPanel csv={csv} />
+            </div>
+          ) : null}
 
           {source === "filter" ? (
             <div className="mt-4 grid gap-4 rounded-xl border border-line bg-canvas p-4 sm:grid-cols-3">

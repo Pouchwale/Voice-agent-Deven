@@ -9,7 +9,7 @@ from fpdf.enums import XPos, YPos
 from PIL import Image
 
 from ..models import Call
-from .reporting import IST, Range, ist
+from .reporting import IST, Range, customer_number, ist
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 FONTS = ASSETS / "fonts"
@@ -34,6 +34,13 @@ def _mmss(sec: float | None) -> str:
         return "–"
     s = int(round(sec))
     return f"{s // 60}:{s % 60:02d}"
+
+
+def _number(c: Call) -> str:
+    """The customer's number as printed (the caller on inbound calls; never our own DID)."""
+    if c.direction == "inbound" and c.caller_type == "anonymous":
+        return "Hidden number"
+    return customer_number(c)
 
 
 class ReportPDF(FPDF):
@@ -109,9 +116,9 @@ class ReportPDF(FPDF):
         self.set_text_color(*FG)
         self.ln(1.5)
 
-    def kpis(self, items: list[tuple[str, str, str]]) -> None:
-        """Grid of (label, value, sub) tiles, 4 per row."""
-        cols, gap, h = 4, 3, 19
+    def kpis(self, items: list[tuple[str, str, str]], cols: int = 4) -> None:
+        """Grid of (label, value, sub) tiles, `cols` per row."""
+        gap, h = 3, 19
         w = (self.content_w - gap * (cols - 1)) / cols
         for i, (label, value, sub) in enumerate(items):
             if i % cols == 0:
@@ -242,47 +249,50 @@ def build_report(calls: list[Call], analytics: dict, rng: Range, *, campaign_nam
     pdf.ln(2)
 
     lat = f"{t['avg_latency_ms'] / 1000:.1f} s" if t["avg_latency_ms"] else "–"
-    pdf.section("Overview")
+    pdf.section("Overview", "Dialed / picked up = calls we made; inbound = customers who called us")
     pdf.kpis([
-        ("Dialed", f"{t['dialed']:,}", ""),
+        ("Dialed", f"{t['dialed']:,}", "outbound calls"),
         ("Picked up", f"{t['connected']:,}", f"{t['connect_rate'] * 100:.0f}% connect rate"),
+        ("Inbound calls", f"{t['inbound']:,}", f"{t['inbound_missed']:,} missed"),
         ("Conversations", f"{t['conversations']:,}", f"{t['talk_minutes']:,} talk minutes"),
         ("Avg rating", f"{t['avg_rating']}/10" if t["avg_rating"] is not None else "–", f"{t['qualified']} qualified"),
+        ("Avg response", lat, f"p90 {t['p90_latency_ms'] / 1000:.1f} s" if t["p90_latency_ms"] else ""),
         ("Hot", f"{t['hot']:,}", "strong interest"),
         ("Warm", f"{t['warm']:,}", "normal interest"),
         ("Cold", f"{t['cold']:,}", "cut / not interested"),
-        ("Avg response", lat, f"p90 {t['p90_latency_ms'] / 1000:.1f} s" if t["p90_latency_ms"] else ""),
-    ])
+    ], cols=3)
 
     dialed = t["dialed"] or None
-    pdf.section("Funnel", "Share of dialed calls at each step")
+    every_call = len(calls) or None  # interest + end reasons count every call (both directions): never > 100%
+    pdf.section("Funnel", "Calls we made: share of dialed calls at each step")
     pdf.hbars([(f["label"], f["count"], NAVY if f["stage"] == "hot" else BRAND if f["stage"] != "dialed" else FAINT)
                for f in analytics["funnel"]], total=dialed)
 
     days = analytics["by_day"]
-    pdf.section("Calls per day", "Dialed vs picked up (IST)")
+    series = [("Dialed", [d["dialed"] for d in days], FAINT), ("Picked up", [d["connected"] for d in days], BRAND)]
+    if t["inbound"]:
+        series.append(("Inbound", [d.get("inbound", 0) for d in days], NAVY))
+    pdf.section("Calls per day", "Dialed vs picked up" + (", and inbound calls" if t["inbound"] else "") + " (IST)")
     every = max(1, len(days) // 10)
-    pdf.columns([d["date"][5:] for d in days],
-                [("Dialed", [d["dialed"] for d in days], FAINT), ("Picked up", [d["connected"] for d in days], BRAND)],
-                every=every)
+    pdf.columns([d["date"][5:] for d in days], series, every=every)
 
-    pdf.section("Lead interest", "Calls by interest after AI scoring")
+    pdf.section("Lead interest", "All calls by interest after AI scoring")
     i = analytics["interest"]
     pdf.hbars([("Hot", i["hot"], TIER["hot"]), ("Warm", i["warm"], TIER["warm"]), ("Cold", i["cold"], TIER["cold"]),
-               ("Not scored", i["unknown"], TIER["unknown"])], total=dialed)
+               ("Not scored", i["unknown"], TIER["unknown"])], total=every_call)
 
     pdf.section("Rating distribution", "1 = cold, 10 = ready to buy")
     pdf.columns([str(r["rating"]) for r in analytics["rating_histogram"]],
                 [("Calls", [r["count"] for r in analytics["rating_histogram"]], BRAND)], height=30)
 
     hours = analytics["by_hour"]
-    pdf.section("Best time to call", "Dialed vs picked up by hour of day (IST)")
+    pdf.section("Best time to call", "Dialed vs picked up by hour of day (IST, calls we made)")
     pdf.columns([f"{h['hour']:02d}" for h in hours],
                 [("Dialed", [h["dialed"] for h in hours], FAINT), ("Picked up", [h["connected"] for h in hours], BRAND)],
                 height=30, every=2)
 
-    pdf.section("Why calls ended")
-    pdf.hbars([(r["reason"], r["count"], FAINT) for r in analytics["end_reasons"]], total=dialed)
+    pdf.section("Why calls ended", "All calls")
+    pdf.hbars([(r["reason"], r["count"], FAINT) for r in analytics["end_reasons"]], total=every_call)
     if analytics["objections"]:
         pdf.section("Top objections")
         pdf.hbars([(o["label"], o["count"], PRIMARY) for o in analytics["objections"][:8]])
@@ -299,7 +309,7 @@ def build_report(calls: list[Call], analytics: dict, rng: Range, *, campaign_nam
             if c.interest == tier and c.lead_id:
                 best[c.lead_id] = c
         rows = sorted(best.values(), key=lambda c: -(c.rating or 0))[:MAX_LEAD_ROWS]
-        return [[(c.lead.name if c.lead else "") or "—", c.lead.phone if c.lead else (c.to_number or ""),
+        return [[(c.lead.name if c.lead else "") or "—", (c.lead.phone if c.lead else "") or _number(c),
                  (c.lead.company if c.lead else "") or "", f"{c.rating}/10" if c.rating else "–",
                  (c.next_action or c.summary or "")[:160], ist(c.created_at).strftime("%d %b")] for c in rows]
 
@@ -309,23 +319,24 @@ def build_report(calls: list[Call], analytics: dict, rng: Range, *, campaign_nam
 
     pdf.add_page()
     pdf.section("Hot leads", lead_note("hot", "Strong interest: call these first"))
-    pdf.table(["Name", "Phone", "Company", "Rating", "Next action", "Called"], lead_rows("hot"),
-              widths=(30, 26, 28, 13, 70, 15))
+    pdf.table(["Name", "Phone", "Company", "Rating", "Next action", "Last call"], lead_rows("hot"),
+              widths=(30, 26, 28, 13, 69, 16))
     pdf.section("Warm leads", lead_note("warm", "Normal interest: follow up"))
-    pdf.table(["Name", "Phone", "Company", "Rating", "Next action", "Called"], lead_rows("warm"),
-              widths=(30, 26, 28, 13, 70, 15))
+    pdf.table(["Name", "Phone", "Company", "Rating", "Next action", "Last call"], lead_rows("warm"),
+              widths=(30, 26, 28, 13, 69, 16))
 
     # Caps keep a year-long report to seconds, not minutes; the calls CSV always has every row.
     shown = calls[-MAX_CALL_ROWS:]
     note = (f"{len(calls):,} calls" if len(calls) <= MAX_CALL_ROWS
             else f"latest {MAX_CALL_ROWS:,} of {len(calls):,} calls — download the calls CSV for all rows")
-    pdf.section("All calls", note)
-    pdf.table(["When (IST)", "Lead", "Phone", "Interest", "Rating", "Length", "Summary"],
-              [[ist(c.created_at).strftime("%d %b %H:%M"), (c.lead.name if c.lead else "") or "—",
-                c.lead.phone if c.lead else (c.to_number or ""), c.interest.title() if c.interest != "unknown" else "–",
+    pdf.section("All calls", note + "  ·  In = the customer called us, Out = we called them")
+    pdf.table(["When (IST)", "In/Out", "Lead", "Phone", "Interest", "Rating", "Length", "Summary"],
+              [[ist(c.created_at).strftime("%d %b %H:%M"), "In" if c.direction == "inbound" else "Out",
+                (c.lead.name if c.lead else "") or "—", _number(c),
+                c.interest.title() if c.interest != "unknown" else "–",
                 f"{c.rating}/10" if c.rating else "–", _mmss(c.duration_sec), (c.summary or "")[:220]]
                for c in shown],
-              widths=(20, 26, 25, 15, 13, 12, 71), size=7.5)
+              widths=(20, 11, 24, 25, 14, 12, 12, 64), size=7.5)
 
     if include_transcripts:
         talked = [c for c in calls if any(tt.role == "user" for tt in c.turns)]
@@ -338,7 +349,7 @@ def build_report(calls: list[Call], analytics: dict, rng: Range, *, campaign_nam
             for c in talked:
                 pdf.ensure_space(20)
                 pdf.set_font("Inter", "B", 9)
-                who = (c.lead.name if c.lead else "") or (c.lead.phone if c.lead else c.to_number) or "Test call"
+                who = (c.lead.name if c.lead else "") or _number(c) or "Test call"
                 pdf.cell(0, 6, f"{who} · {ist(c.created_at).strftime('%d %b %Y %H:%M')} · "
                                f"{c.interest.title()} {f'{c.rating}/10' if c.rating else ''}",
                          new_x=XPos.LMARGIN, new_y=YPos.NEXT)

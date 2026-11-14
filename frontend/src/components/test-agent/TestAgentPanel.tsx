@@ -1,6 +1,19 @@
 "use client";
 
-import { ArrowRight, Headphones, Mic, MicOff, PhoneOff, RotateCcw, Search, UserRound, X } from "lucide-react";
+import {
+  ArrowRight,
+  Headphones,
+  Info,
+  Mic,
+  MicOff,
+  PhoneIncoming,
+  PhoneOff,
+  PhoneOutgoing,
+  RotateCcw,
+  Search,
+  UserRound,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { ChatBubble } from "@/components/calls/ChatBubble";
@@ -9,11 +22,12 @@ import { Button, ButtonLink } from "@/components/ui/Button";
 import { Chip, type ChipColor } from "@/components/ui/Badge";
 import { TextField } from "@/components/ui/Input";
 import { Drawer } from "@/components/ui/Modal";
+import { Segmented } from "@/components/ui/Select";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useNow } from "@/hooks/useNow";
 import { keys } from "@/lib/api";
 import { endReasonLabel, formatDuration, formatPhone, leadName } from "@/lib/format";
-import type { Lead, Page } from "@/lib/types";
+import type { CallDirection, Lead, Page } from "@/lib/types";
 import { useBrowserCall, type CallPhase } from "./useBrowserCall";
 
 type PickedLead = Pick<Lead, "id" | "name" | "company">;
@@ -32,7 +46,15 @@ const STATE_CHIP: Record<OrbState, ChipColor> = {
   speaking: "primary-solid",
 };
 
-function LeadPicker({ value, onChange }: { value: PickedLead | null; onChange: (l: PickedLead | null) => void }) {
+function LeadPicker({
+  value,
+  onChange,
+  label = "Pick a lead (optional)",
+}: {
+  value: PickedLead | null;
+  onChange: (l: PickedLead | null) => void;
+  label?: string;
+}) {
   const [q, setQ] = useState("");
   const search = useDebounced(q.trim(), 250);
   const { data, isLoading, error } = useSWR<Page<Lead>>(search ? keys.leads({ search, page_size: 6 }) : null, {
@@ -62,7 +84,7 @@ function LeadPicker({ value, onChange }: { value: PickedLead | null; onChange: (
   return (
     <div>
       <label htmlFor="ta-lead-search" className="field-label">
-        Pick a lead (optional)
+        {label}
       </label>
       <div className="relative">
         <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
@@ -125,6 +147,9 @@ export default function TestAgentPanel({ onClose, initialLead }: { onClose: () =
   const [lead, setLead] = useState<PickedLead | null>(initialLead);
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
+  // "inbound" rehearses a customer calling our number: inbound greeting, purpose and the lead's memory.
+  const [direction, setDirection] = useState<CallDirection>("outbound");
+  const inbound = direction === "inbound";
   const now = useNow(1000);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { phase } = call;
@@ -195,8 +220,34 @@ export default function TestAgentPanel({ onClose, initialLead }: { onClose: () =
 
         {showSetup ? (
           <div className="flex flex-col gap-4">
-            <LeadPicker value={lead} onChange={setLead} />
-            {!lead ? (
+            <div>
+              {/* visual label; the radio group carries the same accessible name */}
+              <p className="field-label" aria-hidden>
+                Who calls?
+              </p>
+              <Segmented<CallDirection>
+                label="Who calls"
+                value={direction}
+                onChange={setDirection}
+                options={[
+                  { value: "outbound", label: "We call the customer", icon: <PhoneOutgoing aria-hidden /> },
+                  { value: "inbound", label: "Customer calls us", icon: <PhoneIncoming aria-hidden /> },
+                ]}
+              />
+            </div>
+            <LeadPicker
+              value={lead}
+              onChange={setLead}
+              label={inbound ? "Call in as a lead (optional)" : "Pick a lead (optional)"}
+            />
+            {inbound ? (
+              <p className="flex items-start gap-2 text-[13px] text-muted">
+                <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+                {lead
+                  ? `The agent answers as if ${lead.name?.trim() || "this lead"} rang your number: the same greeting a real call gets, and its memory of their earlier calls.`
+                  : "Without a lead you're a first-time caller from an unknown number: the agent uses the new-caller greeting and asks your name."}
+              </p>
+            ) : !lead ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <TextField label="Or a test name" placeholder="e.g. Rahul Sharma" value={name} onChange={(e) => setName(e.target.value)} />
                 <TextField label="Company" placeholder="e.g. Sharma Snacks" value={company} onChange={(e) => setCompany(e.target.value)} />
@@ -214,9 +265,13 @@ export default function TestAgentPanel({ onClose, initialLead }: { onClose: () =
               size="lg"
               block
               icon={<Mic />}
-              onClick={() => void call.start(lead ? { lead_id: lead.id } : { name, company })}
+              onClick={() =>
+                void call.start(
+                  inbound ? { lead_id: lead?.id, direction: "inbound" } : lead ? { lead_id: lead.id } : { name, company },
+                )
+              }
             >
-              {phase === "error" ? "Try again" : "Start test call"}
+              {phase === "error" ? "Try again" : inbound ? "Start test call-in" : "Start test call"}
             </Button>
           </div>
         ) : null}
@@ -225,7 +280,12 @@ export default function TestAgentPanel({ onClose, initialLead }: { onClose: () =
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-3">
               <p className="font-heading text-sm font-semibold">Transcript</p>
-              {lead || name ? (
+              {inbound ? (
+                <p className="truncate text-[13px] text-muted">
+                  Calling in as {lead ? lead.name?.trim() || "Unnamed lead" : "a new caller"}
+                  {lead?.company ? ` · ${lead.company}` : ""}
+                </p>
+              ) : lead || name ? (
                 <p className="truncate text-[13px] text-muted">
                   Talking as {lead ? lead.name?.trim() || "Unnamed lead" : name}
                   {(lead?.company ?? company) ? ` · ${lead?.company ?? company}` : ""}

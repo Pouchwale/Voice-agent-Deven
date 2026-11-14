@@ -97,7 +97,8 @@ def test_csv_import_export_template(client):
 def test_settings_validation(client):
     s = client.get("/api/settings").json()
     assert s["silence_timeout_sec"] == 10 and s["silence_final_wait_sec"] == 3 and s["voice"] == "suhani"
-    assert s["opening_line"].endswith("क्या अभी दो minute बात कर सकते हैं?")  # permission-first greeting
+    assert s["opening_line"].endswith("अभी बात कर सकते हैं?")  # permission-first greeting
+    assert "दो minute" in s["opening_line"]
     r = client.put("/api/settings", json={"silence_timeout_sec": 12, "voice": "suhani", "call_window_start": "9:05"})
     assert r.status_code == 200 and r.json()["voice"] == "suhani" and r.json()["call_window_start"] == "09:05"
     assert client.put("/api/settings", json={"silence_timeout_sec": 999}).status_code == 422
@@ -105,7 +106,8 @@ def test_settings_validation(client):
     assert client.put("/api/settings", json={"call_window_end": "25:00"}).status_code == 422
     assert client.post("/api/settings/reset").json()["voice"] == "suhani"
     voices = client.get("/api/settings/voices").json()
-    assert {"id": "suhani", "name": "Suhani", "gender": "female"} in voices
+    assert {"id": "suhani", "name": "Suhani", "gender": "female", "model": "bulbul:v3"} in voices
+    assert any(v["id"] == "aparna_hi_customer" and v["model"] == "bulbul:v4-flash" for v in voices)
     assert not any(v["id"] == "pooja" for v in voices)
     sysinfo = client.get("/api/settings/system").json()
     assert sysinfo["llm_model"] == "gpt-4o-mini" and sysinfo["llm_max_tokens"] == 120
@@ -258,6 +260,11 @@ def test_dashboard_stats_shape(client):
                       "top_leads"}
     assert len(s["rating_histogram"]) == 10 and len(s["calls_by_day"]) == 14
     assert set(s["interest"]) == {"unknown", "cold", "warm", "hot"}
+    assert {"inbound_today", "inbound_missed_today"} <= set(s["totals"])
+    assert all(set(d) == {"date", "total", "connected", "hot", "inbound"} for d in s["calls_by_day"])
+    # the per-day series and the tiles agree (today = the last day)
+    assert s["calls_by_day"][-1]["total"] == s["totals"]["calls_today"]
+    assert s["calls_by_day"][-1]["inbound"] == s["totals"]["inbound_today"]
 
 
 def test_dashboard_excludes_browser_test_calls(client):

@@ -66,9 +66,12 @@ class CampaignCreate(BaseModel):
 
 
 class VoicePreview(BaseModel):
-    text: str = Field(max_length=500)
+    text: str = Field(max_length=600)  # spoken lines are validated up to 600 chars
     voice: str | None = None
-    pace: float | None = None
+    pace: float | None = Field(default=None, ge=0.5, le=2.0)
+    # Unsaved form values, so a preview plays what the owner just picked (tone presets).
+    temperature: float | None = Field(default=None, ge=0.01, le=1.0)
+    language_code: str | None = None
 
 
 # ---------------- serializers ----------------
@@ -103,13 +106,20 @@ def lead_out(lead: Lead) -> dict[str, Any]:
 
 def call_list_out(call: Call) -> dict[str, Any]:
     lead = call.lead
+    direction = call.direction or "outbound"
+    # The customer's number: the caller on inbound calls, the dialed number on outbound ones.
+    customer_number = call.from_number if direction == "inbound" else call.to_number
     return {
         "uuid": call.uuid,
         "lead_id": call.lead_id,
         "lead_name": lead.name if lead else None,
-        "lead_phone": lead.phone if lead else call.to_number,
+        "lead_phone": lead.phone if lead else customer_number,
         "lead_company": lead.company if lead else None,
         "campaign_id": call.campaign_id,
+        "direction": direction,
+        "caller_type": call.caller_type,
+        "from_number": call.from_number,
+        "to_number": call.to_number,
         "channel": call.channel,
         "status": call.status,
         "end_reason": call.end_reason,
@@ -121,6 +131,12 @@ def call_list_out(call: Call) -> dict[str, Any]:
         "interest": call.interest,
         "qualified": call.qualified,
         "summary": call.summary,
+        "next_action": call.next_action,
+        "callback_time": call.callback_time,
+        # why an inbound caller called (set by the post-call analysis), e.g. enquiry / complaint
+        "call_reason": (call.metrics or {}).get("call_reason") if isinstance(call.metrics, dict) else None,
+        # missed inbound calls only: pending | tried | done — filled by list endpoints, None elsewhere
+        "follow_up": None,
         "analysis_status": call.analysis_status,
         "has_recording": bool(call.recording_path or call.recording_url),
         "created_at": iso(call.created_at),
@@ -161,7 +177,8 @@ def call_detail_out(call: Call) -> dict[str, Any]:
     return data
 
 
-def campaign_out(c: Campaign, counts: dict[str, int], interest_counts: dict[str, int], active: int) -> dict[str, Any]:
+def campaign_out(c: Campaign, counts: dict[str, int], interest_counts: dict[str, int], active: int,
+                 outcomes: dict[str, int], placed: int) -> dict[str, Any]:
     return {
         "id": c.id,
         "name": c.name,
@@ -176,4 +193,6 @@ def campaign_out(c: Campaign, counts: dict[str, int], interest_counts: dict[str,
         "counts": counts,
         "interest_counts": interest_counts,
         "active_calls": active,
+        "outcomes": outcomes,      # per number, by its latest call (see services/campaign_stats.py)
+        "calls_placed": placed,    # every dial attempt, retries included
     }

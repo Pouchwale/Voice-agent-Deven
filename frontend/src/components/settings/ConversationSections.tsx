@@ -8,7 +8,7 @@ import { formatDuration } from "@/lib/format";
 import type { SectionProps } from "./model";
 import { NumberField, SettingsSection, TimeField } from "./SettingsSection";
 
-/** Removable word chips + an input that adds on Enter or comma. */
+/** Removable word chips + an input that adds on Enter (commas stay: "जी, समझ गई" is one filler). */
 function WordChips({
   label,
   words,
@@ -25,7 +25,7 @@ function WordChips({
 
   function commit(raw: string) {
     const parts = raw
-      .split(",")
+      .split("\n")
       .map((s) => s.trim())
       .filter(Boolean)
       .filter((s, i, arr) => arr.indexOf(s) === i && !words.includes(s));
@@ -60,11 +60,7 @@ function WordChips({
           id={id}
           value={draft}
           disabled={disabled}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v.includes(",")) commit(v);
-            else setDraft(v);
-          }}
+          onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -74,11 +70,11 @@ function WordChips({
             }
           }}
           onBlur={() => draft.trim() && commit(draft)}
-          placeholder={words.length ? "Add…" : "e.g. hmm, achha, ji"}
+          placeholder={words.length ? "Add…" : "e.g. हम्म, जी, अच्छा"}
           className="text-mixed min-w-[120px] flex-1 bg-transparent py-1 text-[15px] font-normal outline-none placeholder:font-medium placeholder:text-muted"
         />
       </div>
-      <p className="mt-1.5 text-[13px] font-normal text-muted">Press Enter or comma to add. Backspace removes the last one.</p>
+      <p className="mt-1.5 text-[13px] font-normal text-muted">Press Enter to add (commas are fine inside a filler). Backspace removes the last one.</p>
     </div>
   );
 }
@@ -94,7 +90,7 @@ export function ConversationSection({ form, set, errors }: SectionProps) {
     >
       <Switch
         label="Filler words"
-        description="Short sounds like “hmm” or “achha” while the agent thinks, so the line never feels dead."
+        description="Natural Hindi sounds (“हम्म”, “जी, समझ गई”) when a reply takes a moment, so the line never feels dead. Thinking sounds follow questions, acknowledgements follow statements, and the same one never plays twice in a row. Keep them neutral: they play before the reply is known."
         checked={form.fillers_enabled}
         onChange={(v) => set("fillers_enabled", v)}
       />
@@ -108,13 +104,13 @@ export function ConversationSection({ form, set, errors }: SectionProps) {
         <NumberField
           label="Filler delay"
           unit="ms"
-          min={0}
-          max={5000}
+          min={200}
+          max={3000}
           step={50}
           value={form.filler_delay_ms}
           onChange={(v) => set("filler_delay_ms", v)}
           error={errors.filler_delay_ms}
-          hint="Wait this long before a filler."
+          hint="Wait this long before a filler. 800 ms feels natural; shorter can delay a reply that was nearly ready."
         />
       </div>
       <div className="border-t border-line pt-5">
@@ -127,10 +123,10 @@ export function ConversationSection({ form, set, errors }: SectionProps) {
       </div>
       <div className="grid gap-4 border-t border-line pt-5 sm:grid-cols-[200px_1fr] sm:items-end">
         <NumberField
-          label="Max call length"
+          label="Max outbound call length"
           unit="sec"
-          min={60}
-          max={3600}
+          min={30}
+          max={1800}
           step={30}
           value={form.max_call_sec}
           onChange={(v) => set("max_call_sec", v)}
@@ -138,7 +134,7 @@ export function ConversationSection({ form, set, errors }: SectionProps) {
         />
         <p className="pb-3 text-[13px] font-normal text-muted">
           {Number.isFinite(form.max_call_sec)
-            ? `Calls are wrapped up politely at ${formatDuration(form.max_call_sec)} (m:ss).`
+            ? `Outbound calls are wrapped up politely at ${formatDuration(form.max_call_sec)} (m:ss). Inbound calls have their own limit under Calling.`
             : "Set a hard limit for call length."}
         </p>
       </div>

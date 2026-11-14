@@ -1,4 +1,8 @@
-"""Vobiz webhooks + bidirectional media stream (mu-law 8 kHz)."""
+"""Vobiz webhooks + bidirectional media stream (mu-law 8 kHz).
+
+Outbound calls carry a per-call token in every URL. Inbound calls arrive on the static application URLs
+/vobiz/inbound/{token}/answer|hangup (token = vobiz.inbound_token()), set up by /api/inbound/setup.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -11,9 +15,9 @@ from fastapi import APIRouter, BackgroundTasks, Request, WebSocket, WebSocketDis
 from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy import select
 
-from ..db import SessionLocal, utcnow
+from ..db import SessionLocal
 from ..models import ACTIVE_CALL_STATUSES, Call
-from ..services import vobiz
+from ..services import inbound_audio, vobiz
 from ..services.audio import pcm16_to_ulaw, ulaw_to_pcm16
 from ..services.call_manager import manager
 from ..services.events import spawn
@@ -22,6 +26,10 @@ from ..services.session import CallSession, Transport
 
 log = logging.getLogger("vobiz.router")
 router = APIRouter(prefix="/vobiz", tags=["vobiz"])
+
+# CallStatus values that only ever arrive once a call is over (a hangup posted to the answer URL)
+_ENDED_STATUSES = {"completed", "cancel", "canceled", "cancelled", "busy", "no-answer", "no_answer", "failed",
+                   "timeout"}
 
 
 async def _payload(request: Request) -> dict:
@@ -48,26 +56,23 @@ def _call_row(call_uuid: str) -> dict | None:
 
 
 # ------------------------------------------------------------------ webhooks
+def _xml(content: str) -> Response:
+    return Response(content=content, media_type="application/xml")
+
+
 @router.post("/answer/{call_uuid}/{token}")
 async def answer(call_uuid: str, token: str, request: Request):
     if not vobiz.verify_token(call_uuid, token):
         return PlainTextResponse("forbidden", status_code=403)
     data = await _payload(request)
-    row = await run_db(_call_row, call_uuid)
-    if not row or row["status"] not in ("queued", "initiated", "ringing", "in_progress"):
-        # cancelled/finished before the customer picked up (or a late retry): hang up, no AI
-        log.info("answer for inactive call %s (%s): hanging up", call_uuid, row and row["status"])
-        return Response(content='<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>',
-                        media_type="application/xml")
-    fields = {"status": "in_progress"}
-    if not row["answered"]:
-        fields["answered_at"] = utcnow()
-    if data.get("CallUUID"):
-        fields["provider_call_id"] = data["CallUUID"]
-    await run_db(lambda: update_call(call_uuid, **fields))
+    # Guarded: only a still-active call is answered. Cancelled / superseded / finished before the customer
+    # picked up (or a late retry): hang up, no AI.
+    out = await run_db(manager.mark_in_progress, call_uuid, str(data.get("CallUUID") or "") or None)
+    if out is None:
+        log.info("answer for inactive call %s: hanging up", call_uuid)
+        return _xml(vobiz.hangup_xml())
     from ..services.agent_config import load_agent_settings
-    xml = vobiz.answer_xml(call_uuid, int(load_agent_settings().get("max_call_sec") or 300))
-    return Response(content=xml, media_type="application/xml")
+    return _xml(vobiz.answer_xml(call_uuid, int(load_agent_settings().get("max_call_sec") or 300)))
 
 
 @router.post("/ring/{call_uuid}/{token}")
@@ -140,7 +145,84 @@ async def stream_status(call_uuid: str, token: str, request: Request):
     return PlainTextResponse("ok")
 
 
+# ------------------------------------------------------------------ inbound (static application URLs)
+def _inbound_forbidden(what: str, request: Request) -> PlainTextResponse:
+    """Counted and reported by the inbound setup check: usually Vobiz still calling an old tunnel / salt URL."""
+    vobiz.note_inbound_rejection()
+    log.warning("inbound %s with a wrong secret from %s", what, request.client.host if request.client else "?")
+    return PlainTextResponse("forbidden", status_code=403)
+
+
+async def _inbound_payload(request: Request) -> dict:
+    """Form / JSON body and query string together (the application may be set to GET or POST)."""
+    data = {k: v for k, v in request.query_params.items()}
+    if request.method != "GET":
+        data.update(await _payload(request))
+    return {str(k): ("" if v is None else str(v)) for k, v in data.items()}
+
+
+def _is_hangup_callback(data: dict) -> bool:
+    """Without a hangup_url on the application, Vobiz posts hangups to the answer URL too."""
+    if str(data.get("Event") or "").strip().lower() == "hangup":
+        return True
+    if str(data.get("HangupCause") or "").strip() or str(data.get("HangupCauseCode") or "").strip():
+        return True
+    return str(data.get("CallStatus") or "").strip().lower() in _ENDED_STATUSES
+
+
+@router.api_route("/inbound/{token}/answer", methods=["GET", "POST"])
+async def inbound_answer(token: str, request: Request, background: BackgroundTasks):
+    if not vobiz.verify_inbound_token(token):
+        return _inbound_forbidden("answer", request)
+    try:
+        data = await _inbound_payload(request)
+        if _is_hangup_callback(data):
+            background.add_task(manager.inbound_hangup, data)  # reply at once; nothing is created
+            return PlainTextResponse("ok")
+        direction = str(data.get("Direction") or "").strip().lower()
+        if direction and direction != "inbound":
+            log.warning("inbound answer URL got a %s call (%s): refused", direction, data.get("CallUUID"))
+            return PlainTextResponse("not an inbound call", status_code=400)
+        if not str(data.get("CallUUID") or "").strip():
+            log.warning("inbound answer without CallUUID: %s", {k: data.get(k) for k in ("From", "To", "CallStatus")})
+            return PlainTextResponse("CallUUID missing", status_code=400)
+        xml = await manager.answer_inbound(data)  # never raises
+    except Exception:  # noqa: BLE001  (belt and braces: never a 500, never invalid XML)
+        log.exception("inbound answer crashed")
+        xml = manager.inbound_failure_xml()
+    return _xml(xml)
+
+
+@router.api_route("/inbound/{token}/hangup", methods=["GET", "POST"])
+async def inbound_hangup(token: str, request: Request, background: BackgroundTasks):
+    if not vobiz.verify_inbound_token(token):
+        return _inbound_forbidden("hangup", request)
+    data = await _inbound_payload(request)
+    log.info("inbound hangup %s: %s", data.get("CallUUID"),
+             {k: data.get(k) for k in ("CallStatus", "HangupCause", "HangupCauseCode", "Duration")})
+    background.add_task(manager.inbound_hangup, data)  # respond < 3 s, Vobiz retries otherwise
+    return PlainTextResponse("ok")
+
+
+@router.get("/inbound/{token}/audio/{key}.wav")
+async def inbound_audio_clip(token: str, key: str, request: Request):
+    """Our own voice for the unavailable message (<Play> is only issued for a clip that is cached)."""
+    if not vobiz.verify_inbound_token(token):
+        return _inbound_forbidden("audio", request)
+    data = inbound_audio.wav(key)
+    if data is None:
+        return PlainTextResponse("not found", status_code=404)
+    return Response(content=data, media_type="audio/wav")
+
+
 # ------------------------------------------------------------------ media stream
+def _drop_line(call_uuid: str, provider_call_id: str | None) -> None:
+    """A stream for a call we already closed: unless Vobiz told us the line is down, hang it up, or with
+    keepCallAlive the caller could sit on a silent (billed) line."""
+    if provider_call_id and call_uuid not in manager.hangup_received:
+        spawn(vobiz.hangup_call(provider_call_id))
+
+
 class VobizTransport(Transport):
     channel = "phone"
     in_rate = 8000
@@ -237,20 +319,35 @@ async def media_stream(ws: WebSocket, call_uuid: str, token: str):
         # unknown / already finished call, or a duplicate stream connection: never start a 2nd AI
         log.warning("rejecting stream for %s (status=%s, live=%s)", call_uuid, row and row["status"],
                     call_uuid in manager.sessions)
+        if row is not None and call_uuid not in manager.sessions:
+            _drop_line(call_uuid, row["provider"] or start.get("callId"))
         await ws.close(code=1008)
         return
-    cfg, lead, greeting = await manager.take_prepared(call_uuid)
+    prep = await manager.take_prepared(call_uuid)
+    # The caller may have hung up while the greeting was being prepared: never start an AI on a dead line.
+    # Guarded claim: in_progress (+ answered_at on inbound calls, set here: the caller hears us from now on)
+    # only while the call is still active.
+    claimed = None
+    if call_uuid not in manager.hangup_received:
+        claimed = await run_db(manager.mark_in_progress, call_uuid)
+    if claimed is None or call_uuid in manager.hangup_received:
+        log.info("stream for %s arrived after the call ended: closing", call_uuid)
+        _drop_line(call_uuid, row["provider"] or start.get("callId"))
+        await ws.close(code=1008)
+        return
     call_id = await run_db(manager.call_id_for, call_uuid)
     transport = VobizTransport(ws, stream_id, row["provider"] or start.get("callId"), call_uuid)
-    session = CallSession(call_id=call_id, call_uuid=call_uuid, lead=lead, cfg=cfg, transport=transport,
-                          greeting_pcm=greeting, on_finished=manager.session_finished)
+    session = CallSession(call_id=call_id, call_uuid=call_uuid, lead=prep["lead"], cfg=prep["cfg"],
+                          transport=transport, greeting_pcm=prep["greeting_pcm"], on_finished=manager.session_finished,
+                          direction=prep["direction"], memory=prep["memory"], greeting_text=prep["greeting_text"],
+                          purpose=prep["purpose"])
     if not manager.register(session):
         await ws.close(code=1008)
         return
-    fields = {"status": "in_progress"}
-    if not row["answered"]:
-        fields["answered_at"] = utcnow()
-    await run_db(lambda: update_call(call_uuid, **fields))
+    if call_uuid in manager.hangup_received:  # the hangup slipped in between the claim and the registration
+        manager.sessions.pop(call_uuid, None)
+        await ws.close(code=1008)
+        return
     run_task = asyncio.create_task(session.run())
     try:
         while not session.ending:

@@ -1,5 +1,5 @@
-import { CALL_STATUS_LABEL, LEAD_STATUS_LABEL } from "@/lib/format";
-import type { CallStatus, CampaignStatus, LeadStatus } from "@/lib/types";
+import { CALL_STATUS_LABEL, callStatusLabel, LEAD_STATUS_LABEL } from "@/lib/format";
+import type { CallDirection, CallStatus, CampaignStatus, LeadStatus } from "@/lib/types";
 import { Chip, Dot, type ChipColor } from "./Badge";
 
 // Status is carried by the label; dots are blue (active/done) or neutral (everything else).
@@ -33,11 +33,12 @@ const CALL: Record<CallStatus, { color: ChipColor; dot: string; live?: boolean }
   canceled: { color: "white", dot: "bg-faint" },
 };
 
-export function CallStatusChip({ status }: { status: CallStatus }) {
+/** Pass `direction` so a missed inbound call reads "Missed" instead of "No answer". */
+export function CallStatusChip({ status, direction }: { status: CallStatus; direction?: CallDirection }) {
   const s = CALL[status] ?? CALL.queued;
   return (
     <Chip size="xs" color={s.color} icon={<Dot className={s.dot} live={s.live} />}>
-      {CALL_STATUS_LABEL[status] ?? status}
+      {direction ? callStatusLabel({ status, direction }) : (CALL_STATUS_LABEL[status] ?? status)}
     </Chip>
   );
 }

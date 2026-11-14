@@ -1,21 +1,21 @@
-"""Leads: CRUD, search/filter/sort, CSV import/export."""
+"""Leads: CRUD, search/filter/sort, CSV import/export, customer timeline."""
 from __future__ import annotations
 
-import csv
-import io
-from typing import Any
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import delete, func, insert, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, case, delete, func, insert, or_, select
+from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..db import get_db, utcnow
-from ..models import Call, Lead
-from ..schemas import IdList, LeadCreate, LeadUpdate, call_list_out, lead_out, lead_stage
+from ..models import Call, Campaign, CampaignLead, Lead
+from ..schemas import IdList, LeadCreate, LeadUpdate, call_list_out, iso, lead_out, lead_stage
+from ..services import lead_csv
 from ..services.csvsafe import csv_response
 from ..services.phone import normalize_phone
+from ..services.reporting import conversation_condition, follow_ups
 
 settings = get_settings()
 
@@ -28,19 +28,6 @@ SORTS = {
     "-last_called_at": Lead.last_called_at.desc().nulls_last(),
     "name": Lead.name.asc(), "-name": Lead.name.desc(),
 }
-
-COLUMN_ALIASES = {
-    "name": ("name", "full name", "fullname", "customer", "customer name", "contact name", "lead name", "naam"),
-    "phone": ("phone", "mobile", "number", "contact", "phone number", "mobile number", "contact number",
-              "whatsapp", "mobile no", "phone no", "cell"),
-    "company": ("company", "business", "brand", "company name", "business name", "firm", "organization",
-                "organisation"),
-    "city": ("city", "location", "town", "district", "area", "place"),
-    "email": ("email", "e-mail", "email id", "mail"),
-    "source": ("source", "lead source", "campaign", "channel"),
-    "notes": ("notes", "remarks", "comment", "comments", "note", "requirement", "description"),
-}
-
 
 BOARD_COLUMNS = [
     ("new", "New", "Not called yet"),
@@ -111,6 +98,7 @@ def board(search: str | None = None, limit: int = Query(50, ge=1, le=200), db: S
 
 
 def _phone(raw: str | None) -> str | None:
+    """Normalised E.164 number, or None when it is not a callable number."""
     return normalize_phone(raw, allow_international=settings.allow_international)
 
 
@@ -131,10 +119,7 @@ def create_lead(body: LeadCreate, db: Session = Depends(get_db)):
 
 @router.get("/template")
 def template():
-    content = ("name,phone,company,city,email,source,notes\n"
-               "Rahul Sharma,9876543210,Sharma Snacks,Ahmedabad,rahul@example.com,IndiaMART,Namkeen brand\n"
-               "Priya Patel,+91 98250 12345,Organic Roots,Pune,,Website,Needs stand-up pouches\n")
-    return StreamingResponse(iter([content]), media_type="text/csv",
+    return StreamingResponse(iter([lead_csv.TEMPLATE_CSV]), media_type="text/csv",
                              headers={"Content-Disposition": 'attachment; filename="leads_template.csv"'})
 
 
@@ -151,87 +136,34 @@ def export(interest: str | None = None, status: str | None = None, search: str |
                          "rating", "attempts", "last_called_at", "last_summary", "notes"], rows, name)
 
 
-def _map_columns(headers: list[str]) -> dict[str, str]:
-    mapping: dict[str, str] = {}
-    norm = {h: h.strip().lower().replace("_", " ") for h in headers}
-    for field, aliases in COLUMN_ALIASES.items():
-        for h, n in norm.items():
-            if h in mapping.values():
-                continue
-            if n in aliases:
-                mapping[field] = h
-                break
-    if "phone" not in mapping:  # fuzzy: any header containing phone/mobile/number
-        for h, n in norm.items():
-            if any(k in n for k in ("phone", "mobile", "number", "contact")) and h not in mapping.values():
-                mapping["phone"] = h
-                break
-    return mapping
-
-
-MAX_UPLOAD = 20 * 1024 * 1024
-
-
-def _decode(raw: bytes) -> str:
-    """UTF-8 (with/without BOM), UTF-16 only when it has a BOM, else Excel's Windows-1252."""
-    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
-        return raw.decode("utf-16")
-    try:
-        return raw.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        return raw.decode("cp1252", errors="replace")
-
-
 @router.post("/import")
 def import_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """Sync on purpose: FastAPI runs it in a worker thread, so a 100k-row import never freezes
     live calls on the event loop. All-or-nothing: an unreadable file imports nothing."""
-    raw = file.file.read(MAX_UPLOAD + 1)
-    if len(raw) > MAX_UPLOAD:
-        raise HTTPException(413, "File too large (max 20 MB)")
-    if not raw.strip():
-        raise HTTPException(400, "The file is empty")
-    text = _decode(raw)
-    try:
-        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t")
-    except csv.Error:
-        dialect = csv.excel
-    csv.field_size_limit(1_000_000)
-    reader = csv.DictReader(io.StringIO(text), dialect=dialect)
-    headers = reader.fieldnames or []
-    mapping = _map_columns(headers)
-    if "phone" not in mapping:
-        raise HTTPException(400, f"No phone column found. Columns seen: {', '.join(headers) or 'none'}")
+    parsed, mapping = lead_csv.parse(lead_csv.read_upload(file))
 
     existing = set(db.scalars(select(Lead.phone)).all())
     imported = duplicates = invalid = 0
     errors: list[str] = []
     rows: list[dict] = []
-    line = 1
-    try:
-        for line, row in enumerate(reader, start=2):
-            phone = _phone(row.get(mapping["phone"]))
-            if not phone:
-                invalid += 1
-                if len(errors) < 20:
-                    errors.append(f"Row {line}: invalid phone '{(row.get(mapping['phone']) or '').strip()[:40]}'")
-                continue
-            if phone in existing:
-                duplicates += 1
-                continue
-            existing.add(phone)
-            data: dict[str, Any] = {f: (row.get(col) or "").strip()[:500] or None
-                                    for f, col in mapping.items() if f != "phone"}
-            extra = {k: str(v)[:500] for k, v in row.items()
-                     if k and k not in mapping.values() and v not in (None, "")}
-            now = utcnow()
-            rows.append({"name": data.get("name") or "", "phone": phone, "company": data.get("company"),
-                         "city": data.get("city"), "email": data.get("email"),
-                         "source": data.get("source") or "CSV import", "notes": data.get("notes"),
-                         "extra": extra or None, "status": "new", "interest": "unknown", "attempts": 0,
-                         "created_at": now, "updated_at": now})
-    except csv.Error as e:
-        raise HTTPException(400, f"The CSV is malformed near row {line + 1}: {e}. Nothing was imported.") from None
+    for line, row in parsed:
+        phone = _phone(row.get(mapping["phone"]))
+        if not phone:
+            invalid += 1
+            if len(errors) < 20:
+                errors.append(f"Row {line}: invalid phone '{lead_csv.raw_phone(row, mapping)[:40]}'")
+            continue
+        if phone in existing:
+            duplicates += 1
+            continue
+        existing.add(phone)
+        data = lead_csv.lead_fields(row, mapping)
+        now = utcnow()
+        rows.append({"name": data.get("name") or "", "phone": phone, "company": data.get("company"),
+                     "city": data.get("city"), "email": data.get("email"),
+                     "source": data.get("source") or "CSV import", "notes": data.get("notes"),
+                     "extra": data["extra"], "status": "new", "interest": "unknown", "attempts": 0,
+                     "created_at": now, "updated_at": now})
     for i in range(0, len(rows), 2000):  # one transaction, chunked inserts
         db.execute(insert(Lead), rows[i:i + 2000])
     db.commit()
@@ -250,17 +182,108 @@ def bulk_delete(body: IdList, db: Session = Depends(get_db)):
     return {"deleted": deleted}
 
 
+def _lead_calls(lead: Lead):
+    """Every call of a lead: linked by lead_id, plus INBOUND calls from its number that have no lead (a
+    caller who rang before the lead existed, or while it was on another call). Outbound rows without a lead
+    are never matched by number: they may belong to a deleted lead whose number was recycled."""
+    if not lead.phone:
+        return Call.lead_id == lead.id
+    # coalesce() on direction keeps SQLite on ix_calls_from_number instead of scanning every inbound row
+    return or_(Call.lead_id == lead.id,
+               and_(Call.lead_id.is_(None), func.coalesce(Call.direction, "") == "inbound",
+                    Call.from_number == lead.phone))
+
+
+def _call_items(db: Session, calls: list[Call]) -> list[dict]:
+    states = follow_ups(db, calls)  # missed inbound calls: pending | tried | done
+    items = []
+    for c in calls:
+        item = call_list_out(c)
+        item["follow_up"] = states.get(c.uuid)
+        items.append(item)
+    return items
+
+
 @router.get("/{lead_id}")
 def get_lead(lead_id: int, db: Session = Depends(get_db)):
     lead = db.get(Lead, lead_id)
     if not lead:
         raise HTTPException(404, "Lead not found")
-    calls = db.scalars(select(Call).where(Call.lead_id == lead_id).order_by(Call.id.desc()).limit(50)).all()
+    calls = db.scalars(select(Call).options(selectinload(Call.lead)).where(_lead_calls(lead))
+                       .order_by(Call.id.desc()).limit(50)).all()
     out = lead_out(lead)
-    for c in calls:
-        c.lead = lead
-    out["calls"] = [call_list_out(c) for c in calls]
+    out["calls"] = _call_items(db, list(calls))
     return out
+
+
+TIMELINE_MAX = 200
+_KIND_RANK = {"call": 2, "campaign_added": 1, "lead_created": 0}  # same instant: the call is the newest
+_NEVER = datetime.min.replace(tzinfo=timezone.utc)  # sort key for a row without any timestamp
+
+
+@router.get("/{lead_id}/timeline")
+def lead_timeline(lead_id: int, db: Session = Depends(get_db)):
+    """Everything that happened with this customer, newest first: calls (both directions, browser tests
+    included), campaigns they were added to, and when the lead was created."""
+    lead = db.get(Lead, lead_id)
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    linked = _lead_calls(lead)
+    when = func.coalesce(Call.started_at, Call.created_at)
+
+    calls = list(db.scalars(select(Call).options(selectinload(Call.lead)).where(linked)
+                            .order_by(when.desc(), Call.id.desc()).limit(TIMELINE_MAX)).all())
+    states = follow_ups(db, calls)
+    events: list[tuple[tuple, dict]] = []  # (sort key, event)
+    for c in calls:
+        at = c.started_at or c.created_at
+        item = call_list_out(c)
+        item["follow_up"] = states.get(c.uuid)
+        key_points = [str(k) for k in c.key_points if k][:5] if isinstance(c.key_points, list) else []
+        events.append(((at or _NEVER, _KIND_RANK["call"], c.id), {
+            "id": f"call-{c.uuid}", "kind": "call", "at": iso(at), "call": item,
+            "next_action": c.next_action or None, "callback_time": c.callback_time or None, "key_points": key_points}))
+
+    # A CSV campaign is saved a moment BEFORE the leads it creates: never show "added" before "created".
+    for camp_id, name, status, created in db.execute(
+            select(Campaign.id, Campaign.name, Campaign.status, Campaign.created_at)
+            .join(CampaignLead, CampaignLead.campaign_id == Campaign.id).where(CampaignLead.lead_id == lead.id)):
+        at = max((t for t in (created, lead.created_at) if t is not None), default=None)
+        events.append(((at or _NEVER, _KIND_RANK["campaign_added"], camp_id), {
+            "id": f"campaign-{camp_id}", "kind": "campaign_added", "at": iso(at), "campaign_id": camp_id,
+            "campaign_name": name, "campaign_status": status}))
+
+    created = {"id": f"lead-{lead.id}", "kind": "lead_created", "at": iso(lead.created_at), "source": lead.source}
+    events.append(((lead.created_at or _NEVER, _KIND_RANK["lead_created"], lead.id), created))
+    events.sort(key=lambda e: e[0], reverse=True)
+    ordered = [e for _, e in events]
+    if len(ordered) > TIMELINE_MAX:  # cap the list, but "Lead created" is always kept
+        head = ordered[:TIMELINE_MAX]
+        ordered = head if any(e is created for e in head) else head[:-1] + [created]
+
+    # Stats cover EVERY linked phone call (SQL aggregates), not just the events listed above.
+    phone = and_(linked, Call.channel == "phone")
+    answered = Call.status == "completed"
+    n, inbound, n_answered, talk, first, last = db.execute(select(
+        func.count(), func.sum(case((Call.direction == "inbound", 1), else_=0)), func.sum(case((answered, 1), else_=0)),
+        func.sum(case((answered, func.coalesce(Call.duration_sec, 0)), else_=0)), func.min(when), func.max(when),
+    ).where(phone)).one()
+    n, inbound = n or 0, inbound or 0
+
+    # Next step: the newest analysed conversation that left a next action or a callback time.
+    nxt = db.scalars(select(Call).where(
+        phone, conversation_condition(), Call.analysis_status == "done",
+        or_(func.trim(func.coalesce(Call.next_action, "")) != "", func.trim(func.coalesce(Call.callback_time, "")) != ""))
+        .order_by(when.desc(), Call.id.desc()).limit(1)).first()
+    return {
+        "lead": lead_out(lead),
+        "events": ordered,
+        "stats": {"calls": n, "inbound": inbound, "outbound": n - inbound, "answered": n_answered or 0,
+                  "talk_sec": int(round(float(talk or 0))), "first_contact_at": iso(first), "last_contact_at": iso(last)},
+        "next_step": None if nxt is None else {
+            "next_action": (nxt.next_action or "").strip() or None, "callback_time": (nxt.callback_time or "").strip() or None,
+            "call_uuid": nxt.uuid, "at": iso(nxt.started_at or nxt.created_at)},
+    }
 
 
 @router.patch("/{lead_id}")

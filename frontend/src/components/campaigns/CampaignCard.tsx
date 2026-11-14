@@ -1,7 +1,8 @@
 "use client";
 
-import { ChevronDown, Clock, Layers, Pause, Play, RotateCcw, Trash2 } from "lucide-react";
+import { ChevronDown, Clock, Layers, Pause, PhoneOff, Play, RotateCcw, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
+import { OUTBOUND_OFF_HINT } from "@/components/calls/useCallNow";
 import { Chip } from "@/components/ui/Badge";
 import { Button, IconButton } from "@/components/ui/Button";
 import { InterestBadge } from "@/components/ui/InterestBadge";
@@ -11,8 +12,9 @@ import { useToast } from "@/components/ui/Toast";
 import { api, errorMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { formatNumber, formatShortDateTime } from "@/lib/format";
-import type { Campaign, Interest } from "@/lib/types";
+import type { Campaign, CampaignResultFilter, Interest } from "@/lib/types";
 import { CampaignLeads } from "./CampaignLeads";
+import { CampaignLiveCalls, CampaignOutcomes } from "./CampaignOutcomes";
 import { CampaignProgress } from "./CampaignProgress";
 
 const INTEREST_SHOWN: Interest[] = ["cold", "warm", "hot", "unknown"];
@@ -21,18 +23,32 @@ export function CampaignCard({
   campaign,
   onChanged,
   onDeleted,
+  outboundOff = false,
 }: {
   campaign: Campaign;
   onChanged: (c: Campaign) => void;
   onDeleted: (id: number) => void;
+  /** Outbound calling is switched off in Settings: nothing dials, and starting would be refused. */
+  outboundOff?: boolean;
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState<"start" | "pause" | "delete" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [filter, setFilter] = useState<CampaignResultFilter | "">("");
   const leadsId = useId();
   const c = campaign;
   const running = c.status === "running";
+
+  /** A result tile opens the number list filtered to it; clicking the same tile again clears the filter. */
+  function pickResult(f: CampaignResultFilter) {
+    if (expanded && filter === f) {
+      setFilter("");
+      return;
+    }
+    setFilter(f);
+    setExpanded(true);
+  }
 
   async function start() {
     setBusy("start");
@@ -93,6 +109,11 @@ export function CampaignCard({
                 {c.name}
               </h2>
               <CampaignStatusChip status={c.status} />
+              {running && outboundOff ? (
+                <Chip size="sm" color="neutral" icon={<PhoneOff aria-hidden />} title={OUTBOUND_OFF_HINT}>
+                  On hold: outbound calling off
+                </Chip>
+              ) : null}
               {c.active_calls > 0 ? (
                 <Chip size="sm" color="primary" icon={<span className="live-dot inline-block size-2 rounded-full border border-line bg-primary" aria-hidden />}>
                   {c.active_calls} on call
@@ -112,7 +133,15 @@ export function CampaignCard({
                 Pause
               </Button>
             ) : c.status !== "completed" ? (
-              <Button variant="primary" size="sm" icon={<Play />} loading={busy === "start"} disabled={busy !== null} onClick={() => void start()}>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Play />}
+                loading={busy === "start"}
+                disabled={busy !== null || outboundOff}
+                title={outboundOff ? OUTBOUND_OFF_HINT : undefined}
+                onClick={() => void start()}
+              >
                 {c.status === "paused" ? "Resume" : "Start"}
               </Button>
             ) : null}
@@ -149,6 +178,13 @@ export function CampaignCard({
           <CampaignProgress counts={c.counts} name={c.name} />
         </div>
 
+        {c.outcomes ? (
+          <div className="mt-4 space-y-3">
+            <CampaignOutcomes campaign={c} active={expanded ? filter : ""} onPick={pickResult} />
+            <CampaignLiveCalls campaignId={c.id} />
+          </div>
+        ) : null}
+
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2" aria-label="Interest so far">
           {INTEREST_SHOWN.map((i) => {
             const n = c.interest_counts?.[i] ?? 0;
@@ -173,12 +209,19 @@ export function CampaignCard({
             expanded ? "rounded-none" : "rounded-b-xl",
           )}
         >
-          <span>{expanded ? "Hide leads" : `View leads (${formatNumber(c.counts.total)})`}</span>
+          <span>{expanded ? "Hide numbers" : `View all numbers & results (${formatNumber(c.counts.total)})`}</span>
           <ChevronDown className={cn("size-4 transition-transform duration-200", expanded && "rotate-180")} aria-hidden />
         </button>
         {expanded ? (
           <div id={leadsId} className="border-t border-line">
-            <CampaignLeads id={c.id} running={running} total={c.counts.total} />
+            <CampaignLeads
+              id={c.id}
+              running={running}
+              total={c.counts.total}
+              outcomes={c.outcomes}
+              filter={filter}
+              onFilter={setFilter}
+            />
           </div>
         ) : null}
       </div>

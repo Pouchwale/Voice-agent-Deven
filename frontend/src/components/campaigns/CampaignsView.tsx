@@ -1,19 +1,21 @@
 "use client";
 
-import { Megaphone, Plus, Users } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
-import useSWR from "swr";
-import { useCampaignUpdates } from "@/components/providers/LiveProvider";
-import { Button, ButtonLink } from "@/components/ui/Button";
+import { Download, Megaphone, Plus, Upload, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import useSWR, { useSWRConfig } from "swr";
+import { useCallUpdates, useCampaignUpdates } from "@/components/providers/LiveProvider";
+import { Button, ButtonLink, buttonClass } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/States";
 import { useEntrance } from "@/hooks/useEntrance";
-import { keys } from "@/lib/api";
-import { formatNumber } from "@/lib/format";
-import type { Campaign } from "@/lib/types";
+import { api, keys } from "@/lib/api";
+import { pluralize } from "@/lib/format";
+import type { CallListItem, Campaign } from "@/lib/types";
 import { CampaignCard } from "./CampaignCard";
 import { CreateCampaignModal } from "./CreateCampaignModal";
+import { CsvTemplate } from "./CsvTemplate";
+import { OutboundOffNotice, useOutboundOff } from "./OutboundOffNotice";
 
 function upsert(list: Campaign[] | undefined, c: Campaign): Campaign[] {
   const current = list ?? [];
@@ -40,6 +42,7 @@ function CampaignSkeleton() {
 
 export function CampaignsView() {
   const [creating, setCreating] = useState(false);
+  const outboundOff = useOutboundOff();
   const { data, error, isLoading, mutate } = useSWR<Campaign[]>(keys.campaigns, {
     refreshInterval: (latest) => (latest?.some((c) => c.status === "running") ? 5000 : 30_000),
   });
@@ -56,6 +59,25 @@ export function CampaignsView() {
     [mutate],
   );
   useCampaignUpdates(onCampaignUpdate);
+
+  // A campaign call rang, connected or ended: refresh the counts (and any open number list) at once
+  // instead of waiting for the next poll. Bursts of events are coalesced into one refresh.
+  const { mutate: globalMutate } = useSWRConfig();
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onCallUpdate = useCallback(
+    (call: CallListItem) => {
+      if (call.campaign_id == null || refreshTimer.current) return;
+      refreshTimer.current = setTimeout(() => {
+        refreshTimer.current = null;
+        void globalMutate((key) => typeof key === "string" && key.startsWith("/api/campaigns"));
+      }, 600);
+    },
+    [globalMutate],
+  );
+  useCallUpdates(onCallUpdate);
+  useEffect(() => () => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+  }, []);
 
   const onChanged = useCallback((c: Campaign) => void mutate((list) => upsert(list, c), { revalidate: false }), [mutate]);
   const onDeleted = useCallback(
@@ -82,15 +104,29 @@ export function CampaignsView() {
         title="Campaigns"
         description={
           data && campaigns.length > 0
-            ? `${formatNumber(campaigns.length)} campaigns · ${running} running · ${activeCalls} calls on air right now.`
+            ? `${pluralize(campaigns.length, "campaign")} · ${running} running · ${pluralize(activeCalls, "call")} on air right now.`
             : "Bulk-dial a list of leads. The agent calls, qualifies and scores every lead so your sales team only follows up on the hot ones."
         }
         actions={
-          <Button variant="primary" icon={<Plus />} onClick={() => setCreating(true)}>
-            New campaign
-          </Button>
+          <>
+            <a href={api.campaigns.templateUrl()} download className={buttonClass({ variant: "secondary" })}>
+              <Download aria-hidden />
+              CSV template
+            </a>
+            <Button variant="primary" icon={<Plus />} onClick={() => setCreating(true)}>
+              New campaign
+            </Button>
+          </>
         }
       />
+
+      {outboundOff ? (
+        <OutboundOffNotice className="mb-5">
+          Outbound calling is off in Settings — campaigns won&apos;t dial until you turn it on.
+          {running === 1 ? " The running campaign waits and carries on by itself once it's back on." : null}
+          {running > 1 ? ` The ${running} running campaigns wait and carry on by themselves once it's back on.` : null}
+        </OutboundOffNotice>
+      ) : null}
 
       {error && !data ? (
         <ErrorState error={error} onRetry={() => void mutate()} title="Couldn't load campaigns" />
@@ -101,29 +137,32 @@ export function CampaignsView() {
           <CampaignSkeleton />
         </div>
       ) : campaigns.length === 0 ? (
-        <div className="rounded-xl border border-line bg-white" data-anim>
-          <EmptyState
-            icon={<Megaphone />}
-            tone="subtle"
-            title="No campaigns yet"
-            body="A campaign dials a list of leads automatically. The agent calls, qualifies and scores each one, and hot leads go to your sales team."
-            action={
-              <>
-                <Button variant="primary" icon={<Plus />} onClick={() => setCreating(true)}>
-                  New campaign
-                </Button>
-                <ButtonLink href="/leads" variant="secondary" icon={<Users />}>
-                  Pick leads first
-                </ButtonLink>
-              </>
-            }
-          />
+        <div className="space-y-5" data-anim>
+          <div className="rounded-xl border border-line bg-white">
+            <EmptyState
+              icon={<Megaphone />}
+              tone="subtle"
+              title="No campaigns yet"
+              body="Upload a CSV of numbers (or pick leads). The agent calls, qualifies and scores each one, and hot leads go to your sales team."
+              action={
+                <>
+                  <Button variant="primary" icon={<Upload />} onClick={() => setCreating(true)}>
+                    Upload CSV &amp; create campaign
+                  </Button>
+                  <ButtonLink href="/leads" variant="secondary" icon={<Users />}>
+                    Pick leads first
+                  </ButtonLink>
+                </>
+              }
+            />
+          </div>
+          <CsvTemplate />
         </div>
       ) : (
         <div ref={listRef} className="space-y-5">
           {error ? <ErrorState error={error} onRetry={() => void mutate()} title="Showing the last loaded data" compact /> : null}
           {campaigns.map((c) => (
-            <CampaignCard key={c.id} campaign={c} onChanged={onChanged} onDeleted={onDeleted} />
+            <CampaignCard key={c.id} campaign={c} onChanged={onChanged} onDeleted={onDeleted} outboundOff={outboundOff} />
           ))}
         </div>
       )}

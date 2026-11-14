@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Calls" };
 
 export default function CallsPage() {
   return (
-    <Suspense fallback={<SkeletonRows rows={8} cols={7} />}>
+    <Suspense fallback={<SkeletonRows rows={8} cols={9} />}>
       <CallsView />
     </Suspense>
   );

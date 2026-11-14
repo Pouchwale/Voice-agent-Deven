@@ -2,17 +2,33 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Building2, Headphones, Mail, MapPin, Pencil, Phone, PhoneCall, Sparkles, Trash2, UserRound } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  ArrowLeft,
+  Building2,
+  Headphones,
+  ListTree,
+  Mail,
+  MapPin,
+  Pencil,
+  Phone,
+  PhoneCall,
+  Sparkles,
+  Table2,
+  Trash2,
+  UserRound,
+} from "lucide-react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { CallsTable } from "@/components/calls/CallsTable";
 import { useCallNow } from "@/components/calls/useCallNow";
 import { useTestAgent } from "@/components/providers/TestAgentProvider";
+import { CustomerTimeline } from "@/components/timeline/CustomerTimeline";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { InterestBadge } from "@/components/ui/InterestBadge";
 import { ConfirmDialog } from "@/components/ui/Modal";
 import { RatingPill } from "@/components/ui/RatingPill";
+import { Segmented } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/States";
 import { LeadStatusChip } from "@/components/ui/StatusChip";
@@ -43,7 +59,9 @@ export function LeadDetailView({ id }: { id: number }) {
   const toast = useToast();
   const { mutate: globalMutate } = useSWRConfig();
   const testAgent = useTestAgent();
-  const { callNow, callingId } = useCallNow();
+  const { callNow, callingId, outboundOff, outboundHint } = useCallNow();
+  const [historyView, setHistoryView] = useState<"timeline" | "table">("timeline");
+  const callHintId = useId();
   const validId = Number.isInteger(id) && id > 0;
   const [pollEvery, setPollEvery] = useState(0);
   const { data, error, isLoading, mutate } = useSWR<LeadWithCalls>(validId ? keys.lead(id) : null, {
@@ -128,7 +146,9 @@ export function LeadDetailView({ id }: { id: number }) {
             variant="primary"
             icon={<PhoneCall />}
             loading={callingId === lead.id}
-            disabled={lead.status === "dnc"}
+            disabled={lead.status === "dnc" || outboundOff}
+            aria-describedby={outboundHint ? callHintId : undefined}
+            title={outboundHint ?? undefined}
             onClick={() => void callNow({ id: lead.id, name: leadName(lead) })}
           >
             Call now
@@ -142,6 +162,14 @@ export function LeadDetailView({ id }: { id: number }) {
           <Button variant="danger" icon={<Trash2 />} onClick={() => setDeleting(true)}>
             Delete
           </Button>
+          {outboundHint ? (
+            <p id={callHintId} className="w-full text-[13px] text-muted">
+              {outboundHint}{" "}
+              <Link href="/settings#calling" className="font-medium text-primary hover:underline">
+                Open Settings
+              </Link>
+            </p>
+          ) : null}
         </div>
       </header>
 
@@ -173,7 +201,7 @@ export function LeadDetailView({ id }: { id: number }) {
               {lead.source ?? "—"}
             </Detail>
             <Detail label="Calls" icon={<PhoneCall />}>
-              {formatNumber(lead.attempts)} attempts · last {formatDateTime(lead.last_called_at, "never")}
+              {formatNumber(lead.attempts)} attempts · last contact {formatDateTime(lead.last_called_at, "never")}
             </Detail>
           </dl>
           {lead.notes ? (
@@ -200,12 +228,32 @@ export function LeadDetailView({ id }: { id: number }) {
             </section>
           ) : null}
 
-          <section className="overflow-hidden rounded-xl border border-line bg-white" data-anim>
-            <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
-              <h2 className="font-heading font-semibold tracking-tight text-base">Call history</h2>
-              <span className="text-sm font-medium text-muted">{formatNumber(calls.length)} calls</span>
+          <section className="overflow-hidden rounded-xl border border-line bg-white" data-anim aria-labelledby={`${callHintId}-history`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
+              <div className="min-w-0">
+                <h2 id={`${callHintId}-history`} className="font-heading font-semibold tracking-tight text-base">
+                  {historyView === "timeline" ? "Customer timeline" : "Call history"}
+                </h2>
+                {historyView === "table" ? (
+                  <p className="text-[13px] font-medium text-muted">{formatNumber(calls.length)} calls</p>
+                ) : null}
+              </div>
+              <Segmented<"timeline" | "table">
+                label="History view"
+                size="sm"
+                value={historyView}
+                onChange={setHistoryView}
+                options={[
+                  { value: "timeline", label: "Timeline", icon: <ListTree aria-hidden /> },
+                  { value: "table", label: "Table", icon: <Table2 aria-hidden /> },
+                ]}
+              />
             </div>
-            {calls.length ? (
+            {historyView === "timeline" ? (
+              <div className="p-4 sm:p-5">
+                <CustomerTimeline leadId={lead.id} limit={30} />
+              </div>
+            ) : calls.length ? (
               <CallsTable calls={calls} showLead={false} />
             ) : (
               <EmptyState

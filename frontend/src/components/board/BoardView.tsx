@@ -2,6 +2,7 @@
 
 import { RefreshCw, SquareKanban } from "lucide-react";
 import { useRef, useState, type DragEvent } from "react";
+import { OutboundOffNotice } from "@/components/campaigns/OutboundOffNotice";
 import { useCallNow } from "@/components/calls/useCallNow";
 import { Button } from "@/components/ui/Button";
 import { SearchInput } from "@/components/ui/Input";
@@ -32,6 +33,7 @@ function Column({
   onMove,
   onCall,
   callingId,
+  callBlockedReason,
   onLoadMore,
 }: {
   col: ViewColumn;
@@ -41,6 +43,8 @@ function Column({
   onMove: (lead: Lead, to: Stage) => void;
   onCall: (lead: Lead) => void;
   callingId: number | null;
+  /** Why "Call now" is unavailable on every card (outbound calling off), else null. */
+  callBlockedReason: string | null;
   onLoadMore: () => void;
 }) {
   const [over, setOver] = useState(false);
@@ -107,6 +111,7 @@ function Column({
               lead={lead}
               stage={col.key}
               calling={callingId === lead.id}
+              callBlockedReason={callBlockedReason}
               onCall={() => onCall(lead)}
               onMove={(to) => onMove(lead, to)}
               onDragStateChange={onDragging}
@@ -127,7 +132,7 @@ export function BoardView() {
   const [q, setQ] = useState("");
   const search = useDebounced(q.trim(), 300);
   const { columns, data, error, isLoading, isValidating, refresh, loadMore, moveLead } = useBoard(search);
-  const { callNow, callingId } = useCallNow();
+  const { callNow, callingId, outboundHint } = useCallNow();
   const [dragging, setDragging] = useState<{ id: number; from: Stage } | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -160,6 +165,12 @@ export function BoardView() {
         <SearchInput value={q} onChange={setQ} placeholder="Search name, phone, company, city" label="Search leads" className="w-full sm:w-80" />
         {data ? <p className="text-[13px] text-muted">{formatNumber(total)} leads</p> : null}
       </div>
+
+      {outboundHint ? (
+        <OutboundOffNotice className="mb-4">
+          Outbound calling is off in Settings, so “Call now” is disabled on the cards. Moving cards still works.
+        </OutboundOffNotice>
+      ) : null}
 
       {error && !data ? (
         <ErrorState error={error} onRetry={() => void refresh()} title="Couldn't load the board" />
@@ -196,6 +207,7 @@ export function BoardView() {
                 onMove={(lead, to) => void moveLead(lead, to)}
                 onCall={(lead) => void callNow({ id: lead.id, name: lead.name || lead.phone })}
                 callingId={callingId}
+                callBlockedReason={outboundHint}
                 onLoadMore={() => void loadMore(col.key)}
               />
             ))}

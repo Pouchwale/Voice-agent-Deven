@@ -16,8 +16,10 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import functools
 import json
 import logging
+import re
 import time
 import urllib.parse
 from collections import OrderedDict
@@ -43,7 +45,28 @@ BULBUL_V3_VOICES: list[dict] = [
         "kabir", "aayan", "advait", "anand", "tarun", "sunny", "mani", "gokul", "vijay", "mohit",
         "rehan", "soham", "varun")],
 ]
-VALID_VOICES = {v["id"] for v in BULBUL_V3_VOICES}
+for _v in BULBUL_V3_VOICES:
+    _v["model"] = "bulbul:v3"
+
+# Bulbul v4-flash female personas (id = name_language_style; Sarvam docs, Nov 2026). Same streaming
+# protocol and speed as v3 (measured 2026-11-13: first audio ~220 ms at 8 kHz linear16). The style is
+# built into the persona, so `temperature` is not sent (v4 ignores it).
+V4_MODEL = "bulbul:v4-flash"
+BULBUL_V4_VOICES: list[dict] = [
+    {"id": vid, "name": name, "gender": "female", "model": V4_MODEL} for vid, name in (
+        ("aparna_hi_customer", "Aparna (v4) · customer care"),  # Sarvam's top pick for Hindi sales
+        ("aarti_hi_customer", "Aarti (v4) · customer care"),
+        ("ritu_hi_customer_warm", "Ritu (v4) · warm"),
+        ("ritu_hi_sales", "Ritu (v4) · sales"),
+        ("simran_hi_sales", "Simran (v4) · sales"),
+        ("ishita_enhi_customer", "Ishita (v4) · Hinglish"),
+        ("sarika_hi_conversation", "Sarika (v4) · conversational"),
+        ("suhani_hi_social", "Suhani (v4) · lively"),
+    )
+]
+ALL_VOICES = BULBUL_V3_VOICES + BULBUL_V4_VOICES
+VALID_VOICES = {v["id"] for v in ALL_VOICES}
+_V4_IDS = {v["id"] for v in BULBUL_V4_VOICES}
 
 
 def voice_for(cfg: dict) -> str:
@@ -53,6 +76,11 @@ def voice_for(cfg: dict) -> str:
     return "priya" if cfg.get("agent_gender", "female") == "female" else "shubh"
 
 
+def model_for(voice: str) -> str:
+    """Bulbul model that owns this speaker id (v4 persona ids look like name_hi_style)."""
+    return V4_MODEL if voice in _V4_IDS else settings.sarvam_tts_model
+
+
 def _headers() -> dict[str, str]:
     return {"api-subscription-key": settings.sarvam_api_key}
 
@@ -60,6 +88,35 @@ def _headers() -> dict[str, str]:
 def _tts_lang(cfg: dict) -> str:
     code = cfg.get("language_code") or "hi-IN"
     return code if code != "auto" else "hi-IN"
+
+
+# =====================================================================
+# Text -> what the voice should actually say
+# =====================================================================
+_RULE_SPLIT = re.compile(r"\s*(?:=|->|→)\s*")
+_MARKUP = re.compile(r"[*#`~|<>\[\]{}_]+")  # never meant to be read aloud
+
+
+@functools.lru_cache(maxsize=32)
+def _pronunciation_rules(lines: tuple[str, ...]) -> list[tuple[re.Pattern, str]]:
+    rules: list[tuple[re.Pattern, str]] = []
+    for line in lines:
+        parts = _RULE_SPLIT.split(str(line).strip(), maxsplit=1)
+        if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+            src = re.escape(parts[0].strip())
+            rules.append((re.compile(rf"(?<!\w){src}(?!\w)", re.IGNORECASE), parts[1].strip()))
+    rules.sort(key=lambda r: len(r[0].pattern), reverse=True)  # "PouchWale India" before "PouchWale"
+    return rules
+
+
+def speakable(text: str, cfg: dict) -> str:
+    """Text as it should be spoken: pronunciation fixes ("PouchWale = पाउचवाले") applied, stray
+    markup removed. Only the audio uses this; transcripts keep the original spelling."""
+    out = text
+    for pattern, spoken in _pronunciation_rules(tuple(cfg.get("pronunciations") or ())):
+        out = pattern.sub(spoken, out)
+    out = _MARKUP.sub(" ", out)
+    return re.sub(r"[ \t]{2,}", " ", out).strip()
 
 
 # =====================================================================
@@ -99,7 +156,7 @@ _clip_cache = _LRU(400)
 
 async def tts_rest(text: str, cfg: dict, sample_rate: int) -> bytes:
     """Synthesize `text` -> mono PCM16 at `sample_rate`. Cached by (text, voice, pace, temp, rate)."""
-    text = text.strip()
+    text = speakable(text.strip(), cfg)
     if not text:
         return b""
     voice = voice_for(cfg)
@@ -111,15 +168,17 @@ async def tts_rest(text: str, cfg: dict, sample_rate: int) -> bytes:
         return cached
     if not settings.sarvam_ready:
         raise RuntimeError("SARVAM_API_KEY is not set")
+    model = model_for(voice)
     body = {
         "text": text[:2500],
         "target_language_code": _tts_lang(cfg),
         "speaker": voice,
-        "model": settings.sarvam_tts_model,
+        "model": model,
         "pace": max(0.5, min(2.0, pace)),
-        "temperature": max(0.01, min(1.0, temp)),
         "speech_sample_rate": sample_rate if sample_rate in (8000, 16000, 22050, 24000) else 24000,
     }
+    if model != V4_MODEL:
+        body["temperature"] = max(0.01, min(1.0, temp))
     resp = await http().post("/text-to-speech", json=body, headers=_headers())
     if resp.status_code >= 300:
         raise RuntimeError(f"Sarvam TTS {resp.status_code}: {resp.text[:200]}")
@@ -171,23 +230,26 @@ class TTSStream:
         self.sent: list[str] = []
 
     async def connect(self) -> None:
-        q = urllib.parse.urlencode({"model": settings.sarvam_tts_model, "send_completion_event": "true"})
+        voice = voice_for(self.cfg)
+        model = model_for(voice)
+        q = urllib.parse.urlencode({"model": model, "send_completion_event": "true"})
         url = f"{settings.sarvam_ws_url}/text-to-speech/ws?{q}"
         self.ws = await connect(url, additional_headers=_headers(), open_timeout=8, ping_interval=None,
                                 max_size=8 * 1024 * 1024, compression=None)
         config = {
             "type": "config",
             "data": {
-                "speaker": voice_for(self.cfg),
+                "speaker": voice,
                 "language_code": _tts_lang(self.cfg),
                 "pace": max(0.5, min(2.0, float(self.cfg.get("tts_pace") or 1.0))),
-                "temperature": max(0.01, min(1.0, float(self.cfg.get("tts_temperature") or 0.6))),
                 "speech_sample_rate": self.rate,
                 "output_audio_codec": "linear16",
                 "min_buffer_size": 30,
                 "max_chunk_length": 200,
             },
         }
+        if model != V4_MODEL:
+            config["data"]["temperature"] = max(0.01, min(1.0, float(self.cfg.get("tts_temperature") or 0.6)))
         await self.ws.send(json.dumps(config))
         self._reader = asyncio.create_task(self._read_loop())
         self._pinger = asyncio.create_task(self._keepalive())
@@ -206,7 +268,8 @@ class TTSStream:
 
     async def send_sentence(self, text: str) -> None:
         """Queue one sentence. Raises if the socket is gone, so the caller can use the REST voice."""
-        text = text.strip()
+        original = text.strip()
+        text = speakable(original, self.cfg)
         if not text:
             return
         if self.ws is None or self.done.is_set():
@@ -214,7 +277,7 @@ class TTSStream:
         if self._chars + len(text) > 2400:  # per-session character budget
             raise RuntimeError("TTS session character budget reached")
         self._chars += len(text)
-        self.sent.append(text)
+        self.sent.append(original)  # REST fallback re-applies speakable() itself
         await self.ws.send(json.dumps({"type": "text", "data": {"text": text}}))
         await self.ws.send(json.dumps({"type": "flush"}))
         self._flushes += 1

@@ -139,7 +139,9 @@ def test_full_conversation_end_call_recording_and_scoring(monkeypatch):
     assert "avg_latency_ms" in call.metrics
     with SessionLocal() as db:
         lead = db.get(Lead, call.lead_id)
-        assert (lead.interest, lead.rating, lead.status) == ("hot", 8, "called")
+        # a browser test is role-play: the call itself is scored, the real lead is never changed by it
+        # (phone calls roll up: tests/test_conversation_memory.py::test_analysis_fills_empty_lead_fields_only)
+        assert (lead.interest, lead.rating, lead.name, lead.last_summary) == ("unknown", None, "Rahul Sharma", None)
 
 
 def test_silence_prompt_then_goodbye_then_hangup(monkeypatch):
@@ -246,3 +248,28 @@ def test_backchannel_rules():
     assert not is_backchannel("Hello?")
     assert not is_backchannel("नहीं चाहिए")
     assert not is_backchannel("price kitna hai")
+
+
+def test_asked_for_english_stays_english_to_the_goodbye(monkeypatch):
+    """Real call: "Can you speak in English?" got one English reply, then "No No" was answered with a Hindi
+    goodbye. Once asked, every later turn carries the English note (and no Hindi filler) until they ask for Hindi."""
+    from app.services.prompts import ENGLISH_PREFERRED_NOTE
+
+    async def scenario():
+        lead_id = _lead("+919800000091")
+        llm = ScriptedLLM(["Sure! Our expert will call you tomorrow at ten.", "Anything else I can help you with?",
+                           "जी, बताइए।", "जी।"])
+        s, t = await _new_session(lead_id, _cfg(), llm, monkeypatch)
+        run = asyncio.create_task(s.run())
+        await _wait(lambda: s.greeted and s.state == "listening")
+        stt = FakeSTT.instances[-1]
+        for i, text in enumerate(("Can you speak in English?", "No No", "हिंदी में बोलिए", "हाँ ठीक है")):
+            await stt.say(text)
+            await _wait(lambda: len(llm.calls) == i + 1 and s.state == "listening", timeout=6)
+        run.cancel()
+        return s, llm
+
+    s, llm = asyncio.run(scenario())
+    notes = [m[-1]["content"] if m[-1]["role"] == "system" else None for m in llm.calls]
+    assert notes == [ENGLISH_PREFERRED_NOTE, ENGLISH_PREFERRED_NOTE, None, None]
+    assert s.language_pref == "hindi"
