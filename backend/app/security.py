@@ -1,6 +1,6 @@
 """Access control for the dashboard API and WebSockets.
 
-Rules (Vobiz webhooks under /vobiz/* are NOT covered here; they carry per-call HMAC tokens):
+Rules (phone webhooks under /plivo/* and /vobiz/* are NOT covered here; they carry per-call HMAC tokens):
   * Direct local use (browser on this machine -> localhost, no proxy headers) needs no login,
     so the normal desktop setup keeps working with zero friction.
   * Anything else (through the ngrok tunnel, another PC, a server deployment) needs a session

@@ -313,7 +313,7 @@ export function InboundView() {
     if (pastEnd) setParams({ page: lastPage > 1 ? lastPage : null }, false);
   }, [pastEnd, lastPage, setParams]);
 
-  // ---- live feed: coalesced refresh of the list + KPIs (never the Vobiz setup check) and a toast per missed call ----
+  // ---- live feed: coalesced refresh of the list + KPIs (never the provider setup check) and a toast per missed call ----
   const { mutate: globalMutate } = useSWRConfig();
   const refreshTimer = useRef<{ id: ReturnType<typeof setTimeout>; due: number } | null>(null);
   const scheduleRefresh = useCallback(
@@ -414,7 +414,7 @@ export function InboundView() {
     <div ref={rootRef}>
       <PageHeader
         title="Inbound calls"
-        description="Customers who call your Vobiz number. The agent answers, remembers returning callers and logs every call here."
+        description="Customers who call your business number. The agent answers, remembers returning callers and logs every call here."
         actions={
           <>
             <InboundStatusChip state={inboundState} />

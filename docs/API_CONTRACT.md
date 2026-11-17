@@ -19,7 +19,7 @@ type EndReason = "agent_ended" | "user_hangup" | "silence_timeout" | "max_durati
                | "inbound_off"   // inbound call while inbound calling was off / the AI couldn't answer (missed)
                | "lines_busy"    // inbound call while every line was in use, or > 5 calls from the number in 10 min (missed)
                | "superseded"    // our outbound attempt was cancelled because the customer called us at that moment
-               | "offline"       // inbound call that rang while the backend / tunnel was down (back-filled from Vobiz records)
+               | "offline"       // inbound call that rang while the backend / tunnel was down (back-filled from the provider's call records)
                | null;
 type Channel = "phone" | "browser";
 type CallDirection = "inbound" | "outbound";
@@ -147,8 +147,9 @@ interface AgentSettings {
 interface SystemInfo {           // GET /api/settings/system (read-only, from backend .env)
   llm_model: string; llm_max_tokens: number; llm_temperature: number;
   stt_model: string; stt_mode: string; tts_model: string;
-  providers: { openai: boolean; sarvam: boolean; vobiz: boolean };
-  public_base_url: string; public_url_ok: boolean;  // false if still localhost (Vobiz can't reach it)
+  providers: { openai: boolean; sarvam: boolean; plivo: boolean; vobiz: boolean; telephony: boolean };
+  telephony_provider: "plivo" | "vobiz"; telephony_name: "Plivo" | "Vobiz";  // the active phone provider
+  public_base_url: string; public_url_ok: boolean;  // false if still localhost (the provider can't reach it)
 }
 
 interface Voice { id: string; name: string; gender: "female" | "male"; }
@@ -188,8 +189,8 @@ interface Voice { id: string; name: string; gender: "female" | "male"; }
   - All `fetch` calls must use `credentials: "include"` so the cookie is sent; WebSockets, `<audio src>` and
     download links carry it automatically.
 - Requests whose browser `Origin` is not one of the configured dashboard origins get **403** (CSRF protection).
-- Vobiz webhooks (`/vobiz/*`) use their own tokens (per call, or the static inbound secret) and are unaffected.
-  The public ngrok tunnel only exposes `/vobiz/*`.
+- Phone-provider webhooks (`/plivo/*`, `/vobiz/*`) use their own tokens (per call, or the static inbound secret) and
+  are unaffected. The public ngrok tunnel only exposes `/plivo/*` and `/vobiz/*`.
 
 ## REST endpoints
 
@@ -281,8 +282,8 @@ interface LeadTimeline {
   (never what the team typed; never from browser tests).
 
 ### Calls
-- `POST /api/calls` body `{ lead_id: number }` → `CallListItem` (starts a real phone call via Vobiz).
-  400 with `detail` if Vobiz/AI is not configured, or **"Outbound calling is turned off in Settings."** when
+- `POST /api/calls` body `{ lead_id: number }` → `CallListItem` (starts a real phone call via the active provider, Plivo or Vobiz).
+  400 with `detail` if the phone provider / AI is not configured, or **"Outbound calling is turned off in Settings."** when
   `outbound_enabled` is false; 404 unknown lead; 409 Do-Not-Call lead or a lead already on a live call (either direction).
   *Callback mode*: when the lead's latest inbound call in the last 7 days was missed and nobody has spoken with them
   since, the agent opens with `callback_greeting` and follows `inbound_purpose` (direction stays "outbound"). Same for
@@ -328,36 +329,38 @@ interface InboundSummary {
   live: number;                      // inbound phone calls in progress right now (not limited to the range)
 }
 ```
-- `GET /api/inbound/setup?check=true` → `InboundSetup` (the Vobiz part is cached ~60 s server-side; `check=false` never
-  queries Vobiz: it returns the last cached Vobiz state, or null Vobiz fields with `checked=false` until one check has
+- `GET /api/inbound/setup?check=true` → `InboundSetup` (the provider part is cached ~60 s server-side; `check=false` never
+  queries the provider: it returns the last cached provider state, or null provider fields with `checked=false` until one check has
   run since the backend started — treat that as "unknown", not "not connected"; use it for any periodic refresh).
-  Never 500 on Vobiz errors: they are listed in `problems`, whose last item is always the
+  Never 500 on provider errors: they are listed in `problems`, whose last item is always the
   "answers only while this computer, the backend and the tunnel are running" note.
 ```ts
 interface InboundSetup {
   enabled: boolean;               // inbound_enabled setting
-  number: string | null;          // our Vobiz DID (E.164)
-  answer_url: string; hangup_url: string;   // paste into a Vobiz application: they contain a SECRET token
+  number: string | null;          // our number on the provider (E.164)
+  answer_url: string; hangup_url: string;   // paste into the provider application: they contain a SECRET token
   public_url_ok: boolean;         // PUBLIC_BASE_URL is https
-  vobiz_ready: boolean;           // Vobiz keys + number configured
+  provider: "plivo" | "vobiz";  provider_name: "Plivo" | "Vobiz";   // the active phone provider
+  provider_ready: boolean;        // its keys + number configured
+  vobiz_ready: boolean;           // old name of provider_ready (same value)
   ai_ready: boolean;              // OpenAI + Sarvam keys present (otherwise callers get the unavailable response)
-  checked: boolean;               // Vobiz was queried
+  checked: boolean;               // the provider was queried
   app_id: string | null; app_name: string | null;   // our application "GP3-Voice-Agent-Inbound"
   app_urls_match: boolean | null; // its answer + hangup URLs equal ours (false after the tunnel URL changed)
   number_linked: boolean | null;  // our DID is attached to OUR application
   number_app_id: string | null; number_app_name: string | null;   // where calls to the DID go right now
   number_on_trunk: boolean | null; number_voice_enabled: boolean | null; number_status: string | null;
   previous_app_id: string | null; // the application the DID was on before we connected (Disconnect restores it)
-  concurrency_max: number | null; // Vobiz account concurrent-call limit
+  concurrency_max: number | null; // provider account concurrent-call limit (null on Plivo: not reported)
   last_inbound_at: string | null; // newest inbound call we received
   rejected_requests: number;      // inbound webhook calls with a wrong/old secret since startup
   last_rejected_at: string | null;
   problems: string[];             // plain English, e.g. "AI keys missing: callers are being turned away"
-  ready: boolean;                 // enabled && public_url_ok && vobiz_ready && ai_ready && app_urls_match && number_linked
+  ready: boolean;                 // enabled && public_url_ok && provider_ready && ai_ready && app_urls_match && number_linked
 }
 ```
-- `POST /api/inbound/setup?force=false` → `InboundSetup` (fresh check). Creates or updates our Vobiz application
-  (answer/hangup URLs, both methods POST) and attaches our DID to it. 400 when `PUBLIC_BASE_URL` is not https or Vobiz
+- `POST /api/inbound/setup?force=false` → `InboundSetup` (fresh check). Creates or updates our provider application
+  (answer/hangup URLs, both methods POST) and attaches our DID to it. 400 when `PUBLIC_BASE_URL` is not https or the provider
   isn't configured; **409** with a detail naming the current routing ("Calls to +91… currently go to 'X'. Connecting
   moves them to the AI agent.") when the DID is attached to another application or a SIP trunk, unless `force=true`.
   The previous application id is remembered for Disconnect.
@@ -409,30 +412,32 @@ interface InboundSetup {
   → `audio/wav`. `temperature` / `language_code` are UNSAVED form values (e.g. a tone preset) so the preview plays exactly
   what was just picked.
 - `POST /api/settings/test-providers` → `Record<string, { ok: boolean; detail: string; latency_ms?: number }>` with keys
-  `openai`, `sarvam_tts` (REST voice), `sarvam_tts_stream` (live streaming voice), `sarvam_stt` (realtime speech recognition), `vobiz`.
+  `openai`, `sarvam_tts` (REST voice), `sarvam_tts_stream` (live streaming voice), `sarvam_stt` (realtime speech recognition), and the active phone provider: `plivo` or `vobiz`.
   Render every key returned (more may be added). Can take ~10 s.
 
-## Vobiz inbound webhooks (not under `/api`; for the Vobiz application only)
+## Phone-provider inbound webhooks (not under `/api`; for the provider application only)
 
-Static secret: `{token}` = HMAC of `INBOUND_TOKEN_SALT` (default `inbound-v1`) with `VOBIZ_AUTH_TOKEN`. A wrong token →
-**403** (counted in `InboundSetup.rejected_requests`); with no `VOBIZ_AUTH_TOKEN` every request is refused. To revoke a
-leaked URL, change `INBOUND_TOKEN_SALT` and click "Connect inbound on Vobiz" again.
-- `POST /vobiz/inbound/{token}/answer` (also `GET` with query params; form-encoded or JSON body with `CallUUID`, `From`,
-  `To`, `Direction`, `CallStatus`, `Event`, `HangupCause`, `HangupCauseCode`, `CallerName`) → VobizXML, always **200**
+`{p}` below is `plivo` or `vobiz`: the same router is mounted under both, and the URLs we hand out use the active
+provider (`TELEPHONY_PROVIDER`). Static secret: `{token}` = HMAC of `INBOUND_TOKEN_SALT` (default `inbound-v1`) with
+the active provider's auth token (`PLIVO_AUTH_TOKEN` / `VOBIZ_AUTH_TOKEN`). A wrong token → **403** (counted in
+`InboundSetup.rejected_requests`); with no auth token every request is refused. To revoke a leaked URL, change
+`INBOUND_TOKEN_SALT` and click "Connect inbound" again.
+- `POST /{p}/inbound/{token}/answer` (also `GET` with query params; form-encoded or JSON body with `CallUUID`, `From`,
+  `To`, `Direction`, `CallStatus`, `Event`, `HangupCause`, `HangupCauseCode`, `CallerName`) → provider XML, always **200**
   and valid XML (never a 500): the bidirectional `<Stream>` (the AI answers), `<Hangup reason="busy"/>` (reject, not
-  billed), or `<Play>`/`<Speak>` of the unavailable message then `<Hangup/>`. A hangup posted to this URL (Vobiz does
+  billed), or `<Play>`/`<Speak>` of the unavailable message then `<Hangup/>`. A hangup posted to this URL (the provider does
   that when the application has no hangup URL) is handled as a hangup and creates nothing. One row per `CallUUID`:
   retries replay the first decision. `Direction` other than inbound or a missing `CallUUID` → 400.
-- `POST /vobiz/inbound/{token}/hangup` → `"ok"` immediately (processed in the background). A call that ends before its
+- `POST /{p}/inbound/{token}/hangup` → `"ok"` immediately (processed in the background). A call that ends before its
   audio stream starts is missed: `no_answer` / `user_hangup` ("Caller hung up before the agent answered"), or `failed` /
   `error` for our-side causes 4010 / 7011 / 8011 ("Call failed on our side — call back").
-- `GET /vobiz/inbound/{token}/audio/{key}.wav` → `audio/wav` (8 kHz mono PCM16, `Content-Length`) of a cached
+- `GET /{p}/inbound/{token}/audio/{key}.wav` → `audio/wav` (8 kHz mono PCM16, `Content-Length`) of a cached
   unavailable-message clip; 404 for keys never generated.
-- Inbound rows: `direction "inbound"`, `channel "phone"`, `provider_call_id` = Vobiz CallUUID, `from_number` = the
+- Inbound rows: `direction "inbound"`, `channel "phone"`, `provider_call_id` = the provider's CallUUID, `from_number` = the
   caller, `to_number` = our DID, `caller_type` set; `answered_at` is set when the audio stream starts. Missed rows
   carry a plain summary for the team ("Missed inbound call — inbound calling was switched off", "… all lines were busy",
   "Missed while the agent was offline — call back", …) and `analysis_status "skipped"`. Calls that rang while the
-  backend or tunnel was down are back-filled from Vobiz call records at startup and every 10 minutes (`end_reason
+  backend or tunnel was down are back-filled from the provider's call records at startup and every 10 minutes (`end_reason
   "offline"`; env `INBOUND_CDR_SYNC=false` turns this off).
 
 ## WebSockets
@@ -531,7 +536,7 @@ called in)", offline "Missed (agent offline)", none "Unknown".
 
 ## Configuration (backend `.env`) relevant to inbound calling
 - `INBOUND_TOKEN_SALT` (default `inbound-v1`): part of the inbound webhook secret; change it to revoke a leaked URL.
-- `INBOUND_CDR_SYNC` (default true): back-fill inbound calls missed while offline from Vobiz call records.
+- `INBOUND_CDR_SYNC` (default true): back-fill inbound calls missed while offline from the provider's call records.
 - `ALLOW_INTERNATIONAL` (default false): foreign callers are logged (`caller_type "international"`) but get no lead.
 - `PUBLIC_BASE_URL` must be https for inbound calls to be answered by the AI; the agent answers only while this
   computer, the backend and the tunnel are running.

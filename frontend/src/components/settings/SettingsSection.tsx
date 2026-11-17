@@ -3,6 +3,7 @@
 import { useId, type ReactNode } from "react";
 import { CircleIcon } from "@/components/ui/Card";
 import { Field, TextInput } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
 
 export type SectionTone = "subtle" | "primary" | "brand";
@@ -116,17 +117,54 @@ export function TimeField({
   error?: string;
 }) {
   const id = useId();
+  // Saved as 24-hour "HH:MM" (what the backend uses); picked as hour / minute / AM-PM, which is easier to read
+  // than the browser's own time picker (24-hour on many Windows setups).
+  const [h24, minute] = parseTime(value);
+  const ampm: "AM" | "PM" = h24 >= 12 ? "PM" : "AM";
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const update = (h: number, m: number, p: "AM" | "PM") =>
+    onChange(`${String((h % 12) + (p === "PM" ? 12 : 0)).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+  const minutes = MINUTES.includes(minute) ? MINUTES : [...MINUTES, minute].sort((a, b) => a - b);
   return (
     <Field label={label} hint={hint} error={error} htmlFor={id}>
-      <TextInput
-        id={id}
-        type="time"
-        step={60}
-        value={value}
-        onChange={(e) => onChange(e.target.value.slice(0, 5))}
-        invalid={!!error}
-        className="tabular"
-      />
+      <div className="grid grid-cols-[1fr_1fr_1fr] gap-2" aria-invalid={!!error || undefined}>
+        <Select
+          id={id}
+          aria-label="Hour"
+          value={String(h12)}
+          onChange={(v) => update(Number(v), minute, ampm)}
+          options={HOURS.map((h) => ({ value: String(h), label: String(h) }))}
+          className="tabular"
+        />
+        <Select
+          aria-label="Minute"
+          value={String(minute)}
+          onChange={(v) => update(h12, Number(v), ampm)}
+          options={minutes.map((m) => ({ value: String(m), label: String(m).padStart(2, "0") }))}
+          className="tabular"
+        />
+        <Select<"AM" | "PM">
+          aria-label="AM or PM"
+          value={ampm}
+          onChange={(v) => update(h12, minute, v)}
+          options={[
+            { value: "AM", label: "AM" },
+            { value: "PM", label: "PM" },
+          ]}
+        />
+      </div>
     </Field>
   );
+}
+
+const HOURS = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); // 00, 05 … 55
+
+/** "HH:MM" (24-hour) -> [hour 0-23, minute 0-59]; anything unreadable -> 09:00. */
+function parseTime(value: string): [number, number] {
+  const m = /^(\d{1,2}):(\d{2})/.exec(value || "");
+  if (!m) return [9, 0];
+  const h = Math.min(23, Number(m[1]));
+  const min = Math.min(59, Number(m[2]));
+  return [h, min];
 }

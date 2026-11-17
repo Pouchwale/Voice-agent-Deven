@@ -27,6 +27,7 @@ import { useNow } from "@/hooks/useNow";
 import { ApiError, errorMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatNumber, formatPhone, formatRelative } from "@/lib/format";
+import { providerEnvKeys, providerName } from "@/lib/provider";
 import type { InboundSetup } from "@/lib/types";
 import type { InboundSetupState } from "./useInboundSetup";
 
@@ -36,12 +37,13 @@ type DialogState = null | { kind: "connect" } | { kind: "conflict"; detail: stri
 
 /** Where calls to our number go right now, in plain words. */
 function routingText(s: InboundSetup, num: string, pending: boolean): string {
-  if (!s.vobiz_ready) return "Add the Vobiz keys and number to the backend to see where calls go.";
-  if (!s.checked) return pending ? `Checking with Vobiz where calls to ${num} go…` : `Couldn't check with Vobiz where calls to ${num} go right now.`;
+  const pv = providerName(s);
+  if (!s.provider_ready) return `Add the ${pv} keys and number to the backend to see where calls go.`;
+  if (!s.checked) return pending ? `Checking with ${pv} where calls to ${num} go…` : `Couldn't check with ${pv} where calls to ${num} go right now.`;
   if (s.number_linked) return `Calls to ${num} go to the AI agent.`;
   if (s.number_on_trunk) return `Calls to ${num} currently go to a SIP trunk.`;
-  if (s.number_app_id) return `Calls to ${num} currently go to the Vobiz application “${s.number_app_name || s.number_app_id}”.`;
-  return `${num} isn't attached to any Vobiz application yet, so nobody answers its calls.`;
+  if (s.number_app_id) return `Calls to ${num} currently go to the ${pv} application “${s.number_app_name || s.number_app_id}”.`;
+  return `${num} isn't attached to any ${pv} application yet, so nobody answers its calls.`;
 }
 
 function CheckItem({ ok, label, detail }: { ok: boolean | null; label: string; detail?: ReactNode }) {
@@ -103,7 +105,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** Vobiz connection status + one-click Connect / Disconnect. Collapses to one line once everything is ready. */
+/** Phone-provider connection status + one-click Connect / Disconnect. Collapses to one line once everything is ready. */
 export function InboundSetupCard({ setup }: { setup: InboundSetupState }) {
   const toast = useToast();
   const now = useNow(30_000);
@@ -120,14 +122,15 @@ export function InboundSetupCard({ setup }: { setup: InboundSetupState }) {
     return <Skeleton className="h-[76px] rounded-xl" />;
   }
 
-  const num = s.number ? formatPhone(s.number) : "your Vobiz number";
+  const pv = providerName(s);
+  const num = s.number ? formatPhone(s.number) : `your ${pv} number`;
   const pending = setup.fullPending;
-  // Until Vobiz has answered, "not linked" only means "not known yet": no Connect button, no expanded checklist.
+  // Until the provider has answered, "not linked" only means "not known yet": no Connect button, no expanded checklist.
   const open = openPref ?? (!pending && !s.ready);
-  const needsConnect = !pending && s.vobiz_ready && (s.number_linked !== true || s.app_urls_match !== true);
+  const needsConnect = !pending && s.provider_ready && (s.number_linked !== true || s.app_urls_match !== true);
   const routing = routingText(s, num, pending);
-  const connectBlock = !s.vobiz_ready
-    ? "Add VOBIZ_AUTH_ID, VOBIZ_AUTH_TOKEN and VOBIZ_FROM_NUMBER to backend/.env, then restart the backend."
+  const connectBlock = !s.provider_ready
+    ? `Add ${providerEnvKeys(s.provider)} to backend/.env, then restart the backend.`
     : !s.public_url_ok
       ? "Set PUBLIC_BASE_URL in backend/.env to your https tunnel address, then restart the backend."
       : null;
@@ -145,7 +148,7 @@ export function InboundSetupCard({ setup }: { setup: InboundSetupState }) {
     : s.ready
       ? `Calls to ${num} are answered by the AI agent. Last inbound call: ${lastInbound}.`
       : pending
-        ? "Checking the Vobiz connection…"
+        ? `Checking the ${pv} connection…`
         : (problems[0] ?? "Finish the steps below to start answering calls.");
 
   async function connect(force: boolean) {
@@ -158,7 +161,7 @@ export function InboundSetupCard({ setup }: { setup: InboundSetupState }) {
         title: "Inbound connected",
         description: fresh.ready
           ? `Calls to ${num} now reach the AI agent. Call it from your mobile to test.`
-          : "Vobiz was updated. Check the remaining items in the setup card.",
+          : `${pv} was updated. Check the remaining items in the setup card.`,
       });
     } catch (err) {
       if (err instanceof ApiError && err.status === 409 && !force) {
@@ -200,7 +203,7 @@ export function InboundSetupCard({ setup }: { setup: InboundSetupState }) {
         </CircleIcon>
         <div className="min-w-0 flex-1 basis-60">
           <h2 id={`${bodyId}-title`} className="font-heading text-base font-semibold">
-            Vobiz connection
+            {pv} connection
           </h2>
           <p className="text-mixed mt-0.5 text-[13px] text-muted">{headline}</p>
         </div>
@@ -214,7 +217,7 @@ export function InboundSetupCard({ setup }: { setup: InboundSetupState }) {
               title={connectBlock ?? undefined}
               onClick={() => setDialog({ kind: "connect" })}
             >
-              {s.number_linked && s.app_urls_match === false ? "Connect again" : "Connect inbound on Vobiz"}
+              {s.number_linked && s.app_urls_match === false ? "Connect again" : `Connect inbound on ${pv}`}
             </Button>
           ) : null}
           <Button
@@ -249,9 +252,9 @@ export function InboundSetupCard({ setup }: { setup: InboundSetupState }) {
                 ? "The AI keys (OpenAI / Sarvam) are missing, so every caller hears the unavailable message and is logged as missed."
                 : !s.public_url_ok
                   ? "PUBLIC_BASE_URL isn't an https address, so the agent's audio can't connect. Callers hear the unavailable message."
-                  : `Vobiz called an old inbound address ${formatNumber(s.rejected_requests)} ${s.rejected_requests === 1 ? "time" : "times"}${
+                  : `${pv} called an old inbound address ${formatNumber(s.rejected_requests)} ${s.rejected_requests === 1 ? "time" : "times"}${
                       s.last_rejected_at ? ` (last ${formatRelative(s.last_rejected_at, now)})` : ""
-                    } and those callers were dropped. Connect again to give Vobiz the current address.`}
+                    } and those callers were dropped. Connect again to give ${pv} the current address.`}
             </p>
           </div>
         </div>
@@ -288,10 +291,10 @@ export function InboundSetupCard({ setup }: { setup: InboundSetupState }) {
                 )
               }
             />
-            <CheckItem ok={s.vobiz_ready} label="Vobiz keys and number are set" />
+            <CheckItem ok={s.provider_ready} label={`${pv} keys and number are set`} />
             <CheckItem ok={s.ai_ready} label="AI keys are set (OpenAI + Sarvam)" />
             <CheckItem ok={s.public_url_ok} label="Public https address (tunnel) is set" />
-            <CheckItem ok={s.app_urls_match} label={`Vobiz application “${s.app_name || APP_NAME}” uses this dashboard's URLs`} />
+            <CheckItem ok={s.app_urls_match} label={`${pv} application “${s.app_name || APP_NAME}” uses this dashboard's URLs`} />
             <CheckItem ok={s.number_linked} label={`${num} is attached to the AI agent`} />
           </ul>
           {connectBlock ? <p className="mt-2 text-[13px] text-muted">{connectBlock}</p> : null}
@@ -334,7 +337,7 @@ export function InboundSetupCard({ setup }: { setup: InboundSetupState }) {
             </summary>
             <div className="space-y-3 border-t border-line p-3">
               <p className="text-[13px] text-muted">
-                These URLs contain a secret. Paste them only into Vobiz: anyone who has them can send fake calls to the agent.
+                These URLs contain a secret. Paste them only into {pv}: anyone who has them can send fake calls to the agent.
                 If one leaks, change INBOUND_TOKEN_SALT in backend/.env and connect again.
               </p>
               <CopyField label="Answer URL" value={s.answer_url} />
@@ -368,7 +371,7 @@ export function InboundSetupCard({ setup }: { setup: InboundSetupState }) {
         body={
           <div className="space-y-2.5">
             <p>
-              This creates (or updates) the Vobiz application <strong>{s.app_name || APP_NAME}</strong> with this
+              This creates (or updates) the {pv} application <strong>{s.app_name || APP_NAME}</strong> with this
               dashboard&apos;s answer and hang-up URLs, and attaches <strong>{num}</strong> to it.
             </p>
             <p>{routing}</p>
@@ -390,7 +393,7 @@ export function InboundSetupCard({ setup }: { setup: InboundSetupState }) {
           <div className="space-y-2.5">
             <p className="text-mixed">{dialog?.kind === "conflict" ? dialog.detail : null}</p>
             <p>
-              Connecting anyway moves every call to the AI agent. Disconnect later restores the previous routing when Vobiz
+              Connecting anyway moves every call to the AI agent. Disconnect later restores the previous routing when {pv}
               reports it.
             </p>
           </div>
@@ -407,7 +410,7 @@ export function InboundSetupCard({ setup }: { setup: InboundSetupState }) {
         body={
           s.previous_app_id ? (
             <p>
-              Calls to <strong>{num}</strong> go back to the Vobiz application they used before ({s.previous_app_id}). The AI
+              Calls to <strong>{num}</strong> go back to the {pv} application they used before ({s.previous_app_id}). The AI
               agent stops answering them.
             </p>
           ) : (
@@ -419,7 +422,7 @@ export function InboundSetupCard({ setup }: { setup: InboundSetupState }) {
         }
       />
       <span className="sr-only" aria-live="polite">
-        {setup.checking ? "Checking the Vobiz connection…" : ""}
+        {setup.checking ? `Checking the ${pv} connection…` : ""}
       </span>
     </section>
   );

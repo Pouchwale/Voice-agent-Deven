@@ -13,13 +13,14 @@ import { Switch } from "@/components/ui/Switch";
 import { useNow } from "@/hooks/useNow";
 import { errorMessage, keys } from "@/lib/api";
 import { formatDuration, formatPhone, formatRelative } from "@/lib/format";
+import { providerName } from "@/lib/provider";
 import type { InboundOffAction, InboundSetup } from "@/lib/types";
 import { COMPANY_PLACEHOLDERS, fillTemplate, PLACEHOLDERS, type SectionProps } from "./model";
 import { NumberField, SettingsSection } from "./SettingsSection";
 import { SpokenLineField, type SpokenSample } from "./SpokenLineField";
 import { usePreviewVoice, voiceOf } from "./VoicePreview";
 
-/** Local readiness only (check=false): the Settings page never triggers Vobiz API calls. */
+/** Local readiness only (check=false): the Settings page never triggers phone-provider API calls. */
 const SETUP_KEY = `${keys.inboundSetup}?check=false`;
 /** Greetings longer than this (as heard) get talked over: the caller expects us to speak briefly, then listen. */
 const GREETING_SOFT_MAX = 120;
@@ -46,21 +47,22 @@ function inboundStatus(setup: InboundSetup | undefined, enabled: boolean, number
     };
   }
   if (!setup) return { label: "Status unknown", tone: "off", text: "Couldn't read the inbound setup from the backend." };
-  if (!setup.vobiz_ready) {
-    return { label: "Not set up", tone: "warn", text: "The Vobiz keys or our number are missing in the backend .env file." };
+  const pv = providerName(setup);
+  if (!setup.provider_ready) {
+    return { label: "Not set up", tone: "warn", text: `The ${pv} keys or our number are missing in the backend .env file.` };
   }
   if (!setup.public_url_ok) {
-    return { label: "Not reachable", tone: "warn", text: "PUBLIC_BASE_URL isn't an https address, so Vobiz can't reach the agent." };
+    return { label: "Not reachable", tone: "warn", text: `PUBLIC_BASE_URL isn't an https address, so ${pv} can't reach the agent.` };
   }
   if (setup.app_urls_match === false) {
-    return { label: "Reconnect needed", tone: "warn", text: "The tunnel URL changed since Vobiz was connected: click Connect again on the Inbound page." };
+    return { label: "Reconnect needed", tone: "warn", text: `The tunnel URL changed since ${pv} was connected: click Connect again on the Inbound page.` };
   }
   if (setup.number_linked === false) {
     return { label: "Not connected", tone: "warn", text: `Calls to ${number} don't reach the agent yet: connect the number on the Inbound page.` };
   }
   if (setup.number_linked === true) return { label: "Connected", tone: "on", text: `Calls to ${number} reach the agent.` };
-  // The quick status doesn't ask Vobiz, so whether our number points at the agent is unknown until checked.
-  return { label: "Not checked", tone: "off", text: "Whether Vobiz sends calls to the agent hasn't been checked yet.", checkable: true };
+  // The quick status doesn't ask the provider, so whether our number points at the agent is unknown until checked.
+  return { label: "Not checked", tone: "off", text: `Whether ${pv} sends calls to the agent hasn't been checked yet.`, checkable: true };
 }
 
 function InboundStatus({
@@ -75,13 +77,14 @@ function InboundStatus({
   number: string;
 }) {
   const now = useNow(60_000);
-  // One live Vobiz check, only when the owner asks for it (the Settings page never polls Vobiz).
+  // One live provider check, only when the owner asks for it (the Settings page never polls the provider).
   const [wantCheck, setWantCheck] = useState(false);
   const checked = useSWR<InboundSetup>(wantCheck ? keys.inboundSetup : null, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
   });
   const view = checked.data ?? setup;
+  const pv = providerName(view);
 
   if (enabled && !view && !error) return <Skeleton className="mt-3 h-6 w-64 rounded-full" />;
   const status = inboundStatus(view, enabled, number);
@@ -102,13 +105,13 @@ function InboundStatus({
             loading={checking}
             onClick={() => (wantCheck ? void checked.mutate() : setWantCheck(true))}
           >
-            {checking ? "Checking Vobiz…" : "Check connection"}
+            {checking ? `Checking ${pv}…` : "Check connection"}
           </Button>
         ) : null}
       </p>
       {wantCheck && checked.error && !checking ? (
         <p className="text-muted" role="status">
-          Couldn&apos;t check Vobiz: {errorMessage(checked.error)}
+          Couldn&apos;t check {pv}: {errorMessage(checked.error)}
         </p>
       ) : null}
       {view && enabled && !view.ai_ready ? (
@@ -121,7 +124,7 @@ function InboundStatus({
       {view && view.rejected_requests > 0 ? (
         <p className="flex items-start gap-2 rounded-lg border border-line bg-subtle px-3 py-2 font-medium" role="status">
           <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-          Vobiz called an old inbound address {view.rejected_requests === 1 ? "once" : `${view.rejected_requests} times`}{" "}
+          {pv} called an old inbound address {view.rejected_requests === 1 ? "once" : `${view.rejected_requests} times`}{" "}
           since the backend started: open the Inbound page and click Connect again.
         </p>
       ) : null}
@@ -154,7 +157,7 @@ export function CallingSection({ form, set, errors }: SectionProps) {
   const { data: setup, error: setupError } = useSWR<InboundSetup>(SETUP_KEY);
   const preview = usePreviewVoice();
   const voice = voiceOf(form);
-  const number = setup?.number ? formatPhone(setup.number) : "our Vobiz number";
+  const number = setup?.number ? formatPhone(setup.number) : `our ${providerName(setup)} number`;
 
   /** Preview wiring for one line: the Play button speaks it in the current (unsaved) voice. */
   const playerFor = (id: string) => ({

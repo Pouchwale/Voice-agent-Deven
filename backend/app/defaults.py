@@ -1,9 +1,10 @@
 """Default, editable agent configuration (Settings page writes over these).
 
-Facts about PouchWale come from the PouchWale brand kit. Anything the team has
-not confirmed (MOQ, prices, lead times) is a [FILL IN] placeholder and the
-agent is told never to quote it.
+Facts about PouchWale come from the PouchWale team (MOQ, per-piece pricing, sample kit, which pouch for
+which product) and the brand kit. Anything not written in the knowledge base (exact rates, delivery dates,
+unusual sizes or finishes) is never quoted: the agent says the team will cover it.
 """
+from .defaults_legacy import V4_TEXTS
 
 DEFAULT_AGENT_SETTINGS: dict = {
     # ---------------- identity ----------------
@@ -16,11 +17,46 @@ DEFAULT_AGENT_SETTINGS: dict = {
     "tts_temperature": 0.7,  # Sarvam: 0.7-0.8 = warm, conversational (lower = steadier, flatter)
     # How the voice should say words it would otherwise mispronounce ("written = spoken"). Applied to
     # the audio only; transcripts keep the original spelling. Brand names in Devanagari sound native.
+    # Hindi calls use the Devanagari spellings; English calls skip those and use the Latin ones below them.
     "pronunciations": [
         "PouchWale = पाउचवाले",
         "GP3 = जी पी थ्री",
         "MOQ = एम ओ क्यू",
         "D2C = डी टू सी",
+        "GST = जी एस टी",
+        "ISO = आई एस ओ",
+        "GMP = जी एम पी",
+        "BOPP = बी ओ पी पी",
+        "LDPE = एल डी पी ई",
+        "gsm = जी एस एम",
+        "kg = किलो",
+        "Mehsana = मेहसाणा",
+        "EcoVadis = इको वैडिस",
+        "info@pouchwale.com = इन्फो at पाउचवाले dot com",
+        "₹199 = one ninety nine रुपये",
+        "3-side seal = थ्री साइड सील",
+        "3 side seal = थ्री साइड सील",
+        "three side seal = थ्री साइड सील",
+        "side seal = साइड सील",
+        "center seal = सेंटर सील",
+        "centre seal = सेंटर सील",
+        "quad seal = क्वाड सील",
+        "stand-up = स्टैंड अप",
+        "standup = स्टैंड अप",
+        "spout = स्पाउट",
+        "PouchWale = Pouch Waale",
+        "GP3 = G P 3",
+        "MOQ = M O Q",
+        "D2C = D to C",
+        "GST = G S T",
+        "BOPP = B O P P",
+        "LDPE = L D P E",
+        "gsm = G S M",
+        "kg = kilo",
+        "info@pouchwale.com = info at Pouch Waale dot com",
+        "₹199 = one ninety nine rupees",
+        "3-side seal = three side seal",
+        "3 side seal = three side seal",
     ],
 
     # ---------------- call script ----------------
@@ -31,27 +67,54 @@ DEFAULT_AGENT_SETTINGS: dict = {
         "qualify them, and set up the next step.\n"
         "Call flow:\n"
         "1) The opening line already asked if they have two minutes.\n"
-        "2) If yes: in ONE short sentence say why you called (we make custom printed packaging pouches for "
-        "brands, even in small quantities), then ask the first qualification question.\n"
+        "2) If yes: in ONE short sentence say why you called, e.g. \"हम custom pouch बनाते हैं — जैसे namkeen, "
+        "dry fruits, spices के packets होते हैं, वैसे आपके brand के लिए custom printed\", then ask the first "
+        "qualification question.\n"
         "3) If busy / call later: ask for a convenient time, confirm it, end politely.\n"
         "4) If not interested or wrong person: thank them and end politely.\n"
-        "5) Ask the qualification questions one at a time, then offer the next step: a call back from our "
-        "packaging expert with an exact quote, details on WhatsApp, or a Free Sample Kit."
+        "5) Ask the qualification questions one at a time; once you know their product, suggest the right pouch "
+        "from the product list in the business knowledge. Then offer the next step: a call back from our team "
+        "with an exact per-piece quote, details on WhatsApp, or the free sample kit (only one ninety nine "
+        "rupees shipping) — suggest the sample kit especially if they are undecided."
     ),
+    # The company facts the agent may tell customers (from the PouchWale team). Anything not written here is
+    # never invented: the agent says the team will cover it (see the deflection rule in the prompt).
     "knowledge_base": (
-        "PouchWale is the modern packaging arm of Gujarat Print Pack Publications (GP3), "
-        "Mehsana, Gujarat. We make short-run, custom printed flexible packaging for "
-        "emerging D2C brands, with low MOQs and fast turnaround.\n"
-        "Pouch types: Stand-up pouch with zipper (rice, grains, pet food, snacks, dry fruits); "
-        "Center seal / pillow pouch (namkeen, spices, detergents); 3-side seal pouch "
-        "(sachets, cosmetics); Spout pouch (sauces, juices, edible oil, baby food); "
-        "Special shape pouch (confectionery, kids snacks); Vacuum pouch (meat, seafood, "
-        "ready meals); Quad seal pouch (premium coffee, large pet food, protein powder); "
-        "Freeze-grade pouch (frozen food, ice cream).\n"
+        "Company: PouchWale (pouchwale.com), Gujarat, India. Contact: info@pouchwale.com.\n"
+        "What we do: custom printed pouches for brands. Say it like: \"हम custom pouch बनाते हैं — जैसे namkeen, "
+        "dry fruits, spices के packets होते हैं, वैसे आपके brand के लिए custom printed.\"\n"
+        "Why us: low MOQ and fast turnaround.\n"
+        "MOQ: starts from 1,000 pieces (\"MOQ एक हज़ार pieces से start होता है\").\n"
+        "Price / rate: always quoted PER PIECE (pcs), NEVER per kg. There are no fixed rates to tell: our team "
+        "shares the exact per-piece quote once they know the size, quantity and print.\n"
+        "Size / dimensions: the customer gives us the pouch size they need, and our team also helps them choose "
+        "the right size.\n"
+        "Free sample kit: the kit is free, the customer pays only ₹199 shipping (\"Sample kit free है, बस one "
+        "ninety nine rupees shipping charges लगते हैं\"). Suggest it to customers who are undecided or comparing.\n"
         "Certifications: GMP, ISO 9001, ISO 14001, ISO 45001, EcoVadis Silver 2024.\n"
-        "Offer: Free Sample Kit. Contact: info@pouchwale.com.\n"
-        "MOQ: [FILL IN]. Pricing: [FILL IN]. Lead time: [FILL IN]. "
-        "Until these are filled in, never quote numbers — say our packaging expert will share an exact quote."
+        "\n"
+        "Which pouch for which product (suggest these; for a product not listed, the team advises):\n"
+        "- Milk powder, beverage mixes, hot chocolate: 3-side seal pouch or center seal pouch\n"
+        "- Coffee, tea: quad seal bag\n"
+        "- Rice (premium / basmati): quad seal bag or center seal pouch\n"
+        "- Nuts, dry fruits, cashews: standup pouch\n"
+        "- Namkeen, snacks, popcorn, bakery: standup pouch, 3-side seal pouch or center seal pouch\n"
+        "- Chocolates, candy: 3-side seal pouch or standup pouch\n"
+        "- Grains, flour: center seal pouch\n"
+        "- Spices, seasonings, masalas: standup pouch, sachets or center seal pouch\n"
+        "- Paneer, tofu, dairy products: vacuum / high-barrier pouch\n"
+        "- Frozen or fried foods: freeze-grade pouch\n"
+        "- Beverages, juices: spout pouch\n"
+        "- Sauces, ketchup: spout pouch\n"
+        "- Nutritional supplements: standup pouch or center seal pouch\n"
+        "- Cosmetics, beauty: special shape pouch or standup pouch; 3-side seal pouch for items like face masks\n"
+        "- Pet food (dog food, cat food): standup pouch or center seal pouch\n"
+        "- Seeds, fertilizers, agro chemicals: center seal pouch, standup pouch or quad seal bag\n"
+        "- Khakhra, papad: standup pouch or 3-side seal pouch\n"
+        "- Medicines, pharmaceuticals, ayurvedic supplements: center seal pouch or standup pouch\n"
+        "- Mukhwas, supari, mouth freshener: standup pouch (retail) or sachet (small packs)\n"
+        "- Ready-to-eat / instant meals: standup pouch or 3-side seal pouch\n"
+        "- Oats, granola, breakfast cereals: standup pouch"
     ),
     # Written in Devanagari + English words: the agent copies this style, and Bulbul pronounces
     # Devanagari Hindi far more naturally than Hindi typed in Roman letters.
@@ -64,16 +127,20 @@ DEFAULT_AGENT_SETTINGS: dict = {
     ],
     "objection_handling": (
         "Use Acknowledge -> Clarify -> Respond -> Advance. Never argue, never disparage competitors.\n"
-        "- Price too high: acknowledge, ask what they compare against, explain value (print quality, low MOQ, "
-        "fast turnaround), offer an exact quote from our expert.\n"
-        "- MOQ too high / small quantity: ask their monthly quantity, mention we specialise in short runs for "
-        "growing brands, offer the expert call for exact MOQ.\n"
-        "- Already have a supplier: respect it, ask what they would improve, offer a Free Sample Kit to compare.\n"
-        "- Need it urgently / lead time: ask the date they need it by, offer an expert call to confirm timelines.\n"
+        "- Price too high / what is the rate: we quote per piece (never per kg); acknowledge, explain value "
+        "(print quality, low MOQ, fast turnaround), offer an exact per-piece quote from our team.\n"
+        "- Asks the price per kg: say politely that we quote per piece, not per kg, and the team will share it.\n"
+        "- MOQ too high / small quantity: our MOQ starts from just 1,000 pieces; ask their quantity per order or "
+        "per month.\n"
+        "- Already have a supplier: respect it, ask what they would improve, suggest the free sample kit (only "
+        "₹199 shipping) to compare.\n"
+        "- Undecided / wants to see the quality first: suggest the free sample kit (only ₹199 shipping).\n"
+        "- Need it urgently / lead time: we have fast turnaround; ask the date they need it by; the exact delivery "
+        "date the team confirms.\n"
         "- Send details / catalogue: agree, confirm WhatsApp on this number, ask one qualifying question first.\n"
         "- Call later / busy: ask a convenient time, confirm it, end politely.\n"
-        "If they push back twice on the same thing, or ask for final price / discount / firm dates, hand off: "
-        "offer a call back from our packaging expert."
+        "If they push back twice on the same thing, or ask for a final price, a discount or firm dates, hand off: "
+        "offer a call back from our team."
     ),
     "interest_rules": (
         "hot: strong interest — clear packaging need plus a quantity or a timeline within about 30 days, OR asks "
@@ -88,7 +155,8 @@ DEFAULT_AGENT_SETTINGS: dict = {
 
     # ---------------- silence handling ----------------
     "silence_timeout_sec": 10,
-    "silence_prompt_text": "हेलो...? मेरी आवाज़ आ रही है आपको?",
+    # Calm on purpose: "हेलो...?" with drawn-out dots came out as a loud, stretched "हेलोooo?" on a live call.
+    "silence_prompt_text": "हेलो, मेरी आवाज़ आ रही है आपको?",
     "silence_final_wait_sec": 3,
     "silence_goodbye_text": "लगता है line पर आवाज़ नहीं आ रही है। कोई बात नहीं, आपका दिन अच्छा रहे। Thank you!",
 
@@ -97,9 +165,16 @@ DEFAULT_AGENT_SETTINGS: dict = {
     # none of them may agree ("बिल्कुल") or disagree. "हम्म" / "एक second" = thinking (after a
     # question); the others acknowledge what the customer just said.
     "fillers_enabled": True,
-    "filler_words": ["हम्म", "जी", "अच्छा", "हाँ जी", "अच्छा जी", "जी, समझ गई", "हम्म, एक second"],
+    # None of these claims to have understood: a filler plays BEFORE the reply exists, so "जी, समझ गई" would
+    # be said even to words the agent didn't catch.
+    "filler_words": ["हम्म", "जी", "अच्छा", "हाँ जी", "अच्छा जी", "हम्म, एक second"],
     "filler_delay_ms": 800,
     "barge_in_enabled": True,
+    # Human touches (each can be switched off on its own):
+    "fast_replies": True,        # start writing the reply the moment the customer stops talking (~0.4 s sooner)
+    "listening_sounds": True,    # a soft "हम्म" / "जी" in the pauses of a long customer sentence
+    "natural_variation": True,   # slightly different pace per reply + short natural pauses between sentences
+    "mood_matching": True,       # shorter and calmer with a busy / irritated customer, warmer with a friendly one
     "max_call_sec": 300,
 
     # ---------------- campaign dialing ----------------
@@ -125,8 +200,10 @@ DEFAULT_AGENT_SETTINGS: dict = {
         "printing, samples or ordering in a few words.\n"
         "2) If you don't know their name yet, ask it politely early on, and their business / product.\n"
         "3) While helping, qualify them naturally with the qualification questions (skip what is already known).\n"
-        "4) Offer the next step: a call back from our packaging expert with an exact quote, details on "
-        "WhatsApp, or a Free Sample Kit. Confirm a convenient time for the call back.\n"
+        "4) Once you know their product, suggest the right pouch from the product list in the business "
+        "knowledge. Offer the next step: a call back from our team with an exact per-piece quote, details on "
+        "WhatsApp, or the free sample kit (only one ninety nine rupees shipping). Confirm a convenient time for "
+        "the call back.\n"
         "5) An existing customer asking about an order, sample, delivery or payment, or making a complaint: "
         "apologise if needed, take the details, never guess a status, promise a call back from our team "
         "with a time.\n"
@@ -162,17 +239,21 @@ INBOUND_OFF_ACTIONS = ("message", "reject")
 
 # Earlier shipped defaults. A saved value still equal to one of these was never customised, so the
 # one-time upgrade (services/agent_config.py) replaces it with the current default.
-SETTINGS_VERSION = 2
+SETTINGS_VERSION = 6
 LEGACY_DEFAULTS: dict[str, list] = {
+    # version 4 texts, before the PouchWale team's facts (MOQ, per-piece pricing, sample kit, product -> pouch)
+    **{k: [v] for k, v in V4_TEXTS.items()},
     "opening_line": ["नमस्ते {lead_name_ji}! मैं {company_name} से बोल रही हूँ। क्या अभी दो minute बात कर सकते हैं?"],
     "closing_line": ["आपका time देने के लिए बहुत-बहुत धन्यवाद! Have a great day."],
-    "silence_prompt_text": ["Hello? क्या आप call पर हैं? मेरी आवाज़ आ रही है?"],
+    "silence_prompt_text": ["Hello? क्या आप call पर हैं? मेरी आवाज़ आ रही है?", "हेलो...? मेरी आवाज़ आ रही है आपको?"],
     "silence_goodbye_text": ["आप respond नहीं कर रहे हैं, इसलिए हम अभी call end कर रहे हैं। Thank you!"],
     "filler_words": [["हम्म", "अच्छा", "जी", "ओके", "हाँ जी", "ओह, got it"]],
     "filler_delay_ms": [650],
 }
 # Fillers the team asked to remove: they sound foreign / robotic on an Indian business call.
-DROPPED_FILLERS = {"ओके", "ओह", "ओह, got it", "ok", "okay", "oh", "oh yeah", "yeah", "got it", "ओह यस", "ओके जी"}
+# "समझ गई" too: a filler plays before the reply exists, so it claimed to understand words it never caught.
+DROPPED_FILLERS = {"ओके", "ओह", "ओह, got it", "ok", "okay", "oh", "oh yeah", "yeah", "got it", "ओह यस", "ओके जी",
+                   "जी, समझ गई", "समझ गई", "जी समझ गई", "समझ गया"}
 
 # Settings exposed as read-only info (come from .env, not editable in UI)
 LLM_FIXED = {"max_tokens_note": "LLM reply budget is fixed by LLM_MAX_TOKENS in backend/.env"}

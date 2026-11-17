@@ -34,7 +34,7 @@ export type EndReason =
   | "inbound_off" // inbound call arrived while inbound calling was switched off (missed)
   | "lines_busy" // inbound call arrived while every line was in use (missed)
   | "superseded" // outbound attempt cancelled because the customer called in at the same moment
-  | "offline" // inbound call that rang while the backend / tunnel was offline (back-filled from Vobiz records)
+  | "offline" // inbound call that rang while the backend / tunnel was offline (back-filled from the provider's call records)
   | null;
 export type Channel = "phone" | "browser";
 export type CallDirection = "inbound" | "outbound";
@@ -243,6 +243,11 @@ export interface AgentSettings {
   filler_words: string[];
   filler_delay_ms: number;
   barge_in_enabled: boolean;
+  /** Human touches (all on by default). */
+  fast_replies?: boolean; // start writing the reply the moment the customer stops talking
+  listening_sounds?: boolean; // soft "हम्म" / "जी" in the pauses of a long customer sentence
+  natural_variation?: boolean; // slightly different pace per reply, short breaths between sentences
+  mood_matching?: boolean; // shorter and calmer with a busy / irritated customer, warmer with a friendly one
   max_call_sec: number;
   call_window_start: string; // "HH:MM" IST, campaigns only
   call_window_end: string;
@@ -349,13 +354,16 @@ export interface InboundSummary {
 
 export interface InboundSetup {
   enabled: boolean; // inbound_enabled setting
-  number: string | null; // our Vobiz DID (E.164)
-  answer_url: string; // paste into the Vobiz application (contains a secret token)
+  number: string | null; // our phone number on the provider (E.164)
+  answer_url: string; // paste into the provider's application (contains a secret token)
   hangup_url: string;
   public_url_ok: boolean; // PUBLIC_BASE_URL is https
-  vobiz_ready: boolean; // Vobiz keys + number configured
+  provider: "plivo" | "vobiz"; // the active phone provider (TELEPHONY_PROVIDER)
+  provider_name: string; // "Plivo" | "Vobiz"
+  provider_ready: boolean; // the active provider's keys + number are configured
+  vobiz_ready?: boolean; // old name of provider_ready (same value)
   ai_ready: boolean; // OpenAI + Sarvam keys present (otherwise callers get the unavailable message)
-  checked: boolean; // Vobiz was queried for the application / number (cached ~60 s)
+  checked: boolean; // the provider was queried for the application / number (cached ~60 s)
   app_id: string | null; // our application "GP3-Voice-Agent-Inbound"
   app_name: string | null;
   app_urls_match: boolean | null; // the application's answer + hangup URLs equal ours
@@ -367,12 +375,12 @@ export interface InboundSetup {
   number_voice_enabled: boolean | null;
   number_status: string | null; // e.g. "active"
   previous_app_id: string | null; // the application the number was attached to before we connected (Disconnect restores it)
-  concurrency_max: number | null; // Vobiz account concurrent-call limit
+  concurrency_max: number | null; // provider account concurrent-call limit (not reported by Plivo)
   last_inbound_at: string | null; // newest inbound call we received (ISO)
   rejected_requests: number; // inbound webhook calls with a wrong/old secret since startup
   last_rejected_at: string | null;
   problems: string[];
-  ready: boolean; // enabled && public_url_ok && vobiz_ready && ai_ready && app_urls_match && number_linked
+  ready: boolean; // enabled && public_url_ok && provider_ready && ai_ready && app_urls_match && number_linked
 }
 
 export interface SystemInfo {
@@ -382,9 +390,11 @@ export interface SystemInfo {
   stt_model: string;
   stt_mode: string;
   tts_model: string;
-  providers: { openai: boolean; sarvam: boolean; vobiz: boolean };
+  providers: { openai: boolean; sarvam: boolean; vobiz: boolean; plivo?: boolean; telephony?: boolean };
+  telephony_provider?: "plivo" | "vobiz"; // the active phone provider
+  telephony_name?: string; // "Plivo" | "Vobiz"
   public_base_url: string;
-  public_url_ok: boolean; // false if still localhost (Vobiz can't reach it)
+  public_url_ok: boolean; // false if still localhost (the phone provider can't reach it)
 }
 
 export interface Voice {
@@ -576,7 +586,7 @@ export interface ProviderTest {
   latency_ms?: number;
 }
 
-/** Keys: openai, sarvam_tts, sarvam_tts_stream, sarvam_stt, vobiz (more may be added - render generically). */
+/** Keys: openai, sarvam_tts, sarvam_tts_stream, sarvam_stt, plivo or vobiz (more may be added - render generically). */
 export type TestProvidersResult = Record<string, ProviderTest>;
 
 export interface PreviewVoiceBody {

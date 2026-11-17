@@ -14,7 +14,7 @@ from ..config import get_settings
 from ..db import get_db
 from ..models import ACTIVE_CALL_STATUSES, Call, Lead
 from ..schemas import CallCreate, call_list_out
-from ..services import vobiz
+from ..services import telephony
 from ..services.analysis import analyze_call
 from ..services.call_manager import CallError, manager
 from ..services.reporting import (CALLER_TYPES, OUTCOMES, follow_up_pending_condition, follow_ups,
@@ -153,8 +153,8 @@ async def recording(call_uuid: str, db: Session = Depends(get_db)):
     path = recording_abs_path(call.recording_path)
     if path:
         return FileResponse(path, media_type="audio/wav", filename=f"call-{call_uuid[:8]}.wav")
-    if call.recording_url:  # fall back to the provider's copy (needs Vobiz auth headers)
-        data = await vobiz.download_recording(call.recording_url)
+    if call.recording_url:  # fall back to the provider's copy (needs the provider's credentials)
+        data = await telephony.download_recording(call.recording_url)
         if data:
             media = "audio/wav" if data[:4] == b"RIFF" else "audio/mpeg"
             ext = "wav" if media == "audio/wav" else "mp3"

@@ -3,7 +3,7 @@
 The voice agent calls your lead lists in natural **Hinglish** (Indian accent, Hindi + English), asks your qualification questions, and sorts every lead into **Cold / Warm / Hot** with a **1–10 rating**, so your BDE team only spends time on the hot ones. Every call's **recording and transcript** is saved for review. It also **answers inbound calls** to your number: it recognises the caller by their number, greets known customers by name and remembers what they needed on earlier calls. Every customer has a **timeline** of all calls in both directions.
 
 ```
-Lead list ──► Campaign dialer ──► Vobiz (Indian PSTN) ──► customer's phone
+Lead list ──► Campaign dialer ──► Plivo (or Vobiz) ──► customer's phone
                                       │  live audio (μ-law 8 kHz, both ways)
                                       ▼
             Sarvam Saaras v3 realtime STT ──► GPT-4o-mini ──► Sarvam Bulbul v3 TTS
@@ -19,7 +19,7 @@ Lead list ──► Campaign dialer ──► Vobiz (Indian PSTN) ──► cust
 |---|---|
 | Backend | Python 3.13, FastAPI, SQLAlchemy 2 + SQLite (WAL), Prisma-compatible schema |
 | Frontend | Next.js 15 (React 19), Tailwind, anime.js, three.js, SWR. Fonts Inter + Hanken Grotesk, blue/white theme from the PouchWale logo |
-| Telephony | Vobiz: outbound and inbound calls, bidirectional media stream, call recording |
+| Telephony | Plivo (active) or Vobiz, switched with `TELEPHONY_PROVIDER`: outbound and inbound calls, bidirectional media stream, call recording |
 | Speech-to-text | Sarvam **Saaras v3** realtime streaming (`saaras:v3-realtime`, `codemix` = Hindi in Devanagari + English words in English) |
 | Text-to-speech | Sarvam **Bulbul v3** streaming, female voice **`suhani`** (warm, temperature 0.7) |
 | Brain | OpenAI **gpt-4o-mini**, max 120 tokens, temperature 0.6 |
@@ -49,11 +49,13 @@ cd ..\frontend; npm install; npm run dev                 # :3100
 |---|---|
 | `OPENAI_API_KEY` | OpenAI key (gpt-4o-mini) |
 | `SARVAM_API_KEY` | Sarvam AI subscription key (STT + TTS) |
-| `VOBIZ_AUTH_ID`, `VOBIZ_AUTH_TOKEN` | Vobiz console → API credentials |
-| `VOBIZ_FROM_NUMBER` | Your Vobiz Indian DID (caller ID), e.g. `+918071387423` |
+| `TELEPHONY_PROVIDER` | `plivo` (default) or `vobiz`: which phone provider places and receives calls |
+| `PLIVO_AUTH_ID`, `PLIVO_AUTH_TOKEN` | Plivo console → Overview → Auth ID / Auth Token |
+| `PLIVO_FROM_NUMBER` | Your Plivo Indian number (caller ID), e.g. `+918071387423` |
+| `VOBIZ_AUTH_ID`, `VOBIZ_AUTH_TOKEN`, `VOBIZ_FROM_NUMBER` | Only when `TELEPHONY_PROVIDER=vobiz` (kept so you can switch back) |
 | `PUBLIC_BASE_URL` | Public HTTPS URL of this backend (your ngrok URL) |
 
-Then open **Settings → Test providers**: OpenAI, Sarvam voice (REST + live streaming), Sarvam speech recognition and Vobiz each show pass/fail with latency.
+Then open **Settings → Test providers**: OpenAI, Sarvam voice (REST + live streaming), Sarvam speech recognition and the active phone provider (Plivo or Vobiz) each show pass/fail with latency.
 
 **Try it without a phone:** **Test agent** (top bar) → Start. You talk to the agent through your browser mic with the same brain, voice and silence rules as a real call. Use headphones.
 
@@ -61,22 +63,24 @@ Then open **Settings → Test providers**: OpenAI, Sarvam voice (REST + live str
 
 ---
 
-## 2. Going live with phone calls (Vobiz)
+## 2. Going live with phone calls (Plivo, or Vobiz)
 
-1. **Public HTTPS URL:** `start-tunnel.ps1` (ngrok) and `PUBLIC_BASE_URL` in `backend/.env`. Vobiz calls the webhooks and opens the audio WebSocket on it.
-2. **Production hosting must be in India** (e.g. AWS `ap-south-1` Mumbai). Vobiz keeps Indian call audio in India ("media anchoring", hangup cause 2070 otherwise). It also lowers reply latency.
-3. **Vobiz account:** India-registered business with KYC done, a rented Indian DID as caller ID (about 2 minutes to activate).
+The phone provider is chosen by `TELEPHONY_PROVIDER` in `backend/.env` (`plivo` or `vobiz`). Both read the same XML and stream the same call audio, so everything else (agent, recordings, inbound, reports) works the same with either; switching is one word plus a backend restart. Plivo's webhooks live under `/plivo/*`, Vobiz's under `/vobiz/*`.
+
+1. **Public HTTPS URL:** `start-tunnel.ps1` (ngrok) and `PUBLIC_BASE_URL` in `backend/.env`. The provider calls the webhooks and opens the audio WebSocket on it.
+2. **Production hosting must be in India** (e.g. AWS `ap-south-1` Mumbai). Indian call audio has to stay in India ("media anchoring", hangup cause 2070 otherwise). It also lowers reply latency.
+3. **Provider account:** India-registered business with KYC approved and a rented Indian number as caller ID. On Plivo the account must be in the India data region, the number's compliance application must be *accepted*, and a trial account can only call its verified (sandbox) numbers. Promotional calls need a 140-series number.
 4. **Compliance (TRAI):** call only consented leads, inside the calling window (default 09:30–19:30 IST). **DNC** leads are never dialed.
 5. Place one call from **Leads → Call now**, watch it on **Live**, then start campaigns.
 
-Every call is recorded twice: a local stereo WAV (left = customer, right = agent, `backend/data/recordings/`) and Vobiz's own recording as a backup.
+Every call is recorded twice: a local stereo WAV (left = customer, right = agent, `backend/data/recordings/`) and the provider's own recording as a backup.
 
 ### Inbound calls (customers calling your number)
-1. Open **Inbound** → **Connect inbound on Vobiz**. This creates (or updates) the Vobiz application `GP3-Voice-Agent-Inbound` with this backend's answer + hangup URLs and attaches your number to it. If the number currently goes somewhere else (an IVR app or a SIP trunk) you are shown where, and asked before it is moved; **Disconnect** puts the previous routing back.
+1. Open **Inbound** → **Connect inbound on Plivo** (or Vobiz). This creates (or updates) the provider application `GP3-Voice-Agent-Inbound` with this backend's answer + hangup URLs and attaches your number to it. If the number currently goes somewhere else (an IVR app or a SIP trunk) you are shown where, and asked before it is moved; **Disconnect** puts the previous routing back.
 2. Call your number from a mobile to test. The card shows the last inbound call received.
 3. If the ngrok URL ever changes, the card says so: click **Connect** again. To revoke a leaked inbound URL, change `INBOUND_TOKEN_SALT` in `backend/.env` and connect again.
 
-Notes: trial numbers and 140/160-series numbers can't receive inbound calls. The agent answers only while this computer, the backend and the tunnel are running; calls that ring while it is offline are added later as **missed** calls (from Vobiz call records, every 10 minutes), so the team can call back.
+Notes: trial numbers and 140/160-series numbers can't receive inbound calls. The agent answers only while this computer, the backend and the tunnel are running; calls that ring while it is offline are added later as **missed** calls (from the provider's call records, every 10 minutes), so the team can call back.
 
 | Situation | What happens |
 |---|---|
@@ -91,11 +95,11 @@ Notes: trial numbers and 140/160-series numbers can't receive inbound calls. The
 Two lines are always kept free for inbound callers while campaigns run. Both **Inbound calling** and **Outbound calling** can be switched off in Settings → Calling (both are on by default).
 
 ### Security
-- **The tunnel exposes only Vobiz paths.** `start-tunnel.ps1` uses `ngrok-policy.yml`: anyone opening the ngrok URL sees 404 for the dashboard, API and docs; only `/vobiz/*` (with per-call secret tokens, and a separate secret for the inbound URLs) gets through.
+- **The tunnel exposes only phone-provider paths.** `start-tunnel.ps1` uses `ngrok-policy.yml`: anyone opening the ngrok URL sees 404 for the dashboard, API and docs; only `/plivo/*` and `/vobiz/*` (with per-call secret tokens, and a separate secret for the inbound URLs) gets through.
 - **Inbound privacy.** Caller ID can be faked, so on inbound calls the agent greets by name but shares specifics (quantities, quotes) only after the caller brings them up, never reads out internal notes, and stops if the caller says they are someone else. More than 5 calls from one number in 10 minutes get a busy tone.
 - **Dashboard login.** On this computer (`localhost`) no login is needed. From any other machine the dashboard asks for `DASHBOARD_PASSWORD` (set it in `backend/.env`; empty = local only). `REQUIRE_LOGIN_LOCAL=true` asks for it on this computer too. Login attempts are rate-limited; requests from other websites are blocked.
 - **Toll-fraud guard.** Only Indian `+91` numbers can be stored or dialed unless `ALLOW_INTERNATIONAL=true`.
-- **Data safety.** CSV exports are protected against spreadsheet formula injection; recording downloads send Vobiz credentials only to Vobiz; uploads and audio frames are size-capped.
+- **Data safety.** CSV exports are protected against spreadsheet formula injection; recording downloads send provider credentials only to that provider's own hosts; uploads and audio frames are size-capped.
 - Keep real keys only in `backend/.env` (never in `.env.example`).
 
 ---
@@ -150,7 +154,7 @@ Every call shows its real average response time on the call summary, and **Analy
 | **Lead board** | Kanban: **New → No answer → Cold → Warm → Hot**. Cards move automatically after each call; your team can drag them (or use the card menu) |
 | **Campaigns** | Auto-dialer: concurrency, retries for no-answer/busy, calling window, pause/resume |
 | **Calls** | Every call (filter by direction and outcome): rating ring, interest meter, summary, next action, qualification, recording player, clickable transcript, and the customer's timeline |
-| **Inbound** | Vobiz connection status + one-click connect; today / 7 / 30-day numbers (inbound calls, answered, missed, to call back, new and returning callers); live inbound calls; the inbound call list with a **To call back** tab, caller type, reason for calling and next step; click a call for its summary, a Call back button and the caller's timeline. A notice pops up when a call is missed |
+| **Inbound** | Phone-provider connection status + one-click connect; today / 7 / 30-day numbers (inbound calls, answered, missed, to call back, new and returning callers); live inbound calls; the inbound call list with a **To call back** tab, caller type, reason for calling and next step; click a call for its summary, a Call back button and the caller's timeline. A notice pops up when a call is missed |
 | **Customer timeline** (lead page, call page, inbound drawer) | Every call in both directions grouped by day with IST time, outcome, talk time, summary and next step, plus "added to campaign" and "lead created"; the next promised step on top |
 | **Live** | Ongoing calls (marked Inbound / Outbound, returning or new caller) with live transcript, levels, listen-in, hang-up |
 | **Settings** | Voice, **tone & accent** (warm / professional / energetic / calm, Hinglish / mostly Hindi / mostly English), script, knowledge base, questions, objection handling, interest rules, silence timings, fillers, pronunciation fixes, **calling switches + inbound greetings**, calling window |
@@ -171,7 +175,7 @@ Business metrics count real phone calls only; browser test calls are kept out (t
 - Database: `backend/data/voice_agent.db` (SQLite, WAL). Tables are created/migrated on start.
 - **Prisma:** `frontend/prisma/schema.prisma` mirrors the tables (verified with `prisma db pull`). `DATABASE_URL="file:../../backend/data/voice_agent.db" npx prisma generate`. Don't run `prisma migrate`; the backend owns the schema.
 - API: `docs/API_CONTRACT.md` and `http://localhost:8100/docs`.
-- Automated tests: `cd backend; .\.venv\Scripts\python -m pytest` — simulated calls (greeting → conversation → end, barge-in, fillers, 10 s + 3 s silence hang-up, recording, scoring, picked-up-and-cut → cold), a simulated Vobiz media stream, browser calls, CSV import edge cases, board moves, analytics numbers, PDF/CSV reports, dialer concurrency and retries.
+- Automated tests: `cd backend; .\.venv\Scripts\python -m pytest` — simulated calls (greeting → conversation → end, barge-in, fillers, 10 s + 3 s silence hang-up, recording, scoring, picked-up-and-cut → cold), simulated Plivo and Vobiz media streams, browser calls, CSV import edge cases, board moves, analytics numbers, PDF/CSV reports, dialer concurrency and retries.
 
 ## Project layout
 ```
@@ -181,7 +185,8 @@ backend/app/
   services/sarvam.py         Saaras v3 realtime STT + Bulbul v3 streaming/REST TTS
   services/llm.py            GPT-4o-mini streaming, early first-clause chunking, prompt cache
   services/prompts.py        agent prompt (static part first for caching) + scoring prompt
-  services/vobiz.py          Vobiz REST + answer XML    routers/vobiz.py  webhooks + media stream
+  services/telephony.py      active phone provider (TELEPHONY_PROVIDER)   routers/telephony.py  webhooks + media stream (/plivo, /vobiz)
+  services/plivo.py          Plivo REST                 services/vobiz.py  Vobiz REST + shared answer XML
   services/call_manager.py   call lifecycle             services/dialer.py  campaign auto-dialer
   services/analysis.py       post-call scoring (cold/warm/hot, rating, objections)
   services/reporting.py      date ranges + analytics    services/pdf_report.py  PDF report

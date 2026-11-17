@@ -289,10 +289,11 @@ You sound like {person} from the {company} team {on_phone}: {tone}. Genuinely cu
 
 # Sound like a real person (your words are spoken aloud by a voice engine)
 - {style}
-- LANGUAGE RULE: answer in the language of the customer's LAST message. If it is in English (e.g. "Yes, tell me. What do you do?"), reply fully in simple, warm Indian English with no Hindi sentence. If it is Hindi or Hinglish, reply in {hindi_reply}. If they ASK you to speak English (or Hindi), switch and stay in that language for the rest of the call, the goodbye included, even when they answer in a word or two, until they ask otherwise. Match their pace: brief with a busy person, a little chattier with a chatty one.
+- LANGUAGE RULE: answer in the language of the customer's LAST message. If it is in English (e.g. "Yes, tell me. What do you do?"), reply fully in simple, warm Indian English with no Hindi sentence. If it is Hindi or Hinglish, reply in {hindi_reply}. If they ASK you to speak English (or Hindi), switch and stay in that language for the WHOLE rest of the call — every reply, every question and the goodbye — even when they answer in a word or two ("yes", "ok", "हाँ"), even though the earlier conversation was in Hindi, until they ask otherwise. An English reply has no Hindi words at all: say "Sir" or "Madam" or just their name, not "जी". Match their pace: brief with a busy person, a little chattier with a chatty one.
 - English nouns take Hindi gender: quantity, quality, packaging, delivery, details, call are feminine (छोटी quantity, अच्छी quality); order, design, sample, price, pouch, product, brand are masculine (कौन सा pouch, एक sample).
 - SCRIPT RULE (critical, the voice engine depends on it): write every Hindi word in Devanagari and only English words in English letters, e.g. "जी, हम custom printed pouches बनाते हैं। आप किस product के लिए packaging ढूँढ रहे हैं?" NEVER write Hindi in Roman letters (wrong: "aap kis product ke liye", "main bhej dungi", "lekin pehle") — not even when a question, note or the customer's own words below are written that way.
-- React first, then talk. Begin most replies with a short, genuine reaction to what they just said — "अच्छा", "जी", "हाँ जी", "अच्छा जी", "समझ गई", "सही है", "बढ़िया", or "अरे वाह" for good news — but vary it, never the same opener twice in a row, and sometimes skip it.
+- React first, then talk. Begin most replies with a short, genuine reaction to what they just said — "अच्छा", "जी", "हाँ जी", "अच्छा जी", "सही है", "बढ़िया", or "अरे वाह" ONLY for real good news (a big quantity, an order soon) — never in reply to a question, a problem, a "no" or a small quantity — but vary it, never the same opener twice in a row, and sometimes skip it.
+- UNCLEAR SPEECH (critical): phone audio is noisy and people around the customer talk too, so the transcript of their last message can be garbled, cut off or someone else's words. If it is unclear, half a sentence, doesn't fit what you just asked, or sounds like talk not meant for you (e.g. "Hello पड़ी थोड़ा है ना अरे", "करने को वाले"), do NOT guess and do NOT act as if you understood: say in a few words that you couldn't hear clearly and ask them to repeat, e.g. "माफ़ कीजिए, आवाज़ साफ़ नहीं आई, एक बार फिर बोलेंगे?" (English call: "Sorry, I couldn't hear that clearly, could you say it again?"). Never start such a reply with "समझ गई", "अच्छा" or "I see". Say "समझ गई" only right after something you really understood, and then say back what you understood.
 - NEVER say "ओह", "oh", "OK", "ओके", "okay", "got it", "yeah", "cool", "awesome" or "no worries": they sound foreign and robotic on an Indian business call. With an English-speaking customer use "sure", "right", "I see" instead.
 - Show you listened: now and then repeat the key detail back in a few words before moving on ("पाँच हज़ार pouches हर महीने, समझ गई।").
 - Keep every reply SHORT: at most TWO short sentences and about 20 words (a busy owner hangs up on long speeches). One idea per turn: never stack a reaction, an explanation, an offer and a question in one reply — the offer can wait for the next turn. Usually end with one easy question so the customer talks next.
@@ -304,13 +305,17 @@ You sound like {person} from the {company} team {on_phone}: {tone}. Genuinely cu
 - Be respectful: "आप" and "जी" always. Use the customer's name very rarely (at most once more in the whole call), always as "name जी". Say "हम" for the company and "मैं" for yourself.
 {busy}
 - If you could not understand them, ask naturally: "माफ़ कीजिए, आवाज़ थोड़ी cut हो गई, एक बार फिर बताएँगे?"
+- If they only say "hello?" or ask whether you are there, answer that first in a few words ("जी, मेरी आवाज़ आ रही है?") and then repeat your last question in different words; don't jump ahead.
 - Punctuation shapes how your voice sounds: put a comma where a person would pause for breath, "।" at the end of a Hindi sentence, "?" on questions, "!" only for real warmth (at most one per reply). Use "..." very rarely, only for a soft thinking pause.
-- Numbers: write them as spoken words ("पाँच हज़ार pieces", "दो हफ़्ते").
+- Numbers: write them as spoken words ("पाँच हज़ार pieces", "दो हफ़्ते", "साढ़े तीन बजे"). NEVER say a phone number, WhatsApp number, GST number, pincode, order id or any other long number aloud — not even to confirm it. If they say their WhatsApp is on this same number, just say "जी, इसी number पर भेज देंगे" (English: "Sure, we'll send it on this same number"). If they give a different number, say "जी, note कर लिया" without repeating it.
 - Never use lists, bullet points, emojis, markdown, brackets, URLs or symbols (except the end-call marker).
 
 # Stay in context
 - Only talk about {company}, packaging, and this call's purpose. If asked something unrelated, answer in a few words at most and steer back politely.
-- Never invent prices, MOQ, discounts, delivery dates or policies. If asked, say our packaging expert will share the exact quote and offer a call back.
+- FACTS: tell customers only what the business knowledge below says (MOQ, the sample kit and its shipping charge, which pouch suits which product). Never invent prices, discounts, delivery dates or policies. Prices are always per piece (pcs), never per kg, and you never say a rate yourself: the exact per-piece quote comes from our team.
+- DEFLECTION: for anything the business knowledge doesn't cover — an exact rate, a discount, an unusual size or spec, a material or finish, a delivery date, a product not on the list, machines, factory capacity, clients — never guess. Say warmly, in ONE short sentence and in your own words, that you can't confirm that exact detail right now but our team will cover it with them, then move on. Vary the wording every time (e.g. "ये exact detail मैं अभी confirm नहीं कर पाऊँगी, हमारी team आपको बता देगी।", "इसके बारे में हमारी team आपसे detail में बात कर लेगी।", "That exact detail our team will confirm with you."); never repeat the same line in a call.
+- Never confirm a time, a call-back or any next step the customer has not clearly agreed to: ask, wait for their yes, then confirm it once.
+- ORDERS: you cannot take, book, place or confirm an order, and you never agree a quantity, price or delivery with them. If they want to go ahead ("एक हज़ार रख लो", "order कर दो"), welcome it warmly and say our team will call to finalise the order and the exact quote — e.g. "बढ़िया जी! हमारी team आपको call करके order और exact quote finalise कर देगी।". NEVER say "order confirm कर लिया", "order रख लिया", "order book कर दिया", "order note हो गया" or "I've placed your order".
 - You cannot see orders, quotes, samples, payments or deliveries. Never say an order is confirmed, placed, in production, dispatched or ready, and never guess a status. If they ask where their order or enquiry stands, say what was discussed in your own words ("आपने पाँच सौ pouches की बात की थी") and that our team will confirm the exact status, and offer a call back.
 - If asked whether you are a real person, say honestly that you are {company}'s AI assistant, and offer a call back from a human expert.
 - If the customer is busy, ask for a convenient time to call back, confirm it, and end.
@@ -343,8 +348,11 @@ The next message gives the current time (IST), the customer on this call and wha
 
 
 _DEVANAGARI = re.compile(r"[ऀ-ॿ]")
+_ENGLISH_STYLE = (" At most TWO short sentences (about 20 words) and one question. Vary your openers and don't "
+                  "start every reply with 'Great!' or 'Sure!'; never say 'Got it', 'Okay', 'Cool' or 'Awesome' "
+                  "(say 'Right', 'I see' or 'Sure').")
 ENGLISH_TURN_NOTE = ("The customer just spoke in English: reply in simple, warm Indian English this turn "
-                     "(no Hindi sentences), still short.")
+                     "(no Hindi sentences)." + _ENGLISH_STYLE)
 
 
 # Hindi typed in Roman letters (browser tests, other STT modes): such a turn is Hinglish, not English.
@@ -364,13 +372,111 @@ def spoke_english(text: str) -> bool:
     return len(words) >= 3 and not _DEVANAGARI.search(text) and not any(w in _ROMAN_HINDI for w in words)
 
 
-ENGLISH_PREFERRED_NOTE = ("The customer asked you to speak English: reply in simple, warm Indian English (no Hindi "
-                          "sentences) for the rest of the call, the goodbye included, until they ask for Hindi. "
-                          "Still short.")
+ENGLISH_PREFERRED_NOTE = ("The customer asked you to speak English: reply ONLY in simple, warm Indian English (not "
+                          "one Hindi word, even though the earlier conversation was in Hindi) for the rest of the "
+                          "call, short answers and the goodbye included, until they ask for Hindi." + _ENGLISH_STYLE)
+ENGLISH_AUTO_NOTE = ("The customer is talking to you in English: reply ONLY in simple, warm Indian English (not one "
+                     "Hindi word), even to short answers like 'yes' or 'ok', until they speak Hindi again." + _ENGLISH_STYLE)
+
+# The fixed lines of an English call (the Hindi ones come from Settings). "closing" is said at the maximum
+# call length; "error" when the line fails.
+ENGLISH_LINES: dict[str, str] = {
+    # calm: "Hello? Are you there? Can you hear me?" came out loud and stretched on a live call
+    "silence_prompt": "Hello, are you still on the line?",
+    "silence_goodbye": "I think the line isn't clear, so I'll end the call now. Thank you, have a good day.",
+    "closing": "I won't take more of your time. It was nice talking to you, thank you, and have a great day!",
+    "inbound_closing": ("Thank you for calling! Our packaging expert will call you back with the details. "
+                        "Have a great day!"),
+    "error": "Sorry, there's a problem on the line. Our team will call you back soon. Thank you!",
+    "cut": "Sorry, I couldn't hear that clearly. Could you say it again?",
+    "hello_reply": "Yes, I'm here. Can you hear me?",
+    "hear_you": "Yes, I can hear you. Please go ahead.",
+}
+# Soft "I'm listening" sounds while the customer talks for a long time.
+LISTENING_SOUNDS = {"hindi": ["हम्म।", "जी।", "अच्छा।"], "english": ["Mm-hmm.", "Right."]}
+# Fillers for English calls (the Hindi ones would sound odd there). None of them claims to have understood.
+ENGLISH_FILLERS = ["Hmm", "Right", "Sure", "Hmm, one second"]
+
+
+def spoke_hindi(text: str) -> bool:
+    """A real Hindi sentence (3+ Devanagari words, not just "हाँ जी"): ends an English stretch the agent
+    switched to on its own."""
+    words = [w for w in re.findall(r"\S+", text) if _DEVANAGARI.search(w)]
+    return len(words) >= 3
+
+
+# ---------------------------------------------------------------- quick replies without the LLM
+# "Hello? Hello?" mid-call means the customer isn't sure we are still there: answer at once, in our voice,
+# instead of carrying on with the script. Asked whether we can hear THEM: say so.
+HELLO_REPLY = {"hindi": "जी, मेरी आवाज़ आ रही है?", "english": "Yes, I'm here. Can you hear me?"}
+HEAR_YOU_REPLY = {"hindi": "जी, आपकी आवाज़ आ रही है, बताइए।", "english": "Yes, I can hear you. Please go ahead."}
+_HELLO_WORDS = {"hello", "helo", "hallo", "hullo", "hi", "हेलो", "हैलो", "हेल्लो", "हलो", "हल्लो", "हेल्लो"}
+_HELLO_EXTRA = {"जी", "ji", "sir", "madam", "maam", "सर", "मैडम", "भैया", "हाँ", "हां", "haan", "are", "अरे"}
+_THERE_PHRASES = ("are you there", "you there", "anyone there", "कोई है", "हो क्या लाइन पर", "line पर हो",
+                  "लाइन पर हो", "line पर हैं", "लाइन पर हैं")
+_HEAR_ME_PHRASES = ("can you hear me", "are you able to hear me", "मेरी आवाज़ आ रही", "मेरी आवाज आ रही",
+                    "सुनाई दे रहा", "सुनाई दे रही", "मेरी बात सुन")
+
+
+def hello_check(text: str) -> str | None:
+    """"hello" when the customer is checking whether we are there ("Hello? Hello?", "are you there?"),
+    "hear_me" when they ask whether we can hear them, else None (a normal turn for the LLM)."""
+    t = " ".join(text.lower().split())
+    words = [w for w in re.split(r"[\s,.!?।…'\"-]+", t) if w]
+    if not words or len(words) > 8:
+        return None
+    if any(p in t for p in _HEAR_ME_PHRASES) and "नहीं" not in t and "not" not in words:
+        return "hear_me"
+    if any(p in t for p in _THERE_PHRASES):
+        return "hello"
+    if len(words) <= 4 and all(w in _HELLO_WORDS | _HELLO_EXTRA for w in words) and any(w in _HELLO_WORDS for w in words):
+        return "hello"
+    return None
+
+
+# ---------------------------------------------------------------- the customer's mood
+# Read from their words (speech recognition gives text, not tone). Irritated and busy stay for the rest of
+# the call unless they warm up; "brief" = several answers of a word or two.
+_IRRITATED = ("परेशान", "बार बार", "बार-बार", "disturb मत", "मत करो", "मत कीजिए", "call मत", "कॉल मत",
+              "don't call", "stop calling", "irritat", "दिमाग", "फालतू", "बकवास", "bakwas", "गुस्सा",
+              "waste of time", "time waste", "टाइम वेस्ट", "pagal", "पागल", "नहीं चाहिए बोला", "बोला ना",
+              "कितनी बार", "how many times")
+_BUSY = ("busy", "बिज़ी", "बिजी", "meeting", "मीटिंग", "driving", "ड्राइव कर", "गाड़ी चला", "बाद में",
+         "later", "जल्दी बोलो", "जल्दी बताओ", "जल्दी बताइए", "time नहीं", "टाइम नहीं", "समय नहीं",
+         "in a hurry", "quickly", "short में", "काम में हूँ", "काम में हूं")
+_FRIENDLY = ("हाहा", "haha", "hehe", "बढ़िया", "wonderful", "lovely", "अच्छा लगा", "thank you so much",
+             "बहुत अच्छा", "वाह", "wow", "great to hear", "मज़ा", "खुशी")
+MOOD_NOTES = {
+    "irritated": ("The customer sounds irritated: be extra calm and polite, say sorry once for the disturbance, "
+                  "reply in ONE short sentence, don't push or pitch; offer to call at a better time or end politely."),
+    "busy": ("The customer seems busy: ONE short sentence, straight to the point, and offer a quick call back at "
+             "a time that suits them."),
+    "friendly": ("The customer is friendly and relaxed: you may sound a little warmer and more personal (a short "
+                 "friendly remark is fine), still short."),
+    "brief": "The customer answers in very few words: keep your replies very short and easy to answer.",
+}
+# Voice pace for a mood: calmer for an irritated customer, a touch quicker for a busy one.
+MOOD_PACE = {"irritated": 0.96, "busy": 1.05}
+
+
+def detect_mood(text: str) -> str | None:
+    t = " ".join(text.lower().split())
+    if any(p in t for p in _IRRITATED):
+        return "irritated"
+    if any(p in t for p in _BUSY):
+        return "busy"
+    if any(p in t for p in _FRIENDLY):
+        return "friendly"
+    return None
 # A request needs an ask word next to the language: "English labels chahiye" mentions English, it doesn't ask.
 # (Devanagari words get explicit edges: \b treats vowel signs as non-word, and "में" hides inside "हमें")
 _LANG_ASK = re.compile(r"\b(speak|talk|tell|say|reply|answer|continue|explain|please|can|could|bol\w*|baat|me|mein|mai)\b"
-                       r"|(?<![ऀ-ॿ])(बोल|बात|समझा)|(?<![ऀ-ॿ])में(?![ऀ-ॿ])", re.I)
+                       r"|(?<![ऀ-ॿ])(बोल|बात|समझा|स्पीक|टॉक|प्लीज़?)|(?<![ऀ-ॿ])में(?![ऀ-ॿ])", re.I)
+# A very short message that is only the language plus these words is a request too ("In English", "English only",
+# "English sir"); a longer one needs an ask word ("English labels" is about labels).
+_SHORT_ASK_WORDS = {"in", "only", "sir", "madam", "maam", "ma'am", "ji", "जी", "इन", "ओनली", "sir.", "language",
+                    "लैंग्वेज", "please", "plz", "pls", "हिंदी", "हिन्दी", "इंग्लिश", "english", "hindi", "अंग्रेज़ी",
+                    "अंग्रेजी"}
 _ENGLISH_WORD = re.compile(r"\benglish\b|इंग्लिश|अंग्रेज", re.I)  # अंग्रेज: अंग्रेज़ी / अंग्रेजी, with or without nukta
 _HINDI_WORD = re.compile(r"\bhindi\b|हिंदी|हिन्दी", re.I)
 
@@ -378,12 +484,14 @@ _HINDI_WORD = re.compile(r"\bhindi\b|हिंदी|हिन्दी", re.I)
 def language_request(text: str) -> str | None:
     """"english" / "hindi" when the customer asks the agent to switch language ("Can you speak in English?",
     "हिंदी में बोलिए"), else None. The session keeps it for the rest of the call."""
-    if not _LANG_ASK.search(text):
-        return None
     english, hindi = bool(_ENGLISH_WORD.search(text)), bool(_HINDI_WORD.search(text))
-    if english != hindi:
-        return "english" if english else "hindi"
-    return None
+    if english == hindi:
+        return None
+    words = [w for w in re.split(r"[\s,.!?।]+", text.lower()) if w]
+    short = 0 < len(words) <= 4 and all(w in _SHORT_ASK_WORDS for w in words)
+    if not (short or _LANG_ASK.search(text)):
+        return None
+    return "english" if english else "hindi"
 
 
 def _number_line(lead: dict[str, Any], direction: str) -> str | None:
@@ -394,8 +502,9 @@ def _number_line(lead: dict[str, Any], direction: str) -> str | None:
     if not phone:
         return None  # a browser test with a typed name
     if kind == "international" or (phone.startswith("+") and not phone.startswith("+91")):
-        return f"Number: {phone} (international — ask for a WhatsApp number)"
-    return f"Number: {phone}"
+        return "Number: an international number (ask for a WhatsApp number; never say any number aloud)"
+    # the digits are never given: an agent that has them reads them back, digit by digit (robotic, and private)
+    return "Number: their Indian mobile (WhatsApp usually on the same number; never say any number aloud)"
 
 
 def lead_context(lead: dict[str, Any] | None, memory: str = "", *, direction: str = "outbound",

@@ -57,7 +57,7 @@ export function CallTimer({ call, compact = false }: { call: CallListItem; compa
   const now = useNow(1000);
   const startMs = epochMs(call.answered_at ?? call.started_at ?? call.created_at);
   const secs = Number.isFinite(startMs) ? Math.max(0, (now - startMs) / 1000) : null;
-  // An inbound call has been answered by Vobiz before our audio starts: that gap is "picking up", not "dialing".
+  // An inbound call has been answered by the phone provider before our audio starts: that gap is "picking up", not "dialing".
   const caption = call.answered_at ? "On call" : call.direction === "inbound" ? "Picking up" : "Since dial";
   if (compact) {
     return (

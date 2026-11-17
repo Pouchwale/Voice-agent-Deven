@@ -11,7 +11,7 @@ from fastapi.responses import Response
 from ..config import get_settings
 from ..defaults import DEFAULT_AGENT_SETTINGS, INBOUND_OFF_ACTIONS, LANGUAGE_MIXES, SPEAKING_TONES
 from ..schemas import VoicePreview
-from ..services import inbound_audio, vobiz
+from ..services import inbound_audio, telephony
 from ..services.agent_config import load_agent_settings, reset_agent_settings, save_agent_settings
 from ..services.audio import wav_bytes
 from ..services.llm import client
@@ -128,7 +128,10 @@ def system_info():
         "stt_mode": settings.sarvam_stt_mode,
         "tts_model": model_for(voice_for(load_agent_settings())),  # the model of the voice in use
         "providers": {"openai": settings.openai_ready, "sarvam": settings.sarvam_ready,
-                      "vobiz": settings.vobiz_ready},
+                      "plivo": settings.plivo_ready, "vobiz": settings.vobiz_ready,
+                      "telephony": settings.telephony_ready},
+        "telephony_provider": settings.provider,  # the active phone provider: "plivo" | "vobiz"
+        "telephony_name": settings.provider_name,
         "public_base_url": settings.public_base_url,
         "public_url_ok": public_ok,
     }
@@ -183,6 +186,6 @@ async def test_providers():
     out["sarvam_tts_stream"] = {"ok": ok, "detail": detail, "latency_ms": ms}
     ok, detail, ms = await check_stt_stream()
     out["sarvam_stt"] = {"ok": ok, "detail": detail, "latency_ms": ms}
-    ok, detail = await vobiz.check_auth()
-    out["vobiz"] = {"ok": ok, "detail": detail}
+    ok, detail = await telephony.check_auth()  # only the active phone provider (TELEPHONY_PROVIDER)
+    out[settings.provider] = {"ok": ok, "detail": detail}
     return out

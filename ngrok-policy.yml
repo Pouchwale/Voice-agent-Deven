@@ -1,9 +1,9 @@
-# ngrok traffic policy: the public tunnel only exposes what Vobiz needs (/vobiz/* webhooks and
-# the /vobiz/stream audio WebSocket). The dashboard API (/api, /ws, /docs) stays private even if
+# ngrok traffic policy: the public tunnel only exposes what the phone provider needs (/plivo/* and /vobiz/*
+# webhooks and the call-audio WebSockets). The dashboard API (/api, /ws, /docs) stays private even if
 # someone learns the tunnel URL. Used by start-tunnel.ps1.
 on_http_request:
   - expressions:
-      - "!req.url.path.startsWith('/vobiz/')"
+      - "!req.url.path.startsWith('/plivo/') && !req.url.path.startsWith('/vobiz/')"
     actions:
       - type: custom-response
         config:

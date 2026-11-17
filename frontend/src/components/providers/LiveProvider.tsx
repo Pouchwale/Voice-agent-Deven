@@ -32,7 +32,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         void mutate(keys.leadTimeline(call.lead_id));
       }
       // Inbound KPIs (any range): a phone call in either direction can move them (missed / answered / called back).
-      // Coalesced, so a busy campaign doesn't refetch the summary on every ring. Never the Vobiz setup key.
+      // Coalesced, so a busy campaign doesn't refetch the summary on every ring. Never the provider setup key.
       if (call.channel === "phone" && !summaryTimer) {
         summaryTimer = setTimeout(() => {
           summaryTimer = null;

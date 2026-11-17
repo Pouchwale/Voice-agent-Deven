@@ -394,14 +394,15 @@ def test_lead_context_has_now_and_memory():
     lines = ctx.splitlines()
     assert lines[0] == "Now: Fri 13 Nov 2026, 4:12 pm IST"
     assert lines[2:7] == ["# Customer on this call", "Name: Rahul Sharma", "Company: Sharma Snacks", "City: Surat",
-                          "Number: +919400000101"]
+                          "Number: their Indian mobile (WhatsApp usually on the same number; never say any number aloud)"]
+    assert "9400000101" not in ctx  # never handed to the agent: it read numbers back digit by digit
     assert ctx.endswith(memory) and ctx.index("# Customer on this call") < ctx.index(memory)
     for private in ("VIP customer", "hot", "9", "rahul@example.com", "Old summary text", "IndiaMART"):
         assert private not in ctx.replace("+919400000101", ""), private
     assert f"{NOTES_LABEL} VIP customer" in lead_context(lead, "", now=now)  # our own call: notes, labelled
     hidden = lead_context({"phone": ""}, direction="inbound", now=now)
     assert "Name: not known yet" in hidden and "Number: hidden (ask for a WhatsApp or phone number)" in hidden
-    assert "(international" in lead_context({"phone": "+14155550100"}, direction="inbound", now=now)
+    assert "an international number" in lead_context({"phone": "+14155550100"}, direction="inbound", now=now)
     assert "Number:" not in lead_context({"name": "Test User", "company": "Demo Co", "city": ""}, now=now)
     # the static prompt never carries per-call data; the full prompt puts it after
     full = static_system_prompt(CFG, "inbound") + "\n" + ctx

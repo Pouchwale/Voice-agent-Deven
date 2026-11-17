@@ -30,7 +30,8 @@ from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed
 
 from ..config import get_settings
-from .audio import parse_wav_header_any, resample_once
+from .audio import match_loudness, parse_wav_header_any, resample_once
+from .numbers import LONG_DIGITS, speak_numbers_hindi
 
 log = logging.getLogger("sarvam")
 settings = get_settings()
@@ -110,11 +111,13 @@ def _pronunciation_rules(lines: tuple[str, ...]) -> list[tuple[re.Pattern, str]]
 
 
 def speakable(text: str, cfg: dict) -> str:
-    """Text as it should be spoken: pronunciation fixes ("PouchWale = पाउचवाले") applied, stray
-    markup removed. Only the audio uses this; transcripts keep the original spelling."""
+    """Text as it should be spoken: pronunciation fixes ("PouchWale = पाउचवाले") applied, numbers as a
+    person says them ("10,000" -> "दस हज़ार" in Hindi calls), phone numbers and other long digit strings never
+    read out, stray markup removed. Only the audio uses this; transcripts keep the original spelling."""
     out = text
     for pattern, spoken in _pronunciation_rules(tuple(cfg.get("pronunciations") or ())):
         out = pattern.sub(spoken, out)
+    out = speak_numbers_hindi(out) if _tts_lang(cfg).startswith("hi") else LONG_DIGITS.sub("", out)
     out = _MARKUP.sub(" ", out)
     return re.sub(r"[ \t]{2,}", " ", out).strip()
 
@@ -193,7 +196,8 @@ async def tts_rest(text: str, cfg: dict, sample_rate: int) -> bytes:
         else:
             chunk = raw
         pcm.extend(chunk)
-    out = resample_once(bytes(pcm), rate, sample_rate)
+    # same loudness as the streamed voice: the REST voice is 1.5-2x louder (see audio.match_loudness)
+    out = match_loudness(resample_once(bytes(pcm), rate, sample_rate), sample_rate)
     _clip_cache.put(key, out)
     return out
 
@@ -228,6 +232,8 @@ class TTSStream:
         self._carry = b""
         self.audio_bytes = 0
         self.sent: list[str] = []
+        # called with the number of sentences finished so far, after each sentence's audio (natural pauses)
+        self.on_sentence_end: Callable[[int], Awaitable[None]] | None = None
 
     async def connect(self) -> None:
         voice = voice_for(self.cfg)
@@ -343,6 +349,9 @@ class TTSStream:
                 elif mtype == "event":
                     if (data.get("data") or {}).get("event_type") == "final":
                         self._finals += 1
+                        if self.on_sentence_end is not None:
+                            with contextlib.suppress(Exception):
+                                await self.on_sentence_end(self._finals)
                         if self._finished and self._finals >= self._flushes:
                             self.done.set()
                 elif mtype == "error":
@@ -457,7 +466,7 @@ class RealtimeSTT:
             await asyncio.sleep(min(0.3 * attempts, 1.5))
 
     async def _writer(self, ws: ClientConnection) -> None:
-        # batch ~60 ms per message (Vobiz sends 20 ms frames)
+        # batch ~60 ms per message (the phone provider sends 20 ms frames)
         bytes_per_ms = self.rate / 1000 * (1 if self.encoding == "mulaw" else 2)
         target = int(bytes_per_ms * 60)
         buf = bytearray()

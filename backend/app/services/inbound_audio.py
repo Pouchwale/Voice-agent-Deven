@@ -1,10 +1,10 @@
 """Pre-synthesised inbound audio: the first-time-caller greeting and the unavailable message.
 
-An inbound call is answered the moment we reply to Vobiz, so there is no ringing time to synthesise in;
+An inbound call is answered the moment we reply to the phone provider, so there is no ringing time to synthesise in;
 these clips are prepared at startup and after every settings save so callers never hear dead air.
 
 Clips are keyed by their content (spoken text + voice + pace + expressiveness + language): a settings edit
-simply produces a new key, so a Vobiz <Play> URL always names exactly the audio it was issued for.
+simply produces a new key, so a <Play> URL always names exactly the audio it was issued for.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from .sarvam import speakable, tts_rest, voice_for
 log = logging.getLogger("inbound.audio")
 settings = get_settings()
 
-RATE = 8000      # phone audio: Vobiz streams and plays 8 kHz
+RATE = 8000      # phone audio: the provider streams and plays 8 kHz
 MAX_CLIPS = 8    # the current greeting + message, plus a few earlier versions still referenced by live calls
 _KEY = re.compile(r"^[0-9a-f]{40}$")
 

@@ -1,4 +1,4 @@
-"""Back-fill inbound calls that rang while this backend or the tunnel was offline (Vobiz call records),
+"""Back-fill inbound calls that rang while this backend or the tunnel was offline (the provider's call records),
 so every caller shows up as a missed call the team can call back.
 
 Also keeps the few facts about the inbound connection that must survive a restart (our application id,
@@ -21,7 +21,7 @@ from ..db import SessionLocal, utcnow
 from ..defaults import SETTINGS_VERSION
 from ..models import AgentSettings, Call
 from ..schemas import call_list_out
-from . import agent_config, vobiz
+from . import agent_config, telephony
 from .call_manager import OFFLINE_SUMMARY, inbound_caller, resolve_inbound_lead
 from .events import bus
 from .phone import caller_e164
@@ -97,16 +97,16 @@ def _anchor(meta: dict) -> datetime | None:
 
 async def _number_is_ours(number: str, meta: dict) -> bool:
     """Only while our DID is attached to OUR application are its calls ours to back-fill."""
-    num = await vobiz.find_number(number)
+    num = await telephony.find_number(number)
     app_id = str((num or {}).get("application_id") or "")
     if not app_id:
         return False
     if meta.get("_inbound_app_id"):
         return app_id == str(meta["_inbound_app_id"])
-    answer_url = vobiz.inbound_urls()["answer"]
+    answer_url = telephony.inbound_urls()["answer"]
     return any(str(a.get("app_id") or "") == app_id
-               and (a.get("app_name") == vobiz.INBOUND_APP_NAME or a.get("answer_url") == answer_url)
-               for a in await vobiz.list_applications())
+               and (a.get("app_name") == telephony.INBOUND_APP_NAME or a.get("answer_url") == answer_url)
+               for a in await telephony.list_applications())
 
 
 def _store_missed(records: list[dict], our_number: str, start: datetime, now: datetime) -> list[dict]:
@@ -162,9 +162,9 @@ def _store_missed(records: list[dict], our_number: str, start: datetime, now: da
 
 async def sync_once() -> int:
     """One back-fill pass. Returns the number of missed calls added. Errors are logged, never raised."""
-    if not settings.vobiz_ready:
+    if not settings.telephony_ready:
         return 0
-    number = caller_e164(settings.vobiz_from_number)
+    number = caller_e164(settings.caller_number)
     if not number:
         return 0
     try:
@@ -175,14 +175,14 @@ async def sync_once() -> int:
         now = utcnow()
         start = max(anchor, now - LOOKBACK)
         # record dates may be in IST or UTC: ask a day wider on both sides, filter exactly here
-        records = await vobiz.inbound_call_records(number, (start - timedelta(days=1)).date().isoformat(),
+        records = await telephony.inbound_call_records(number, (start - timedelta(days=1)).date().isoformat(),
                                                    (now + timedelta(days=1)).date().isoformat())
         added = await run_db(_store_missed, records, number, start, now)
         # Everything that ended before now - SETTLE is settled: the next pass starts there (records that
         # ended later were skipped above and are picked up next time). Duplicates are prevented by the
         # CallUUID / twin checks, so overlapping windows are harmless.
         await run_db(lambda: save_meta(_inbound_synced_until=(now - SETTLE).isoformat()))
-    except vobiz.VobizError as e:
+    except telephony.ProviderError as e:
         log.warning("inbound back-fill skipped: %s", e)
         return 0
     except Exception:  # noqa: BLE001
@@ -201,9 +201,9 @@ async def _run_forever() -> None:
 
 
 def start() -> None:
-    """Start the periodic sync (at startup, then every ~10 min) when enabled and Vobiz is configured."""
+    """Start the periodic sync (at startup, then every ~10 min) when enabled and the provider is configured."""
     global _task
-    if not (settings.inbound_cdr_sync and settings.vobiz_ready):
+    if not (settings.inbound_cdr_sync and settings.telephony_ready):
         return
     if _task is None or _task.done():
         _task = asyncio.get_running_loop().create_task(_run_forever())

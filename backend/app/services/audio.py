@@ -38,6 +38,39 @@ def resample_once(pcm: bytes, src_rate: int, dst_rate: int) -> bytes:
     return Resampler(src_rate, dst_rate)(pcm)
 
 
+def pcm_rms(pcm: bytes) -> int:
+    """Raw RMS of a PCM16 chunk (0..32767): the loudness scale the background-voice filter uses."""
+    return audioop.rms(pcm, SAMPLE_WIDTH) if pcm else 0
+
+
+# Loudness of Sarvam's streaming voice (median RMS of voiced 20 ms frames, measured on Hindi and English
+# sentences: 2970-3780). Its REST endpoint returns the same voice 1.5-2x louder, sometimes clipped, so a
+# pre-made clip (greeting, filler, "are you there?") jumped out next to streamed replies.
+STREAM_VOICE_LEVEL = 3300
+
+
+def match_loudness(pcm: bytes, rate: int, target: int = STREAM_VOICE_LEVEL) -> bytes:
+    """Scale speech so its voiced frames sit at `target` (never above a safe peak)."""
+    if not pcm:
+        return pcm
+    frame = max(1, rate // 50) * SAMPLE_WIDTH
+    levels = sorted(r for r in (audioop.rms(pcm[i:i + frame], SAMPLE_WIDTH)
+                                for i in range(0, len(pcm) - frame + 1, frame)) if r > 300)
+    if len(levels) < 3:
+        return pcm
+    gain = min(1.5, target / levels[len(levels) // 2])
+    peak = audioop.max(pcm, SAMPLE_WIDTH)
+    if peak and peak * gain > 29000:
+        gain = 29000 / peak
+    if abs(gain - 1.0) < 0.05:
+        return pcm
+    return audioop.mul(pcm, SAMPLE_WIDTH, gain)
+
+
+def scale_volume(pcm: bytes, factor: float) -> bytes:
+    return audioop.mul(pcm, SAMPLE_WIDTH, factor) if pcm and factor != 1.0 else pcm
+
+
 def rms_level(pcm: bytes) -> float:
     """0..1 loudness of a PCM16 chunk (log-scaled so speech sits around 0.4-0.9)."""
     if not pcm:
