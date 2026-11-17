@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{(DATA_DIR / 'voice_agent.db').as_posix()}"
     recordings_dir: Path = DATA_DIR / "recordings"
     cors_origins: str = "http://localhost:3100,http://127.0.0.1:3100"
-    # Public HTTPS URL of THIS backend (ngrok / cloudflared / your domain). Vobiz calls it.
+    # Public HTTPS URL of THIS backend (ngrok / cloudflared / your domain). The phone provider calls it.
     public_base_url: str = "http://localhost:8100"
     timezone: str = "Asia/Kolkata"
 
@@ -49,16 +49,39 @@ class Settings(BaseSettings):
     sarvam_stt_silence_ms: int = 350
     sarvam_tts_model: str = "bulbul:v3"
 
+    # --- Phone provider switch: "plivo" (active) or "vobiz" (kept, switch back any time) ---
+    # Both speak the same XML / audio-stream protocol; only the account REST API differs.
+    telephony_provider: str = "plivo"
+
+    # --- Plivo (telephony) ---
+    plivo_auth_id: str = ""
+    plivo_auth_token: str = ""
+    plivo_base_url: str = "https://api.plivo.com/v1"
+    plivo_from_number: str = ""
+    plivo_record_calls: bool = True
+    # Plivo's own noise cancellation on the call audio we receive (strength 60-100, Plivo default 85).
+    plivo_noise_cancellation: bool = True
+    plivo_noise_cancellation_level: int = 85
+
+    # --- Background voices (phone calls) ---
+    # Loudness = 75th percentile RMS of the voiced 20 ms frames of a sentence. Measured on two live calls:
+    # customers 2700-8700, people talking near them ~2200, so loudness can't safely DROP words (a quiet
+    # customer would be ignored); it only decides who may cut the agent off mid-sentence.
+    background_voice_filter: bool = True
+    near_field_ratio: float = 0.5      # cutting the agent off needs >= this x the customer's usual loudness
+    min_voice_level: int = 900         # quieter than this is near-silent (a TV far away): never answered
+    first_barge_level: int = 2500      # before we know the customer's voice: loudness needed to cut the agent off
+
     # --- Vobiz (telephony) ---
     vobiz_auth_id: str = ""
     vobiz_auth_token: str = ""
     vobiz_base_url: str = "https://api.vobiz.ai/api/v1"
     vobiz_from_number: str = ""
     vobiz_record_calls: bool = True
-    # Inbound webhook URLs carry a secret derived from VOBIZ_AUTH_TOKEN and this salt. Change the salt
-    # (e.g. inbound-v2) to revoke a leaked inbound URL, then click "Connect inbound on Vobiz" again.
+    # Inbound webhook URLs carry a secret derived from the provider's auth token and this salt. Change the
+    # salt (e.g. inbound-v2) to revoke a leaked inbound URL, then click "Connect inbound" again.
     inbound_token_salt: str = "inbound-v1"
-    # Back-fill inbound calls that rang while this backend/tunnel was offline (from Vobiz call records).
+    # Back-fill inbound calls that rang while this backend/tunnel was offline (from the provider's call records).
     inbound_cdr_sync: bool = True
 
     @property
@@ -85,6 +108,38 @@ class Settings(BaseSettings):
     @property
     def vobiz_ready(self) -> bool:
         return bool(self.vobiz_auth_id and self.vobiz_auth_token and self.vobiz_from_number)
+
+    @property
+    def plivo_ready(self) -> bool:
+        return bool(self.plivo_auth_id and self.plivo_auth_token and self.plivo_from_number)
+
+    # ---- the ACTIVE phone provider (everything outside the provider modules uses these) ----
+    @property
+    def provider(self) -> str:
+        p = (self.telephony_provider or "").strip().lower()
+        return p if p in ("plivo", "vobiz") else "plivo"
+
+    @property
+    def provider_name(self) -> str:
+        return {"plivo": "Plivo", "vobiz": "Vobiz"}[self.provider]
+
+    @property
+    def telephony_ready(self) -> bool:
+        return self.plivo_ready if self.provider == "plivo" else self.vobiz_ready
+
+    @property
+    def caller_number(self) -> str:
+        """Our phone number (caller ID for outbound, the DID customers call for inbound)."""
+        return self.plivo_from_number if self.provider == "plivo" else self.vobiz_from_number
+
+    @property
+    def telephony_auth_token(self) -> str:
+        return self.plivo_auth_token if self.provider == "plivo" else self.vobiz_auth_token
+
+    @property
+    def telephony_env_names(self) -> str:
+        p = self.provider.upper()
+        return f"{p}_AUTH_ID / {p}_AUTH_TOKEN / {p}_FROM_NUMBER"
 
 
 @lru_cache

@@ -93,7 +93,7 @@ class Call(Base):
         Index("uq_calls_active_lead", "lead_id", unique=True,
               sqlite_where=text("lead_id IS NOT NULL AND channel = 'phone' "
                                 "AND status IN ('queued','initiated','ringing','in_progress')")),
-        # One row per Vobiz inbound call: answer-webhook retries can never create a second row.
+        # One row per provider inbound call: answer-webhook retries can never create a second row.
         Index("uq_calls_inbound_provider", "provider_call_id", unique=True,
               sqlite_where=text("direction = 'inbound' AND provider_call_id IS NOT NULL AND provider_call_id <> ''")),
         Index("ix_calls_direction", "direction", "id"),

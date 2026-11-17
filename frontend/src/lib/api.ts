@@ -276,10 +276,10 @@ export const api = {
 
   inbound: {
     summary: (p: { from?: string; to?: string } = {}) => request<InboundSummary>(keys.inboundSummary(p)),
-    /** Reads the Vobiz application / number status (live Vobiz check, cached ~60 s server-side; check=false skips it). */
+    /** Reads the provider's application / number status (live provider check, cached ~60 s server-side; check=false skips it). */
     setup: (check = true) => request<InboundSetup>(`${keys.inboundSetup}${check ? "" : "?check=false"}`, { timeoutMs: 30_000 }),
     /**
-     * Creates/updates our Vobiz application (answer + hangup URLs) and attaches our number to it.
+     * Creates/updates our provider application (answer + hangup URLs) and attaches our number to it.
      * 409 when the number is currently routed somewhere else, unless force=true (owner confirmed the takeover).
      */
     connect: (force = false) =>

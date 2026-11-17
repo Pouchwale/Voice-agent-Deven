@@ -143,7 +143,7 @@ export function InboundCallDrawer({
                 ) : null}
               </p>
             ) : (
-              <p className="text-[13px] text-muted">The AI agent calls them right away from your Vobiz number.</p>
+              <p className="text-[13px] text-muted">The AI agent calls them right away from your business number.</p>
             )}
             {raw ? <p className="text-[13px] text-muted">Caller ID sent by the network: {raw}</p> : null}
           </div>

@@ -1,7 +1,7 @@
-"""Lifecycle of calls: start (Vobiz outbound, inbound answer, browser), live session registry, cleanup,
+"""Lifecycle of calls: start (phone provider outbound, inbound answer, browser), live session registry, cleanup,
 analysis hand-off.
 
-Inbound calls (a customer dials our Vobiz number) are answered by answer_inbound(): one row per Vobiz
+Inbound calls (a customer dials our phone number) are answered by answer_inbound(): one row per provider
 CallUUID, the caller found by an exact E.164 match, the AI's availability gated, and everything slow
 (personalised greeting TTS, caller memory) started in the background and handed to the media stream
 through `prepared`, so the answer webhook replies within milliseconds.
@@ -28,7 +28,7 @@ from ..db import SessionLocal, UTCDateTime, utcnow
 from ..defaults import DEFAULT_AGENT_SETTINGS
 from ..models import ACTIVE_CALL_STATUSES, Call, CampaignLead, Lead, TranscriptTurn
 from ..schemas import call_list_out, lead_out
-from . import inbound_audio, vobiz
+from . import inbound_audio, telephony
 from .agent_config import load_agent_settings
 from .analysis import analyze_call
 from .events import bus, spawn
@@ -110,7 +110,7 @@ def callback_due(db, lead: Lead) -> bool:
 # ---------------------------------------------------------------------- inbound caller
 _NAME = re.compile(r"^[A-Za-z][A-Za-z .'\-]{1,59}$")
 _NOT_A_NAME = {"anonymous", "unknown", "private", "restricted", "unavailable", "withheld", "blocked", "caller",
-               "wireless caller", "no caller id", "out of area", "unknown caller", "vobiz"}
+               "wireless caller", "no caller id", "out of area", "unknown caller", "vobiz", "plivo"}
 
 
 def caller_id_name(raw: Any, cfg: dict) -> str | None:
@@ -126,8 +126,8 @@ def inbound_caller(raw_from: Any, raw_to: Any, raw_name: Any, cfg: dict) -> dict
     """Who is calling. kind: None (usable number: the lead lookup decides) | anonymous | international.
     Lookups only ever compare Lead.phone with the exact E.164 (never suffix matching)."""
     e164 = caller_e164(raw_from)
-    to_number = caller_e164(raw_to) or caller_e164(settings.vobiz_from_number) or (settings.vobiz_from_number or None)
-    ours = {n for n in (caller_e164(raw_to), caller_e164(settings.vobiz_from_number)) if n}
+    to_number = caller_e164(raw_to) or caller_e164(settings.caller_number) or (settings.caller_number or None)
+    ours = {n for n in (caller_e164(raw_to), caller_e164(settings.caller_number)) if n}
     if e164 is None or e164 in ours:
         kind = "anonymous"  # hidden / unusable, or our own DID: never a lead (a campaign could dial itself)
     elif not e164.startswith("+91") and not settings.allow_international:
@@ -235,9 +235,9 @@ class CallManager:
         self._analyzed: set[str] = set()
         self.hangup_received: set[str] = set()
         self._watchdog_task: asyncio.Task | None = None
-        # Vobiz CallUUID -> [lock, users]: one answer / hangup handler at a time per inbound call
+        # Provider CallUUID -> [lock, users]: one answer / hangup handler at a time per inbound call
         self._inbound_locks: dict[str, list] = {}
-        # Vobiz CallUUID -> (monotonic time, payload): hangups that arrived before their answer request
+        # Provider CallUUID -> (monotonic time, payload): hangups that arrived before their answer request
         self._early_hangups: dict[str, tuple[float, dict]] = {}
 
     # ------------------------------------------------------------------ helpers
@@ -247,10 +247,11 @@ class CallManager:
             problems.append("OPENAI_API_KEY is not set")
         if not settings.sarvam_ready:
             problems.append("SARVAM_API_KEY is not set")
-        if phone and not settings.vobiz_ready:
-            problems.append("Vobiz is not configured (VOBIZ_AUTH_ID / VOBIZ_AUTH_TOKEN / VOBIZ_FROM_NUMBER)")
+        if phone and not settings.telephony_ready:
+            problems.append(f"{settings.provider_name} is not configured ({settings.telephony_env_names})")
         if phone and settings.public_base_url.startswith(("http://localhost", "http://127.")):
-            problems.append("PUBLIC_BASE_URL is localhost — Vobiz cannot reach it (use an https tunnel / domain)")
+            problems.append(f"PUBLIC_BASE_URL is localhost — {settings.provider_name} cannot reach it "
+                            "(use an https tunnel / domain)")
         return problems
 
     def inbound_blockers(self) -> list[str]:
@@ -334,7 +335,7 @@ class CallManager:
                     raise CallError("This lead already has a call in progress", 409, reason="lead_busy")
                 callback = callback_due(db, lead)
                 call = Call(uuid=call_uuid, lead_id=lead.id, campaign_id=campaign_id, channel="phone",
-                            direction="outbound", status="queued", from_number=settings.vobiz_from_number,
+                            direction="outbound", status="queued", from_number=caller_e164(settings.caller_number) or settings.caller_number,
                             to_number=lead.phone, started_at=utcnow())
                 lead.status = "calling"
                 lead.attempts = (lead.attempts or 0) + 1
@@ -362,21 +363,21 @@ class CallManager:
             "memory": self._memory_task(lead["id"], call_uuid, None, "outbound"),
         }
         try:
-            provider_id = await vobiz.make_call(call_uuid, lead["phone"], int(cfg.get("max_call_sec") or 300),
+            provider_id = await telephony.make_call(call_uuid, lead["phone"], int(cfg.get("max_call_sec") or 300),
                                                 caller_name=cfg.get("company_name", ""))
         except Exception as e:  # noqa: BLE001
             self._drop_prepared(call_uuid)
-            retryable = isinstance(e, httpx.HTTPError) or (isinstance(e, vobiz.VobizError) and e.retryable)
+            retryable = isinstance(e, httpx.HTTPError) or telephony.is_retryable(e)
             await self.finish_unanswered(call_uuid, "failed", "error", error=str(e)[:500],
                                          outcome="provider_error" if retryable else "failed")
             raise CallError(str(e), 502, retryable=retryable) from e
         out, active, end_reason = await run_db(self._mark_dialed, call_uuid, provider_id)
         if not active:
-            # Closed while Vobiz was dialing (the customer called us at that moment, or a manual hang-up):
+            # Closed while the provider was dialing (the customer called us at that moment, or a manual hang-up):
             # the real call is ringing anyway, so drop it now instead of resurrecting the row.
             self._drop_prepared(call_uuid)
             if provider_id:
-                spawn(vobiz.hangup_call(provider_id))
+                spawn(telephony.hangup_call(provider_id))
             if end_reason == "superseded":
                 raise CallError("The customer called us at this moment: the AI is talking to them on their call, "
                                 "so this call was cancelled.", 409, reason="superseded")
@@ -512,7 +513,7 @@ class CallManager:
                             direction="inbound" if inbound else "outbound", caller_type=caller_type,
                             status="in_progress", started_at=utcnow(), answered_at=utcnow(),
                             from_number=(lead.phone if lead else None) if inbound else None,
-                            to_number=(settings.vobiz_from_number or None) if inbound else (lead.phone if lead else None))
+                            to_number=(settings.caller_number or None) if inbound else (lead.phone if lead else None))
                 db.add(call)
                 try:
                     db.commit()
@@ -537,7 +538,7 @@ class CallManager:
         return {"direction": "inbound", "purpose": "inbound", "memory": memory,
                 "greeting_text": inbound_greeting(cfg, lead, call.get("caller_type"))}
 
-    # ------------------------------------------------------------------ inbound (Vobiz answer_url)
+    # ------------------------------------------------------------------ inbound (provider answer_url)
     @contextlib.asynccontextmanager
     async def _inbound_lock(self, provider_id: str) -> AsyncIterator[None]:
         entry = self._inbound_locks.get(provider_id)
@@ -558,10 +559,11 @@ class CallManager:
                          .order_by(Call.id).limit(1))
 
     async def answer_inbound(self, data: dict) -> str:
-        """VobizXML for an inbound answer request (CallUUID required). Never raises: on any failure the caller
-        hears the unavailable message and the call is logged as missed, so the team can call back."""
+        """Provider XML (Plivo / Vobiz) for an inbound answer request (CallUUID required). Never raises: on
+        any failure the caller hears the unavailable message and the call is logged as missed, so the team
+        can call back."""
         pid = str(data.get("CallUUID") or "").strip()
-        async with self._inbound_lock(pid):  # a Vobiz retry waits for the first attempt, then replays it
+        async with self._inbound_lock(pid):  # a provider retry waits for the first attempt, then replays it
             try:
                 return await self._answer_inbound(pid, data)
             except Exception:  # noqa: BLE001
@@ -588,9 +590,9 @@ class CallManager:
             status, end_reason, summary = _missed_by_hangup(early)
             self.mark_hangup_received(call_uuid)
             await self.finish_unanswered(call_uuid, status, end_reason, summary=summary)
-            return vobiz.hangup_xml()
+            return telephony.hangup_xml()
         self._prepare_inbound(call_uuid, cfg, res, caller)
-        return vobiz.answer_xml(call_uuid, int(cfg.get("inbound_max_call_sec") or 600))
+        return telephony.answer_xml(call_uuid, int(cfg.get("inbound_max_call_sec") or 600))
 
     def _inbound_db(self, pid: str, caller: dict, cfg: dict) -> dict:
         """Everything the answer needs from the database in ONE worker-thread hop: idempotency, the caller's
@@ -701,7 +703,7 @@ class CallManager:
         self._drop_prepared(sup["uuid"])
         bus.publish({"type": "call.update", "call": sup["call"]})
         if sup.get("provider_call_id"):
-            spawn(vobiz.hangup_call(sup["provider_call_id"]))
+            spawn(telephony.hangup_call(sup["provider_call_id"]))
         # finish_unanswered ignores rows that are no longer active: settle the campaign item directly
         spawn(self._run_hooks(sup["uuid"], "superseded"))
 
@@ -722,35 +724,35 @@ class CallManager:
 
     def _replay_xml(self, info: dict, cfg: dict) -> str:
         if info["status"] in ACTIVE_CALL_STATUSES:
-            return vobiz.answer_xml(info["uuid"], int(cfg.get("inbound_max_call_sec") or 600))
+            return telephony.answer_xml(info["uuid"], int(cfg.get("inbound_max_call_sec") or 600))
         if info["end_reason"] in ("inbound_off", "lines_busy"):
             default = "reject" if cfg.get("inbound_off_action") == "reject" else "message"
             return self.unavailable_xml(cfg, info.get("reply") or default)
-        return vobiz.hangup_xml()
+        return telephony.hangup_xml()
 
     def unavailable_xml(self, cfg: dict, reply: str) -> str:
         """busy/reject: busy tone, never answered (not billed). message: our own voice when the clip is
-        cached, else Vobiz's Hindi voice right away (and our clip is built for the next caller)."""
+        cached, else the provider's Hindi voice right away (and our clip is built for the next caller)."""
         if reply in ("busy", "reject"):
-            return vobiz.hangup_xml("busy")
+            return telephony.hangup_xml("busy")
         text = inbound_audio.message_text(cfg)
         key = inbound_audio.clip_key(text, cfg)
         if inbound_audio.get(key) is not None:
-            return vobiz.play_xml(vobiz.inbound_audio_url(key))
+            return telephony.play_xml(telephony.inbound_audio_url(key))
         inbound_audio.ensure(text, cfg)
-        return vobiz.speak_xml(speakable(text, cfg))
+        return telephony.speak_xml(speakable(text, cfg))
 
     def inbound_failure_xml(self, cfg: dict | None = None) -> str:
         """Our side broke: the caller still hears a polite message (never a 500, never invalid XML)."""
         try:
             cfg = cfg or load_agent_settings()
-            return vobiz.speak_xml(speakable(inbound_audio.message_text(cfg), cfg))
+            return telephony.speak_xml(speakable(inbound_audio.message_text(cfg), cfg))
         except Exception:  # noqa: BLE001
             try:
                 d = DEFAULT_AGENT_SETTINGS
-                return vobiz.speak_xml(fill_template(d["inbound_unavailable_message"], d, None))
+                return telephony.speak_xml(fill_template(d["inbound_unavailable_message"], d, None))
             except Exception:  # noqa: BLE001
-                return vobiz.hangup_xml()
+                return telephony.hangup_xml()
 
     async def _inbound_failed(self, pid: str, data: dict) -> str:
         try:
@@ -814,7 +816,7 @@ class CallManager:
             return {"uuid": call.uuid, "status": call.status} if call is not None else None
 
     async def inbound_hangup(self, data: dict) -> None:
-        """Vobiz says an inbound call ended (application hangup_url, or a hangup posted to the answer URL)."""
+        """The provider says an inbound call ended (application hangup_url, or a hangup posted to the answer URL)."""
         pid = str(data.get("CallUUID") or "").strip()
         if not pid:
             return
@@ -837,7 +839,7 @@ class CallManager:
                 cause = str(data.get("HangupCause") or data.get("HangupCauseCode") or "").strip()
                 await self.finish_unanswered(
                     row["uuid"], status, end_reason, summary=summary,
-                    error=f"Vobiz ended the call before the audio stream started ({cause})." if status == "failed" else None)
+                    error=f"{settings.provider_name} ended the call before the audio stream started ({cause})." if status == "failed" else None)
         except Exception:  # noqa: BLE001
             log.exception("inbound hangup failed for %s", pid)
 
@@ -949,7 +951,7 @@ class CallManager:
 
         pid = await run_db(provider)
         if pid:
-            await vobiz.hangup_call(pid)
+            await telephony.hangup_call(pid)
         await self.finish_unanswered(call_uuid, "canceled", "manual_hangup")
         return True
 

@@ -1,7 +1,11 @@
-"""Vobiz webhooks + bidirectional media stream (mu-law 8 kHz).
+"""Phone-provider webhooks + bidirectional media stream (mu-law 8 kHz), shared by Plivo and Vobiz.
+
+Plivo and Vobiz send the same webhooks and speak the same stream protocol, so this router is mounted twice
+(main.py): under /plivo and under /vobiz. The URLs we hand out use the ACTIVE provider's prefix
+(TELEPHONY_PROVIDER), and every token is checked against the active provider's secret.
 
 Outbound calls carry a per-call token in every URL. Inbound calls arrive on the static application URLs
-/vobiz/inbound/{token}/answer|hangup (token = vobiz.inbound_token()), set up by /api/inbound/setup.
+/<provider>/inbound/{token}/answer|hangup (token = telephony.inbound_token()), set up by /api/inbound/setup.
 """
 from __future__ import annotations
 
@@ -17,15 +21,15 @@ from sqlalchemy import select
 
 from ..db import SessionLocal
 from ..models import ACTIVE_CALL_STATUSES, Call
-from ..services import inbound_audio, vobiz
+from ..services import inbound_audio, telephony
 from ..services.audio import pcm16_to_ulaw, ulaw_to_pcm16
 from ..services.call_manager import manager
 from ..services.events import spawn
 from ..services.repo import run_db, update_call
 from ..services.session import CallSession, Transport
 
-log = logging.getLogger("vobiz.router")
-router = APIRouter(prefix="/vobiz", tags=["vobiz"])
+log = logging.getLogger("telephony.router")
+router = APIRouter(tags=["telephony"])  # prefixes /plivo and /vobiz are added in main.py
 
 # CallStatus values that only ever arrive once a call is over (a hangup posted to the answer URL)
 _ENDED_STATUSES = {"completed", "cancel", "canceled", "cancelled", "busy", "no-answer", "no_answer", "failed",
@@ -33,7 +37,7 @@ _ENDED_STATUSES = {"completed", "cancel", "canceled", "cancelled", "busy", "no-a
 
 
 async def _payload(request: Request) -> dict:
-    """Vobiz posts form-encoded bodies (sometimes JSON) — accept both."""
+    """The provider posts form-encoded bodies (sometimes JSON) — accept both."""
     ctype = request.headers.get("content-type", "")
     try:
         if "json" in ctype:
@@ -62,7 +66,7 @@ def _xml(content: str) -> Response:
 
 @router.post("/answer/{call_uuid}/{token}")
 async def answer(call_uuid: str, token: str, request: Request):
-    if not vobiz.verify_token(call_uuid, token):
+    if not telephony.verify_token(call_uuid, token):
         return PlainTextResponse("forbidden", status_code=403)
     data = await _payload(request)
     # Guarded: only a still-active call is answered. Cancelled / superseded / finished before the customer
@@ -70,14 +74,14 @@ async def answer(call_uuid: str, token: str, request: Request):
     out = await run_db(manager.mark_in_progress, call_uuid, str(data.get("CallUUID") or "") or None)
     if out is None:
         log.info("answer for inactive call %s: hanging up", call_uuid)
-        return _xml(vobiz.hangup_xml())
+        return _xml(telephony.hangup_xml())
     from ..services.agent_config import load_agent_settings
-    return _xml(vobiz.answer_xml(call_uuid, int(load_agent_settings().get("max_call_sec") or 300)))
+    return _xml(telephony.answer_xml(call_uuid, int(load_agent_settings().get("max_call_sec") or 300)))
 
 
 @router.post("/ring/{call_uuid}/{token}")
 async def ring(call_uuid: str, token: str, request: Request):
-    if vobiz.verify_token(call_uuid, token):
+    if telephony.verify_token(call_uuid, token):
         row = await run_db(_call_row, call_uuid)
         if row and row["status"] in ("queued", "initiated"):
             await run_db(lambda: update_call(call_uuid, status="ringing"))
@@ -101,7 +105,7 @@ async def _handle_hangup(call_uuid: str, data: dict) -> None:
         await manager.finish_unanswered(call_uuid, "failed", "error",
                                         error=f"Answered but no media stream ({cause or code}).")
         return
-    status, reason = vobiz.HANGUP_CODE_MAP.get(code, (None, None))
+    status, reason = telephony.HANGUP_CODE_MAP.get(code, (None, None))
     if status is None:
         if "BUSY" in cause or call_status == "busy" or "REJECT" in cause:
             status, reason = "busy", "busy"
@@ -114,11 +118,11 @@ async def _handle_hangup(call_uuid: str, data: dict) -> None:
 
 @router.post("/hangup/{call_uuid}/{token}")
 async def hangup(call_uuid: str, token: str, request: Request, background: BackgroundTasks):
-    if not vobiz.verify_token(call_uuid, token):
+    if not telephony.verify_token(call_uuid, token):
         return PlainTextResponse("forbidden", status_code=403)
     data = await _payload(request)
     log.info("hangup webhook %s: %s", call_uuid, {k: data.get(k) for k in ("CallStatus", "HangupCause", "HangupCauseCode", "Duration")})
-    background.add_task(_handle_hangup, call_uuid, data)  # respond < 3 s, Vobiz retries otherwise
+    background.add_task(_handle_hangup, call_uuid, data)  # respond < 3 s, the provider retries otherwise
     return PlainTextResponse("ok")
 
 
@@ -129,7 +133,7 @@ async def record_start(call_uuid: str, token: str):
 
 @router.post("/recording/{call_uuid}/{token}")
 async def recording_ready(call_uuid: str, token: str, request: Request):
-    if not vobiz.verify_token(call_uuid, token):
+    if not telephony.verify_token(call_uuid, token):
         return PlainTextResponse("forbidden", status_code=403)
     data = await _payload(request)
     url = data.get("RecordUrl") or data.get("RecordFile") or data.get("record_url") or data.get("recording_url")
@@ -147,8 +151,8 @@ async def stream_status(call_uuid: str, token: str, request: Request):
 
 # ------------------------------------------------------------------ inbound (static application URLs)
 def _inbound_forbidden(what: str, request: Request) -> PlainTextResponse:
-    """Counted and reported by the inbound setup check: usually Vobiz still calling an old tunnel / salt URL."""
-    vobiz.note_inbound_rejection()
+    """Counted and reported by the inbound setup check: usually the provider still calling an old tunnel / salt URL."""
+    telephony.note_inbound_rejection()
     log.warning("inbound %s with a wrong secret from %s", what, request.client.host if request.client else "?")
     return PlainTextResponse("forbidden", status_code=403)
 
@@ -162,7 +166,7 @@ async def _inbound_payload(request: Request) -> dict:
 
 
 def _is_hangup_callback(data: dict) -> bool:
-    """Without a hangup_url on the application, Vobiz posts hangups to the answer URL too."""
+    """Without a hangup_url on the application, the provider posts hangups to the answer URL too."""
     if str(data.get("Event") or "").strip().lower() == "hangup":
         return True
     if str(data.get("HangupCause") or "").strip() or str(data.get("HangupCauseCode") or "").strip():
@@ -172,7 +176,7 @@ def _is_hangup_callback(data: dict) -> bool:
 
 @router.api_route("/inbound/{token}/answer", methods=["GET", "POST"])
 async def inbound_answer(token: str, request: Request, background: BackgroundTasks):
-    if not vobiz.verify_inbound_token(token):
+    if not telephony.verify_inbound_token(token):
         return _inbound_forbidden("answer", request)
     try:
         data = await _inbound_payload(request)
@@ -195,19 +199,19 @@ async def inbound_answer(token: str, request: Request, background: BackgroundTas
 
 @router.api_route("/inbound/{token}/hangup", methods=["GET", "POST"])
 async def inbound_hangup(token: str, request: Request, background: BackgroundTasks):
-    if not vobiz.verify_inbound_token(token):
+    if not telephony.verify_inbound_token(token):
         return _inbound_forbidden("hangup", request)
     data = await _inbound_payload(request)
     log.info("inbound hangup %s: %s", data.get("CallUUID"),
              {k: data.get(k) for k in ("CallStatus", "HangupCause", "HangupCauseCode", "Duration")})
-    background.add_task(manager.inbound_hangup, data)  # respond < 3 s, Vobiz retries otherwise
+    background.add_task(manager.inbound_hangup, data)  # respond < 3 s, the provider retries otherwise
     return PlainTextResponse("ok")
 
 
 @router.get("/inbound/{token}/audio/{key}.wav")
 async def inbound_audio_clip(token: str, key: str, request: Request):
     """Our own voice for the unavailable message (<Play> is only issued for a clip that is cached)."""
-    if not vobiz.verify_inbound_token(token):
+    if not telephony.verify_inbound_token(token):
         return _inbound_forbidden("audio", request)
     data = inbound_audio.wav(key)
     if data is None:
@@ -217,13 +221,13 @@ async def inbound_audio_clip(token: str, key: str, request: Request):
 
 # ------------------------------------------------------------------ media stream
 def _drop_line(call_uuid: str, provider_call_id: str | None) -> None:
-    """A stream for a call we already closed: unless Vobiz told us the line is down, hang it up, or with
+    """A stream for a call we already closed: unless the provider told us the line is down, hang it up, or with
     keepCallAlive the caller could sit on a silent (billed) line."""
     if provider_call_id and call_uuid not in manager.hangup_received:
-        spawn(vobiz.hangup_call(provider_call_id))
+        spawn(telephony.hangup_call(provider_call_id))
 
 
-class VobizTransport(Transport):
+class PhoneStreamTransport(Transport):
     channel = "phone"
     in_rate = 8000
     out_rate = 8000
@@ -253,7 +257,7 @@ class VobizTransport(Transport):
     async def send_audio(self, pcm16: bytes) -> None:
         if self.closed or not pcm16:
             return
-        if not self.cleared.is_set():  # Vobiz: wait for clearedAudio before new audio
+        if not self.cleared.is_set():  # wait for the provider's clearedAudio before new audio
             with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(self.cleared.wait(), 0.5)
             self.cleared.set()
@@ -277,7 +281,7 @@ class VobizTransport(Transport):
         return ulaw_to_pcm16(raw)
 
     async def close(self, reason: str) -> None:
-        """Make sure the phone line really drops, unless Vobiz already told us it did.
+        """Make sure the phone line really drops, unless the provider already told us it did.
 
         A closed media socket is NOT proof the customer hung up (tunnel blip, network drop):
         with keepCallAlive the PSTN leg could otherwise stay open, silent and billed.
@@ -290,7 +294,7 @@ class VobizTransport(Transport):
             async def backup_hangup() -> None:
                 await asyncio.sleep(1.5)
                 if pid and call_uuid not in manager.hangup_received:
-                    await vobiz.hangup_call(pid)  # 404 if already gone: fine
+                    await telephony.hangup_call(pid)  # 404 if already gone: fine
 
             spawn(backup_hangup())
         self.closed = True
@@ -299,7 +303,7 @@ class VobizTransport(Transport):
 @router.websocket("/stream/{call_uuid}/{token}")
 async def media_stream(ws: WebSocket, call_uuid: str, token: str):
     await ws.accept()
-    if not vobiz.verify_token(call_uuid, token):
+    if not telephony.verify_token(call_uuid, token):
         await ws.close(code=1008)
         return
     # wait for the 'start' event (carries streamId)
@@ -336,7 +340,7 @@ async def media_stream(ws: WebSocket, call_uuid: str, token: str):
         await ws.close(code=1008)
         return
     call_id = await run_db(manager.call_id_for, call_uuid)
-    transport = VobizTransport(ws, stream_id, row["provider"] or start.get("callId"), call_uuid)
+    transport = PhoneStreamTransport(ws, stream_id, row["provider"] or start.get("callId"), call_uuid)
     session = CallSession(call_id=call_id, call_uuid=call_uuid, lead=prep["lead"], cfg=prep["cfg"],
                           transport=transport, greeting_pcm=prep["greeting_pcm"], on_finished=manager.session_finished,
                           direction=prep["direction"], memory=prep["memory"], greeting_text=prep["greeting_text"],

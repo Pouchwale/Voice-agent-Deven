@@ -53,7 +53,11 @@ class FakeTTSStream:
     ms_per_sentence = 300
     sentences: list[str] = []
 
+    configs: list[dict] = []  # the voice settings each socket was opened with (pace / temperature checks)
+
     def __init__(self, cfg, sample_rate, on_audio):
+        self.cfg = cfg
+        FakeTTSStream.configs.append(cfg)
         self.rate = sample_rate
         self.on_audio = on_audio
         self.error = None
@@ -61,6 +65,8 @@ class FakeTTSStream:
         self.done = asyncio.Event()
         self.sent: list[str] = []
         self._pending: list[asyncio.Task] = []
+        self.on_sentence_end = None  # like sarvam.TTSStream: called after each sentence's audio
+        self._finals = 0
 
     @property
     def unfinished_sentences(self) -> list[str]:
@@ -73,11 +79,19 @@ class FakeTTSStream:
         FakeTTSStream.sentences.append(text)
         self.sent.append(text)
 
+        index = len(self._pending)
+        previous = self._pending[-1] if self._pending else None
+
         async def deliver():
             await asyncio.sleep(0.02)
+            if previous is not None:  # the real socket finishes sentences in order
+                await asyncio.gather(previous, return_exceptions=True)
             pcm = tone(self.ms_per_sentence, self.rate)
             self.audio_bytes += len(pcm)
             await self.on_audio(pcm)
+            self._finals = index + 1
+            if self.on_sentence_end is not None:
+                await self.on_sentence_end(self._finals)
 
         self._pending.append(asyncio.create_task(deliver()))
 
@@ -225,11 +239,12 @@ def _keep_background_providers_offline() -> None:
     * the inbound clip cache pre-warms on every app startup and settings save: never through Sarvam;
     * Vobiz account API calls (inbound setup check, call-record sync) fail locally unless a test installs
       FakeVobizAPI (monkeypatch restores this guard afterwards)."""
-    from app.services import inbound_audio, vobiz
+    from app.services import inbound_audio, plivo, vobiz
 
     inbound_audio.tts_rest = fake_tts_rest
-    offline = httpx.MockTransport(lambda request: httpx.Response(599, text="no real Vobiz from tests"))
+    offline = httpx.MockTransport(lambda request: httpx.Response(599, text="no real provider from tests"))
     vobiz._client = lambda timeout: httpx.AsyncClient(transport=offline, timeout=timeout)
+    plivo._client = lambda timeout: httpx.AsyncClient(transport=offline, timeout=timeout)
 
 
 _keep_background_providers_offline()

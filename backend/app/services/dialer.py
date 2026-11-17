@@ -5,7 +5,7 @@ Robustness rules:
     matched to its call (or to the absence of one) later;
   * each item is dialed in isolation: an unexpected error re-queues that item instead of
     aborting the tick and leaving others stuck in 'dialing';
-  * provider-side failures (Vobiz 429/5xx, network, our own TTS/STT outage) do not use up a
+  * provider-side failures (Plivo / Vobiz 429/5xx, network, our own TTS/STT outage) do not use up a
     lead's attempts; three in a row pause the campaign so a list isn't burned during an outage;
   * customers come first: a lead on a live call (either direction) or who called us in the last
     30 minutes is left for later, a few lines stay free for callers while inbound is on, and an

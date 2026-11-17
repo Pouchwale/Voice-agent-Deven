@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import re
 import threading
 from typing import Any
 
@@ -29,8 +30,21 @@ def upgrade_saved(data: dict[str, Any]) -> bool:
     if isinstance(words, list):
         kept = [w for w in words if str(w).strip().lower() not in DROPPED_FILLERS]
         data["filler_words"] = kept if kept else copy.deepcopy(DEFAULT_AGENT_SETTINGS["filler_words"])
+    rules = data.get("pronunciations")
+    if isinstance(rules, list):
+        # new shipped pronunciations are added; the team's own (and their spellings of a word) are kept
+        have = {_rule_key(r) for r in rules}
+        data["pronunciations"] = rules + [r for r in DEFAULT_AGENT_SETTINGS["pronunciations"]
+                                          if _rule_key(r) not in have]
     data[VERSION_KEY] = SETTINGS_VERSION
     return True
+
+
+def _rule_key(rule: Any) -> tuple[str, bool]:
+    """A pronunciation rule's word, and whether it is spelled in Devanagari (Hindi calls) or Latin (English)."""
+    parts = re.split(r"\s*(?:=|->|→)\s*", str(rule).strip(), maxsplit=1)  # same separators as sarvam.speakable
+    left, right = (parts + [""])[:2]
+    return left.strip().lower(), bool(re.search(r"[ऀ-ॿ]", right))
 
 
 def load_agent_settings() -> dict[str, Any]:
@@ -81,7 +95,7 @@ def reset_agent_settings() -> dict[str, Any]:
         with SessionLocal() as db:
             row = db.get(AgentSettings, 1)
             if row:
-                # facts about the Vobiz inbound connection are not settings: a reset must keep them, or
+                # facts about the provider's inbound connection are not settings: a reset must keep them, or
                 # Disconnect could no longer restore the number's previous routing
                 kept = {k: v for k, v in (row.data or {}).items() if str(k).startswith("_inbound_")}
                 row.data = {**copy.deepcopy(DEFAULT_AGENT_SETTINGS), VERSION_KEY: SETTINGS_VERSION, **kept}

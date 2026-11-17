@@ -13,7 +13,7 @@ from . import models  # noqa: F401  (register tables)
 from .config import get_settings
 from .db import Base, engine
 from .routers import (analytics, auth, calls, campaigns, dashboard, inbound, inbound_stats, leads, live,
-                      settings as settings_router, vobiz)
+                      settings as settings_router, telephony)
 from .security import AccessGuard
 from .services import inbound_audio, inbound_sync
 from .services.agent_config import load_agent_settings
@@ -24,6 +24,28 @@ from .services.events import bus, spawn
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("app")
+
+
+def _log_to_file() -> None:
+    """Also keep the log in backend/data/logs/backend.log (5 x 5 MB): live calls can be diagnosed afterwards
+    (barge-ins, ignored speech, language switches, latencies) even when the console window is gone."""
+    from logging.handlers import RotatingFileHandler
+
+    root = logging.getLogger()
+    if any(isinstance(h, RotatingFileHandler) for h in root.handlers):
+        return
+    logs = get_settings().recordings_dir.parent / "logs"  # backend/data/logs (tests: their temp folder)
+    try:
+        logs.mkdir(parents=True, exist_ok=True)
+        handler = RotatingFileHandler(logs / "backend.log", maxBytes=5_000_000, backupCount=5, encoding="utf-8")
+    except OSError as e:
+        log.warning("file log unavailable: %s", e)
+        return
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    root.addHandler(handler)
+
+
+_log_to_file()
 settings = get_settings()
 
 
@@ -99,7 +121,7 @@ def _migrate() -> None:
         conn.execute(text(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_calls_active_lead ON calls(lead_id) WHERE lead_id IS NOT NULL "
             "AND channel = 'phone' AND status IN ('queued','initiated','ringing','in_progress')"))
-        # one row per Vobiz inbound call (answer-webhook retries can't create a second row)
+        # one row per provider inbound call (answer-webhook retries can't create a second row)
         conn.execute(text(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_calls_inbound_provider ON calls(provider_call_id) "
             "WHERE direction = 'inbound' AND provider_call_id IS NOT NULL AND provider_call_id <> ''"))
@@ -150,8 +172,11 @@ app.add_middleware(
 )
 
 for r in (auth.router, leads.router, calls.router, campaigns.router, dashboard.router, analytics.router,
-          settings_router.router, live.router, vobiz.router, inbound.router, inbound_stats.router):
+          settings_router.router, live.router, inbound.router, inbound_stats.router):
     app.include_router(r)
+# Plivo and Vobiz share one webhook / media-stream router (same protocol); URLs use the active provider's prefix.
+for prefix in ("/plivo", "/vobiz"):
+    app.include_router(telephony.router, prefix=prefix)
 
 
 @app.get("/api/health")

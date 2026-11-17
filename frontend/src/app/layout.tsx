@@ -1,28 +1,31 @@
 import type { Metadata, Viewport } from "next";
-import { Hanken_Grotesk, Inter, Noto_Sans_Devanagari } from "next/font/google";
+import localFont from "next/font/local";
 import { Providers } from "@/components/providers/Providers";
 import { AppShell } from "@/components/shell/AppShell";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
+// Fonts ship with the project (variable woff2 from Google Fonts in ./fonts): next/font/google downloads them
+// on every build, and a build started before the internet is up (e.g. start-all.bat at login) failed.
+const inter = localFont({
+  src: "./fonts/inter-latin-var.woff2",
   variable: "--font-inter",
   display: "swap",
-  weight: ["300", "400", "500", "600", "700", "800", "900"],
+  weight: "300 900",
 });
 
-const hanken = Hanken_Grotesk({
-  subsets: ["latin"],
+const hanken = localFont({
+  src: "./fonts/hanken-grotesk-latin-var.woff2",
   variable: "--font-hanken",
   display: "swap",
-  weight: ["400", "500", "600", "700", "800", "900"],
+  weight: "400 900",
 });
 
 // Transcripts contain Hindi (Devanagari); Inter/Hanken have no Devanagari glyphs, so this is the fallback.
-const devanagari = Noto_Sans_Devanagari({
-  subsets: ["devanagari"],
+const devanagari = localFont({
+  src: "./fonts/noto-sans-devanagari-var.woff2",
   variable: "--font-devanagari",
   display: "swap",
+  weight: "100 900",
   preload: false,
 });
 

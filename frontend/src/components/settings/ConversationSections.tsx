@@ -121,6 +121,32 @@ export function ConversationSection({ form, set, errors }: SectionProps) {
           onChange={(v) => set("barge_in_enabled", v)}
         />
       </div>
+      <div className="space-y-4 border-t border-line pt-5">
+        <Switch
+          label="Fast replies"
+          description="Start writing the reply the moment the customer stops talking, before the transcript is final. Hindi calls only."
+          checked={form.fast_replies ?? true}
+          onChange={(v) => set("fast_replies", v)}
+        />
+        <Switch
+          label="Listening sounds"
+          description="A soft “हम्म” or “जी” in the pauses of a long customer sentence, so they hear someone is listening."
+          checked={form.listening_sounds ?? true}
+          onChange={(v) => set("listening_sounds", v)}
+        />
+        <Switch
+          label="Natural voice variation"
+          description="A slightly different pace on each reply and short breaths between sentences."
+          checked={form.natural_variation ?? true}
+          onChange={(v) => set("natural_variation", v)}
+        />
+        <Switch
+          label="Match the customer's mood"
+          description="Shorter and calmer with a busy or irritated customer, a little warmer with a friendly one."
+          checked={form.mood_matching ?? true}
+          onChange={(v) => set("mood_matching", v)}
+        />
+      </div>
       <div className="grid gap-4 border-t border-line pt-5 sm:grid-cols-[200px_1fr] sm:items-end">
         <NumberField
           label="Max outbound call length"

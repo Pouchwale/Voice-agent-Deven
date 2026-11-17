@@ -126,9 +126,14 @@ def call_urls(call_uuid: str) -> dict[str, str]:
 
 def answer_xml(call_uuid: str, max_call_sec: int) -> str:
     """Bidirectional mu-law stream + whole-session recording (Record must come before Stream)."""
-    u = call_urls(call_uuid)
+    return build_answer_xml(call_urls(call_uuid), max_call_sec, settings.vobiz_record_calls)
+
+
+def build_answer_xml(u: dict[str, str], max_call_sec: int, record_calls: bool, stream_attrs: str = "") -> str:
+    """Shared with the Plivo client: both read the same <Record> + <Stream> XML. `stream_attrs`: extra
+    provider-only <Stream> attributes (e.g. Plivo's noise cancellation), already formatted."""
     record = ""
-    if settings.vobiz_record_calls:
+    if record_calls:
         record = (
             f'<Record recordSession="true" redirect="false" playBeep="false" '
             f'maxLength="{max(600, max_call_sec + 120)}" fileFormat="mp3" '
@@ -137,7 +142,7 @@ def answer_xml(call_uuid: str, max_call_sec: int) -> str:
         )
     stream = (
         f'<Stream bidirectional="true" audioTrack="inbound" keepCallAlive="true" '
-        f'contentType="audio/x-mulaw;rate=8000" streamTimeout="{max_call_sec + 120}" '
+        f'contentType="audio/x-mulaw;rate=8000" streamTimeout="{max_call_sec + 120}"{stream_attrs} '
         f'statusCallbackUrl="{escape(u["stream_status"])}" statusCallbackMethod="POST">'
         f'{escape(u["stream_ws"])}</Stream>'
     )

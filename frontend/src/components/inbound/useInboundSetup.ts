@@ -7,9 +7,9 @@ import type { InboundSetup } from "@/lib/types";
 
 const QUICK_KEY = `${keys.inboundSetup}?check=false`;
 
-/** The locally known switches; when they change, the Vobiz-side facts and problems need a fresh check. */
+/** The locally known switches; when they change, the provider-side facts and problems need a fresh check. */
 function localSignature(s: InboundSetup): string {
-  return [s.enabled, s.public_url_ok, s.vobiz_ready, s.ai_ready, s.rejected_requests > 0].join("|");
+  return [s.enabled, s.public_url_ok, s.provider_ready, s.ai_ready, s.rejected_requests > 0].join("|");
 }
 
 function newest(a: string | null, b: string | null): string | null {
@@ -20,7 +20,7 @@ function newest(a: string | null, b: string | null): string | null {
 
 /**
  * Inbound setup status for the Inbound page.
- * - The full check (asks Vobiz about the application and the number; up to 8 s per query and shared rate limits)
+ * - The full check (asks the provider about the application and the number; up to 8 s per query and shared rate limits)
  *   runs on mount, after Connect / Disconnect, on "Check again", and once when a local switch changes - never on
  *   window focus or a timer, and the live feed never touches this key.
  * - A cheap `?check=false` read every 30 s keeps the local facts fresh ("Last inbound call", switches, AI keys).
@@ -47,7 +47,9 @@ export function useInboundSetup() {
       answer_url: q.answer_url,
       hangup_url: q.hangup_url,
       public_url_ok: q.public_url_ok,
-      vobiz_ready: q.vobiz_ready,
+      provider: q.provider,
+      provider_name: q.provider_name,
+      provider_ready: q.provider_ready,
       ai_ready: q.ai_ready,
       rejected_requests: q.rejected_requests,
       last_rejected_at: q.last_rejected_at,
@@ -57,7 +59,7 @@ export function useInboundSetup() {
     merged.ready =
       merged.enabled &&
       merged.public_url_ok &&
-      merged.vobiz_ready &&
+      merged.provider_ready &&
       merged.ai_ready &&
       merged.app_urls_match === true &&
       merged.number_linked === true;
@@ -97,7 +99,7 @@ export function useInboundSetup() {
     /** Neither request has succeeded yet. */
     loading: !data && !full.error && !quick.error,
     error: data ? undefined : (full.error ?? quick.error),
-    /** A full Vobiz check is in flight. */
+    /** A full provider check is in flight. */
     checking: fullValidating,
     /** The full check hasn't completed yet (status unknown rather than "not connected"). */
     fullPending: !full.data && !full.error,

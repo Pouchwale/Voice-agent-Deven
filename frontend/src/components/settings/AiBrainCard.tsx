@@ -19,6 +19,7 @@ const PROVIDER_LABEL: Record<string, string> = {
   sarvam_tts_stream: "Sarvam live voice (streaming)",
   sarvam_stt: "Sarvam speech recognition (realtime)",
   sarvam: "Sarvam",
+  plivo: "Plivo telephony",
   vobiz: "Vobiz telephony",
 };
 
@@ -117,8 +118,8 @@ export function AiBrainCard() {
               <span className="font-semibold">Public URL: </span>
               <code className="font-mono">{data.public_base_url || "not set"}</code>
               {data.public_url_ok
-                ? " - Vobiz can reach the backend."
-                : " - still localhost, so Vobiz can't reach it. Phone calls need a public URL (e.g. an ngrok tunnel); browser tests still work."}
+                ? ` - ${data.telephony_name || "The phone provider"} can reach the backend.`
+                : ` - still localhost, so ${data.telephony_name || "the phone provider"} can't reach it. Phone calls need a public URL (e.g. an ngrok tunnel); browser tests still work.`}
             </p>
           </div>
         </>

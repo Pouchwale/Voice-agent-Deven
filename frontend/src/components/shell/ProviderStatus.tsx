@@ -8,11 +8,20 @@ import { keys } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import type { SystemInfo } from "@/lib/types";
 
-const PROVIDERS: { key: keyof SystemInfo["providers"]; label: string; role: string }[] = [
-  { key: "openai", label: "OpenAI", role: "Language model" },
-  { key: "sarvam", label: "Sarvam", role: "Speech (STT / TTS)" },
-  { key: "vobiz", label: "Vobiz", role: "Phone calls" },
-];
+type ProviderRow = { key: keyof SystemInfo["providers"]; label: string; role: string };
+
+/** The phone row follows TELEPHONY_PROVIDER in backend/.env (Plivo or Vobiz). */
+function providerRows(info: SystemInfo): ProviderRow[] {
+  const phone: ProviderRow =
+    info.telephony_provider === "plivo"
+      ? { key: "plivo", label: "Plivo", role: "Phone calls" }
+      : { key: "vobiz", label: "Vobiz", role: "Phone calls" };
+  return [
+    { key: "openai", label: "OpenAI", role: "Language model" },
+    { key: "sarvam", label: "Sarvam", role: "Speech (STT / TTS)" },
+    phone,
+  ];
+}
 
 /** OK = blue check; missing = grey dash (the text label says which). */
 function StatusMark({ ok }: { ok: boolean }) {
@@ -52,6 +61,8 @@ export function ProviderStatus() {
   }
   if (!data) return null;
 
+  const PROVIDERS = providerRows(data);
+  const phoneName = PROVIDERS[2].label;
   const missing = PROVIDERS.filter((p) => !data.providers?.[p.key]);
   const warn = missing.length > 0 || !data.public_url_ok;
 
@@ -108,7 +119,7 @@ export function ProviderStatus() {
                 <Info className="size-4" aria-hidden /> Public URL not reachable
               </p>
               <p className="mt-1 break-all">
-                Backend public URL is <code className="font-mono text-xs">{data.public_base_url || "not set"}</code>. Vobiz can&apos;t
+                Backend public URL is <code className="font-mono text-xs">{data.public_base_url || "not set"}</code>. {phoneName} can&apos;t
                 reach localhost, so set a public URL (for example an ngrok tunnel) for phone calls. Browser tests still work.
               </p>
             </div>
