@@ -6,6 +6,41 @@ unusual sizes or finishes) is never quoted: the agent says the team will cover i
 """
 from .defaults_legacy import V4_TEXTS
 
+# How the call-review agent judges a call (Settings -> Review agent, editable). The review code adds the
+# evidence (numbered transcript turns T#, timing facts F# from the recording) and the answer format.
+REVIEW_RUBRIC = """\
+Goal: find where and why our voice agent lost the customer's interest, with proof. A customer who simply
+isn't a fit is not the agent's fault, and a normal reason to end a call is not a finding.
+
+Lost because of the agent (needs proof): the customer was engaged or neutral, and right after a specific
+agent turn their engagement dropped. They hung up during or just after it, got curt or annoyed, had to repeat
+themselves, said they weren't understood, or stopped answering, and that agent turn did something wrong.
+
+Not the agent's fault (report as the customer's side, never count against the agent): not interested before
+hearing any pitch; wrong number or wrong person; busy, call later; already has a supplier and firmly declines;
+a real price / MOQ / product mismatch the agent handled politely; the customer's own bad line; a test call.
+
+Agent mistakes (category: what it looks like):
+- too_long: a reply far longer than needed (about 25+ words, several sentences) or a monologue.
+- many_questions: two or more questions in one reply.
+- ignored_question: the customer asked something and the reply didn't answer it.
+- repeated_question: asked for something the customer had already told us.
+- pushy: kept pitching after a clear no, or rushed them to a next step.
+- wrong_info: said something the knowledge base doesn't say, contradicted it, promised what we don't offer,
+  or claimed an order / booking was confirmed.
+- misheard: replied as if the customer had said something else.
+- unnatural: robotic, formal or scripted wording, numbers read out, the wrong language for this customer.
+- slow_reply: the customer waited too long for an answer (proof: a response gap from the recording).
+- talked_over: the agent spoke over the customer (proof: an overlap from the recording).
+- weak_opening: the greeting or first pitch is where they disengaged.
+- no_next_step: an interested customer was let go without a clear next step.
+- other: anything else, explained.
+
+Proof rules: every finding names the agent turn (T#) and copies an exact quote from it, and/or cites a timing
+fact (F#) from the recording. No proof, no finding. Never guess what the customer felt or meant beyond what
+they said and did. Also note what worked well, with the same kind of proof.
+"""
+
 DEFAULT_AGENT_SETTINGS: dict = {
     # ---------------- identity ----------------
     "agent_name": "",  # optional personal name; empty = introduce only the company
@@ -230,9 +265,53 @@ DEFAULT_AGENT_SETTINGS: dict = {
     # ---------------- tone & accent ----------------
     "speaking_tone": "warm",      # warm | professional | energetic | calm
     "language_mix": "hinglish",   # hinglish | hindi | english (the customer's own language still wins)
+
+    # ---------------- learned rules ----------------
+    # Extra rules added to the agent's core instructions. The call-review agent suggests them (each one only
+    # after a person approves it); the team can also write them by hand.
+    "learned_rules": "",
+
+    # ---------------- call-review agent ----------------
+    # Reviews finished calls (recording timing + transcript + call data), finds where and why customers were
+    # lost, and suggests script changes. Nothing is changed until a person approves a suggestion.
+    "review_enabled": True,
+    "review_every_calls": 5,         # an automatic review after this many new calls with a conversation
+    "review_min_evidence": 2,        # a problem must show up in at least this many calls to become a suggestion
+    "review_model": "gpt-4o-mini",   # OpenAI model for reviews (live calls keep OPENAI_MODEL)
+    "review_include_inbound": True,  # inbound calls are reviewed too (outbound always)
+    "review_rubric": REVIEW_RUBRIC,  # how calls are judged (editable)
+
+    # ---------------- settings history ----------------
+    "history_days": 30,  # saved changes stay listed (with Undo) this many days
 }
 
 # Allowed values of the choice settings (validated on save, used by the prompt).
+# What each setting is called on the Settings page (settings history and review suggestions show these).
+SETTING_LABELS: dict[str, str] = {
+    "agent_name": "Agent name", "company_name": "Company name", "agent_gender": "Agent gender",
+    "voice": "Voice", "language_code": "Language", "tts_pace": "Speaking pace",
+    "tts_temperature": "Voice expressiveness", "pronunciations": "Pronunciations",
+    "opening_line": "Opening line", "call_purpose": "Call script (outbound)", "knowledge_base": "Knowledge base",
+    "qualification_questions": "Qualification questions", "objection_handling": "Objection handling",
+    "interest_rules": "Interest rules", "closing_line": "Closing line (outbound)",
+    "silence_timeout_sec": "Silence timeout", "silence_prompt_text": "\"Are you there?\" line",
+    "silence_final_wait_sec": "Wait after \"are you there?\"", "silence_goodbye_text": "Silence goodbye line",
+    "fillers_enabled": "Fillers", "filler_words": "Filler words", "filler_delay_ms": "Filler delay",
+    "barge_in_enabled": "Barge-in", "fast_replies": "Fast replies", "listening_sounds": "Listening sounds",
+    "natural_variation": "Natural voice variation", "mood_matching": "Mood matching",
+    "max_call_sec": "Max outbound call length", "call_window_start": "Campaign window start",
+    "call_window_end": "Campaign window end", "outbound_enabled": "Outbound calling",
+    "inbound_enabled": "Inbound calling", "inbound_greeting": "Inbound greeting (new caller)",
+    "inbound_greeting_known": "Inbound greeting (known caller)", "inbound_purpose": "Call script (inbound)",
+    "inbound_closing_line": "Closing line (inbound)", "inbound_max_call_sec": "Max inbound call length",
+    "callback_greeting": "Call-back greeting", "inbound_off_action": "When inbound is off",
+    "inbound_unavailable_message": "Unavailable message", "speaking_tone": "Speaking tone",
+    "language_mix": "Language mix", "learned_rules": "Learned rules", "review_enabled": "Review agent",
+    "review_every_calls": "Review every N calls", "review_min_evidence": "Proof needed (calls)",
+    "review_model": "Review model", "review_include_inbound": "Review inbound calls",
+    "review_rubric": "How calls are judged", "history_days": "Keep history (days)",
+}
+
 SPEAKING_TONES = ("warm", "professional", "energetic", "calm")
 LANGUAGE_MIXES = ("hinglish", "hindi", "english")
 INBOUND_OFF_ACTIONS = ("message", "reject")

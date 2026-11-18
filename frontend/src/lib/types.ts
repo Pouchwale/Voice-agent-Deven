@@ -159,6 +159,16 @@ export interface CallDetail extends CallListItem {
   recording_url: string | null; // relative: "/api/calls/{uuid}/recording" -> prefix with API base
   transcript: TranscriptTurn[];
   lead: Lead | null;
+  /** The call-review agent's latest verdict on this call (null: not reviewed yet). */
+  review?: CallReview | null;
+}
+
+export interface CallReview {
+  run_id: number;
+  reviewed_at: string | null;
+  model: string;
+  evaluation: ReviewCallEvaluation;
+  facts: ReviewFact[];
 }
 
 export interface Page<T> {
@@ -272,6 +282,22 @@ export interface AgentSettings {
   speaking_tone: SpeakingTone;
   /** Default language style; the customer's own language still wins turn by turn. */
   language_mix: LanguageMix;
+  /** Rules learned from call reviews (approved by the team); part of every call's instructions. Max 4000 chars. */
+  learned_rules: string;
+  /** Call-review agent: automatic reviews on/off (the "Run review now" button always works). */
+  review_enabled: boolean;
+  /** An automatic review runs once this many new reviewable calls are waiting (3-50). */
+  review_every_calls: number;
+  /** A problem must be proven in at least this many calls to become a suggestion (1-5). */
+  review_min_evidence: number;
+  /** OpenAI model used for reviews (not for live calls). */
+  review_model: string;
+  /** Also review inbound calls (outbound calls are always reviewed). */
+  review_include_inbound: boolean;
+  /** How calls are judged: the review agent's rubric. */
+  review_rubric: string;
+  /** Settings change history is kept this many days (1-365). */
+  history_days: number;
 }
 
 export type SpeakingTone = "warm" | "professional" | "energetic" | "calm";
@@ -619,6 +645,7 @@ export type LiveEvent =
     }
   | { type: "level"; uuid: string; user: number; agent: number } // 0..1, ~8/sec
   | { type: "campaign.update"; campaign: Campaign }
+  | { type: "review.update"; status: ReviewStatus } // a review started / progressed / finished, a suggestion was decided
   | { type: "pong" };
 
 /** /ws/listen/{uuid} text frames */
@@ -715,4 +742,218 @@ export interface AnalyticsParams {
   to?: string;
   campaign_id?: number | "";
   include_tests?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Settings change history (GET /api/settings/history, POST /api/settings/history/{id}/undo)
+// ---------------------------------------------------------------------------
+
+export type SettingsChangeSource = "settings" | "review" | "undo" | "reset";
+
+export interface SettingsChangeEntry {
+  id: number;
+  created_at: string;
+  source: SettingsChangeSource;
+  label: string;
+  /** The change this one undid (source "undo") or the review suggestion it applied (source "review"). */
+  ref_id: number | null;
+  /** Set once undone: the id of the undo entry (-1 = undone, entry no longer kept). */
+  undone_by: number | null;
+  changes: { key: string; label: string; old: unknown; new: unknown }[];
+}
+
+export interface SettingsHistory {
+  days: number;
+  items: SettingsChangeEntry[];
+}
+
+/** 409 detail of an undo whose settings were changed again since. */
+export interface UndoConflict {
+  key: string;
+  label: string;
+  /** The value now (changed again after the entry). */
+  now: unknown;
+  /** The value the entry set. */
+  after_change: unknown;
+  /** The value an undo would put back. */
+  restore: unknown;
+}
+
+// ---------------------------------------------------------------------------
+// Call-review agent (/api/review/*)
+// ---------------------------------------------------------------------------
+
+export type ReviewRunStatus = "running" | "done" | "failed";
+export type ReviewOutcome = "converted" | "interested" | "neutral" | "lost" | "not_a_fit";
+export type ReviewLossCause = "agent" | "customer_side" | "technical" | "unclear";
+export type ReviewSuggestionStatus = "pending" | "approved" | "rejected" | "superseded";
+
+export interface ReviewRunSummary {
+  id: number;
+  created_at: string;
+  finished_at: string | null;
+  trigger: "auto" | "manual";
+  status: ReviewRunStatus;
+  stage: string | null;
+  model: string;
+  call_count: number;
+  tokens: number | null;
+  error: string | null;
+  summary: string | null;
+  patterns: number;
+  suggestions: number;
+  pending: number;
+}
+
+export interface ReviewStatus {
+  enabled: boolean;
+  openai_ready: boolean;
+  every: number;
+  min_evidence: number;
+  model: string;
+  include_inbound: boolean;
+  /** Reviewable calls waiting for the next automatic review. */
+  new_calls: number;
+  running: ReviewRunSummary | null;
+  last_run: ReviewRunSummary | null;
+  /** After a failed review, automatic reviews wait until then ("Run review now" still works). */
+  auto_paused_until: string | null;
+  pending_suggestions: number;
+}
+
+export interface ReviewIssue {
+  category: string;
+  turn: string;
+  at: string;
+  quote: string;
+  facts: string[];
+  /** Repeated / ignored question: the earlier turn where it was already asked or answered (or the customer asked). */
+  earlier?: string;
+  earlier_text?: string;
+  customer_reaction: string | null;
+  severity: 1 | 2 | 3;
+  why: string;
+}
+
+export interface ReviewCallEvaluation {
+  outcome: ReviewOutcome;
+  customer_intent: string;
+  engagement: "rising" | "steady" | "falling" | "dropped";
+  intent_lost: boolean;
+  lost_at: string | null;
+  lost_at_time: string | null;
+  loss_cause: ReviewLossCause | null;
+  customer_side_reason: string | null;
+  verdict: string;
+  issues: ReviewIssue[];
+  strengths: { turn: string; at: string; quote: string; why: string }[];
+  proof: { removed: string[] };
+}
+
+export interface ReviewFact {
+  id: string;
+  type: string;
+  text: string;
+  turn?: string;
+  at?: string;
+}
+
+export interface ReviewCall {
+  call_uuid: string;
+  lead: string;
+  call_at: string | null;
+  direction: CallDirection;
+  duration_sec: number | null;
+  evaluation: ReviewCallEvaluation;
+  facts: ReviewFact[];
+  timing: { recording: boolean; length_s?: number; agent_share?: number | null; avg_reply_gap_s?: number; max_reply_gap_s?: number };
+}
+
+export interface ReviewEvidence {
+  call: string;
+  call_uuid: string;
+  lead: string;
+  call_at: string | null;
+  turn: string;
+  at: string;
+  quote: string;
+  /** What was proven wrong at that moment (the call's verified finding or a measured fact). */
+  finding?: string;
+}
+
+export interface ReviewPattern {
+  id: string;
+  title: string;
+  category: string;
+  calls: string[];
+  evidence: ReviewEvidence[];
+  impact: string;
+}
+
+export interface ReviewStats {
+  calls: number;
+  outcomes: Partial<Record<ReviewOutcome, number>>;
+  lost_because_of_agent: number;
+  lost_customer_side: number;
+  lost_unclear_or_technical: number;
+  calls_with_issue: Record<string, number>;
+  hung_up_during_agent_reply: number;
+  avg_reply_gap_s: number | null;
+  avg_agent_talk_share: number | null;
+  avg_agent_words_per_reply: number | null;
+  replies_over_35_words_pct: number | null;
+}
+
+export interface ReviewReport {
+  summary?: string;
+  patterns?: ReviewPattern[];
+  watch_list?: { title: string; calls: string[]; note: string }[];
+  team_notes?: string[];
+  impact_of_recent_changes?: string | null;
+  proof?: { removed: string[] };
+  stats?: ReviewStats;
+  min_evidence?: number;
+  calls?: { id: string; call_uuid: string; lead: string; call_at: string | null; direction: CallDirection }[];
+}
+
+export interface ReviewSuggestion {
+  id: number;
+  run_id: number;
+  created_at: string;
+  field: string;
+  field_label: string;
+  title: string;
+  rationale: string | null;
+  expected_effect: string | null;
+  evidence: ReviewEvidence[];
+  /** The setting's value when the suggestion was made. */
+  base_value: unknown;
+  proposed_value: unknown;
+  status: ReviewSuggestionStatus;
+  decided_at: string | null;
+  decision_note: string | null;
+  applied_value: unknown;
+  /** The settings history entry an approval created (undo it from Settings > Change history). */
+  change_id: number | null;
+}
+
+export interface ReviewRunDetail extends ReviewRunSummary {
+  report: ReviewReport;
+  calls: ReviewCall[];
+  suggestion_items: ReviewSuggestion[];
+}
+
+export interface ReviewMethod {
+  steps: string[];
+  rubric: string;
+  default_rubric: string;
+  categories: string[];
+  fields: { key: string; label: string; how: string[]; help: string }[];
+}
+
+export interface ReviewModelChoice {
+  id: string;
+  note: string;
+  /** null = couldn't check with OpenAI right now. */
+  available: boolean | null;
 }

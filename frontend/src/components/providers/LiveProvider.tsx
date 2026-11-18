@@ -46,6 +46,26 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     };
   }, [store, mutate]);
 
+  // Call-review agent: the status rides on the event (sidebar badge, Review page); the run list, the open run and
+  // the suggestions refetch (only where mounted). Approvals also change the settings and their history.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const off = store.onReview((status) => {
+      void mutate(keys.reviewStatus, status, { revalidate: false });
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        void mutate((key) => typeof key === "string" && (key.startsWith(keys.reviewRuns) || key.startsWith("/api/review/suggestions")));
+        void mutate(keys.settings);
+        void mutate(keys.settingsHistory);
+      }, 400);
+    });
+    return () => {
+      off();
+      if (timer) clearTimeout(timer);
+    };
+  }, [store, mutate]);
+
   return <LiveContext.Provider value={store}>{children}</LiveContext.Provider>;
 }
 

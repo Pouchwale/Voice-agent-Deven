@@ -414,6 +414,69 @@ interface InboundSetup {
 - `POST /api/settings/test-providers` → `Record<string, { ok: boolean; detail: string; latency_ms?: number }>` with keys
   `openai`, `sarvam_tts` (REST voice), `sarvam_tts_stream` (live streaming voice), `sarvam_stt` (realtime speech recognition), and the active phone provider: `plivo` or `vobiz`.
   Render every key returned (more may be added). Can take ~10 s.
+- Review / history settings (part of `AgentSettings`, validated like the rest): `learned_rules` (text, max 4000
+  characters, added to every call's instructions), `review_enabled` (bool), `review_every_calls` (3..50),
+  `review_min_evidence` (1..5), `review_model` (OpenAI model name, `^[a-z0-9][a-z0-9.-]{1,62}$`),
+  `review_include_inbound` (bool), `review_rubric` (text), `history_days` (1..365). Template texts (`opening_line`,
+  greetings, closing lines, silence lines, purposes) are rejected with 422 when they contain an unknown `{placeholder}`.
+
+### Settings change history (every save, reset, approved review suggestion and undo)
+```ts
+type SettingsChangeEntry = {
+  id: number; created_at: string; source: "settings" | "review" | "undo" | "reset"; label: string;
+  ref_id: number | null;      // undo: the entry it undid · review: the suggestion it applied
+  undone_by: number | null;   // set once undone (-1: nothing was left to put back)
+  changes: { key: string; label: string; old: unknown; new: unknown }[];  // label = the Settings page label
+};
+```
+- `GET /api/settings/history?limit=300` (1..1000) → `{ days: number; items: SettingsChangeEntry[] }` (newest first; entries older
+  than `history_days` are hidden and removed daily). A save that changes nothing creates no entry.
+- `POST /api/settings/history/{id}/undo?force=false` → `{ settings: AgentSettings; change: SettingsChangeEntry }`. Puts back
+  the old values of exactly the settings that entry changed (the undo is itself an entry, so it can be undone too).
+  404 unknown/expired entry · 409 `"This change was already undone."` · 409 when one of those settings changed again
+  since, with `detail = { message, conflicts: { key, label, now, after_change, restore }[] }`: repeat with `force=true`.
+
+### Call review (the review agent)
+Reviews finished phone calls in which the customer spoke (outbound, plus inbound when `review_include_inbound`),
+automatically every `review_every_calls` new calls (when `review_enabled`) or on demand. Nothing changes a setting
+except an explicit approval.
+```ts
+type ReviewRunSummary = { id: number; created_at: string; finished_at: string | null; trigger: "auto" | "manual";
+  status: "running" | "done" | "failed"; stage: string | null; model: string; call_count: number; tokens: number | null;
+  error: string | null; summary: string | null; patterns: number; suggestions: number; pending: number };
+type ReviewStatus = { enabled: boolean; openai_ready: boolean; every: number; min_evidence: number; model: string;
+  include_inbound: boolean; new_calls: number; running: ReviewRunSummary | null; last_run: ReviewRunSummary | null;
+  auto_paused_until: string | null;   // after a failed review, automatic reviews wait 30 min
+  pending_suggestions: number };
+type ReviewSuggestion = { id: number; run_id: number; created_at: string; field: string; field_label: string;
+  title: string; rationale: string | null; expected_effect: string | null;
+  evidence: { call: string; call_uuid: string; lead: string; call_at: string | null; turn: string; at: string;
+              quote: string; finding?: string }[];
+  base_value: unknown; proposed_value: unknown; status: "pending" | "approved" | "rejected" | "superseded";
+  decided_at: string | null; decision_note: string | null; applied_value: unknown; change_id: number | null };
+```
+Full shapes (run detail, per-call evaluation, stats): `frontend/src/lib/types.ts` (`ReviewRunDetail`, `ReviewCall`,
+`ReviewCallEvaluation`, `ReviewReport`, `ReviewMethod`, `CallReview`).
+- `GET /api/review/status` → `ReviewStatus`
+- `GET /api/review/method` → `{ steps: string[]; rubric: string; default_rubric: string; categories: string[];
+  fields: { key; label; how: string[]; help }[] }` (how a review works, for the Review page and Settings)
+- `GET /api/review/models` → `{ models: { id; note; available: boolean | null }[] }` (`available` = this OpenAI key can
+  use it; `null` = couldn't check; checked at most hourly)
+- `GET /api/review/runs?limit=20` → `ReviewRunSummary[]` (newest first)
+- `GET /api/review/runs/{id}` → `ReviewRunDetail` (summary + `report` + `calls` with each call's proof-checked verdict
+  and timing facts + `suggestion_items`). 404 unknown.
+- `POST /api/review/runs` body `{ limit?: number }` (1..15, default 10: the most recent reviewable calls) → 201
+  `ReviewRunSummary` (runs in the background; progress arrives as `review.update`). 400 no OpenAI key / no calls ·
+  409 a review is already running · 422 `limit` not a number.
+- `GET /api/review/suggestions?status=&limit=100` → `ReviewSuggestion[]` (newest first)
+- `POST /api/review/suggestions/{id}/approve` body `{ value?: unknown; force?: boolean }` → `ReviewSuggestion`. Writes the
+  proposed (or edited `value`) into the setting with the same validation as `PUT /api/settings` and records it in the
+  change history (`source: "review"`). 404 unknown · 409 already decided · 409 when the setting changed after the
+  suggestion was made, with `detail = { message, stale: true, current }`: repeat with `force: true` · 422 invalid value.
+- `POST /api/review/suggestions/{id}/reject` body `{ note?: string }` → `ReviewSuggestion` (nothing changes; the same
+  change is never suggested again).
+- `GET /api/calls/{uuid}` also returns `review: { run_id; reviewed_at; model; evaluation; facts } | null`: the latest
+  finished review of that call.
 
 ## Phone-provider inbound webhooks (not under `/api`; for the provider application only)
 
@@ -450,7 +513,8 @@ type LiveEvent =
   | { type: "call.state"; uuid: string; state: "connecting" | "listening" | "thinking" | "speaking" | "ended" }
   | { type: "transcript"; uuid: string; role: "agent" | "user"; text: string; final: boolean; offset_ms: number; interrupted?: boolean }
   | { type: "level"; uuid: string; user: number; agent: number }                 // 0..1, ~8/sec
-  | { type: "campaign.update"; campaign: Campaign };
+  | { type: "campaign.update"; campaign: Campaign }
+  | { type: "review.update"; status: ReviewStatus };                              // review started / progressed / finished, suggestion decided
 ```
 Client may send `{"type":"ping"}`; server replies `{"type":"pong"}`. Calls in events carry `direction`, `caller_type`,
 `from_number`, `to_number` and `call_reason` (`follow_up` is always null in events: refetch the list for it). An inbound

@@ -27,6 +27,15 @@ import type {
   AnalyticsParams,
   BoardResponse,
   PreviewVoiceBody,
+  ReviewMethod,
+  ReviewModelChoice,
+  ReviewRunDetail,
+  ReviewRunSummary,
+  ReviewStatus,
+  ReviewSuggestion,
+  ReviewSuggestionStatus,
+  SettingsChangeEntry,
+  SettingsHistory,
   SystemInfo,
   TestProvidersResult,
   Voice,
@@ -36,12 +45,15 @@ import type {
 export class ApiError extends Error {
   status: number;
   detail: string;
+  /** The raw `detail` of the error body when it carries more than a message (e.g. an undo's conflicts). */
+  data?: unknown;
 
-  constructor(status: number, detail: string) {
+  constructor(status: number, detail: string, data?: unknown) {
     super(detail);
     this.name = "ApiError";
     this.status = status;
     this.detail = detail;
+    this.data = data;
   }
 
   get isNetwork(): boolean {
@@ -63,11 +75,14 @@ export function qs(query?: Query): string {
   return s ? `?${s}` : "";
 }
 
-/** FastAPI errors look like {detail: "..."} or {detail: [{msg, loc}]}. */
+/** FastAPI errors look like {detail: "..."}, {detail: [{msg, loc}]} or {detail: {message, ...more}}. */
 function extractDetail(body: unknown, fallback: string): string {
   if (body && typeof body === "object" && "detail" in body) {
     const detail = (body as { detail: unknown }).detail;
     if (typeof detail === "string") return detail;
+    if (detail && typeof detail === "object" && !Array.isArray(detail) && "message" in detail) {
+      return String((detail as { message: unknown }).message);
+    }
     if (Array.isArray(detail)) {
       return detail
         .map((d) => {
@@ -157,7 +172,8 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
       // Session missing/expired: let the AuthProvider send the user to /login. /api/auth/* handles its own 401s
       // (e.g. a wrong password on the login form must not trigger a redirect).
       if (res.status === 401 && !path.startsWith("/api/auth/")) notifyUnauthorized(detail);
-      throw new ApiError(res.status, detail);
+      const raw = parsed && typeof parsed === "object" && "detail" in parsed ? (parsed as { detail: unknown }).detail : undefined;
+      throw new ApiError(res.status, detail, raw);
     }
 
     try {
@@ -234,7 +250,14 @@ export const keys = {
   campaignItems: (id: number, p: { result?: CampaignResultFilter | ""; page?: number; page_size?: number } = {}) =>
     `/api/campaigns/${id}${qs({ result: p.result, page: p.page ?? 1, page_size: p.page_size ?? 50 })}`,
   settings: "/api/settings",
+  settingsHistory: "/api/settings/history",
   voices: "/api/settings/voices",
+  reviewStatus: "/api/review/status",
+  reviewMethod: "/api/review/method",
+  reviewModels: "/api/review/models",
+  reviewRuns: "/api/review/runs",
+  reviewRun: (id: number) => `/api/review/runs/${id}`,
+  reviewSuggestions: (status?: ReviewSuggestionStatus) => `/api/review/suggestions${qs({ status })}`,
   board: (search: string, limit = 50) => `/api/leads/board${qs({ search, limit })}`,
   analytics: (p: AnalyticsParams) =>
     `/api/analytics${qs({ from: p.from, to: p.to, campaign_id: p.campaign_id, include_tests: p.include_tests ? "true" : undefined })}`,
@@ -357,5 +380,28 @@ export const api = {
     previewVoice: (body: PreviewVoiceBody, signal?: AbortSignal) =>
       request<Blob>("/api/settings/preview-voice", { method: "POST", body, as: "blob", signal, timeoutMs: 60_000 }),
     testProviders: () => request<TestProvidersResult>("/api/settings/test-providers", { method: "POST", timeoutMs: 60_000 }),
+    history: () => request<SettingsHistory>(keys.settingsHistory),
+    /** Puts back what that change replaced. 409 with detail.conflicts when a setting changed again since: repeat with force. */
+    undo: (id: number, force = false) =>
+      request<{ settings: AgentSettings; change: SettingsChangeEntry | Record<string, never> }>(
+        `${keys.settingsHistory}/${id}/undo${force ? "?force=true" : ""}`,
+        { method: "POST" },
+      ),
+  },
+
+  review: {
+    status: () => request<ReviewStatus>(keys.reviewStatus),
+    method: () => request<ReviewMethod>(keys.reviewMethod),
+    models: () => request<{ models: ReviewModelChoice[] }>(keys.reviewModels, { timeoutMs: 20_000 }),
+    runs: () => request<ReviewRunSummary[]>(keys.reviewRuns),
+    run: (id: number) => request<ReviewRunDetail>(keys.reviewRun(id)),
+    /** Reviews the `limit` most recent reviewable calls in the background (progress arrives as review.update). */
+    start: (limit: number) => request<ReviewRunSummary>(keys.reviewRuns, { method: "POST", body: { limit } }),
+    suggestions: (status?: ReviewSuggestionStatus) => request<ReviewSuggestion[]>(keys.reviewSuggestions(status)),
+    /** 409 when the setting changed after the suggestion was made: repeat with force. 422: the value isn't valid. */
+    approve: (id: number, body: { value?: unknown; force?: boolean } = {}) =>
+      request<ReviewSuggestion>(`/api/review/suggestions/${id}/approve`, { method: "POST", body }),
+    reject: (id: number, note?: string) =>
+      request<ReviewSuggestion>(`/api/review/suggestions/${id}/reject`, { method: "POST", body: { note } }),
   },
 };

@@ -9,7 +9,8 @@
 //
 // Conventions shared with the backend:
 //   * DateTime columns: RFC 3339 UTC text written by the backend.
-//   * Json-ish columns (extra, qualification, key_points, objections, metrics, data) are TEXT holding JSON -> String.
+//   * Json-ish columns (extra, qualification, key_points, objections, metrics, data, changes, report, evidence,
+//     evaluation, base_value, proposed_value, applied_value) are TEXT holding JSON -> String.
 
 generator client {
   provider = "prisma-client-js"
@@ -120,6 +121,7 @@ model Call {
   lead           Lead?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
   campaign       Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   turns          TranscriptTurn[]
+  reviewReports  ReviewCallReport[]
 
   @@index([providerCallId], map: "ix_calls_provider_call_id")
   @@index([leadId], map: "ix_calls_lead_id")
@@ -152,4 +154,78 @@ model AgentSettings {
   updatedAt DateTime @default(now()) @map("updated_at")
 
   @@map("agent_settings")
+}
+
+// Settings change history: every save, approved review suggestion, reset and undo, kept history_days days.
+model SettingsChange {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  source    String   @default("settings") // settings | review | undo | reset
+  label     String   @default("")
+  changes   String?  // JSON {key: {"old": value, "new": value}}
+  refId     Int?     @map("ref_id") // the change an undo undid, or the review suggestion an approval applied
+  undoneBy  Int?     @map("undone_by") // the undo entry, once undone (-1: nothing was left to put back)
+
+  @@index([createdAt], map: "ix_settings_changes_created")
+  @@map("settings_changes")
+}
+
+// Call-review agent: one row per review of a batch of calls.
+model ReviewRun {
+  id          Int                @id @default(autoincrement())
+  createdAt   DateTime           @default(now()) @map("created_at")
+  finishedAt  DateTime?          @map("finished_at")
+  trigger     String             @default("auto") // auto | manual
+  status      String             @default("running") // running | done | failed
+  stage       String             @default("")
+  model       String             @default("")
+  callCount   Int                @default(0) @map("call_count")
+  report      String?            // JSON: summary, stats, proven patterns, watch list, team notes, proof notes
+  tokens      Int                @default(0)
+  error       String?
+  callReports ReviewCallReport[]
+  suggestions ReviewSuggestion[]
+
+  @@index([createdAt], map: "ix_review_runs_created")
+  @@index([status], map: "ix_review_runs_status")
+  @@map("review_runs")
+}
+
+// The review agent's proof-checked verdict on one call of a review.
+model ReviewCallReport {
+  id         Int       @id @default(autoincrement())
+  runId      Int       @map("run_id")
+  callId     Int       @map("call_id")
+  evidence   String?   // JSON: numbered transcript turns + timing facts measured from the recording
+  evaluation String?   // JSON: outcome, where / why the customer was lost, mistakes with verified quotes
+  createdAt  DateTime  @default(now()) @map("created_at")
+  run        ReviewRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  call       Call      @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, callId], map: "uq_review_call_reports_run_call")
+  @@index([callId], map: "ix_review_call_reports_call")
+  @@map("review_call_reports")
+}
+
+// A settings change the review agent proposes; only a person's approval writes it (as a SettingsChange).
+model ReviewSuggestion {
+  id             Int       @id @default(autoincrement())
+  runId          Int       @map("run_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  field          String
+  title          String    @default("")
+  rationale      String    @default("")
+  expectedEffect String    @default("") @map("expected_effect")
+  evidence       String?   // JSON [{call_uuid, lead, turn, at, quote, finding}]
+  baseValue      String?   @map("base_value") // JSON: the setting when the suggestion was made
+  proposedValue  String?   @map("proposed_value") // JSON
+  status         String    @default("pending") // pending | approved | rejected | superseded
+  decidedAt      DateTime? @map("decided_at")
+  decisionNote   String?   @map("decision_note")
+  appliedValue   String?   @map("applied_value") // JSON: what was saved (may have been edited)
+  changeId       Int?      @map("change_id") // the settings_changes entry the approval created
+  run            ReviewRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([status, id], map: "ix_review_suggestions_status")
+  @@map("review_suggestions")
 }

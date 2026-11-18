@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ChartColumn,
+  ClipboardCheck,
   LayoutDashboard,
   Megaphone,
   PhoneCall,
@@ -17,10 +18,13 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect } from "react";
+import useSWR from "swr";
 import { isInboundPhone } from "@/components/inbound/caller";
 import { useLive } from "@/components/providers/LiveProvider";
 import { SignOutButton } from "./SignOutButton";
+import { keys } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import type { ReviewStatus } from "@/lib/types";
 
 const NAV: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -31,6 +35,7 @@ const NAV: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/calls", label: "Calls", icon: PhoneCall },
   { href: "/inbound", label: "Inbound", icon: PhoneIncoming },
   { href: "/live", label: "Live", icon: Radio },
+  { href: "/review", label: "Call review", icon: ClipboardCheck },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -45,9 +50,12 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   const liveCount = live.active.length;
   // Customers on the line with the agent right now (browser rehearsals don't count).
   const inboundCount = live.active.filter((lc) => isInboundPhone(lc.call)).length;
+  // Suggestions from the call-review agent waiting for a decision (kept fresh by review.update events).
+  const { data: review } = useSWR<ReviewStatus>(keys.reviewStatus, { revalidateOnFocus: false });
   const badges: Record<string, { count: number; label: string }> = {
     "/live": { count: liveCount, label: "live calls" },
     "/inbound": { count: inboundCount, label: "live inbound calls" },
+    "/review": { count: review?.pending_suggestions ?? 0, label: "suggestions waiting for a decision" },
   };
 
   // Esc closes the mobile menu.

@@ -56,6 +56,7 @@ import { ChannelIcon } from "./CallsTable";
 import { ChatBubble } from "./ChatBubble";
 import { InterestMeter } from "./InterestMeter";
 import { QualificationChecklist } from "./Qualification";
+import { CallReviewCard } from "@/components/review/CallReviewCard";
 import { RatingGauge } from "./RatingGauge";
 import { useCallNow } from "./useCallNow";
 
@@ -523,6 +524,11 @@ export function CallDetailView({ uuid }: { uuid: string }) {
           )}
         </Card>
       </div>
+
+      {/* The call-review agent's verdict (once a review included this call); times jump the recording there */}
+      {call.review ? (
+        <CallReviewCard review={call.review} onSeek={recordingSrc ? (ms) => playerRef.current?.seekTo(ms) : undefined} />
+      ) : null}
 
       {/* Customer timeline: this call in the context of everything else with the customer */}
       {call.lead_id ? (

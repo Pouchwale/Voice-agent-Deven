@@ -83,6 +83,18 @@ def _offline(monkeypatch):
     # Scripted conversations sync on "the LLM was called N times"; an early-started reply (fast_replies)
     # would satisfy that a moment before the real reply. Off here; tests/test_humanize_live.py covers it.
     monkeypatch.setattr(session_mod.CallSession, "_maybe_prefetch", lambda self: None)
+    # The call-review agent must never reach OpenAI from tests: no automatic reviews, and any review a test
+    # starts fails fast unless the test installs a fake model (tests/test_review_agent.py).
+    from app.services.review import agent as review_agent
+
+    async def no_auto_review() -> None:
+        return None
+
+    async def offline_model(model, messages, max_out):
+        raise review_agent.ReviewError("no real OpenAI from tests")
+
+    monkeypatch.setattr(review_agent, "maybe_auto_run", no_auto_review)
+    monkeypatch.setattr(review_agent, "_ask_json", offline_model)
     monkeypatch.setattr(inbound_audio, "tts_rest", fake_clip_tts)
     # Vobiz account API (setup checks, call-record back-fill): answered locally, never the network.
     # Tests that need real-looking answers install tests.fakes.FakeVobizAPI on top of this.

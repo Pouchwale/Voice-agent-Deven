@@ -3,21 +3,24 @@
 import {
   BookOpen,
   Brain,
+  ClipboardCheck,
   Clock,
   Flame,
+  GraduationCap,
   Hourglass,
   ListChecks,
   MessageSquare,
   PhoneCall,
   RotateCcw,
   Save,
+  ScrollText,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   UserRound,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -34,6 +37,7 @@ import { CampaignWindowSection, ConversationSection } from "./ConversationSectio
 import { IdentityVoiceSection } from "./IdentityVoiceSection";
 import { coerce, diffSettings, normalize, validate, type SetField } from "./model";
 import { QuestionsSection } from "./QuestionsSection";
+import { ChangeHistorySection, LearnedRulesSection, ReviewAgentSection } from "./ReviewSections";
 import { CallScriptSection, InterestRulesSection, KnowledgeBaseSection, ObjectionsSection } from "./ScriptSections";
 import { SectionNav, type NavItem } from "./SectionNav";
 import { SilenceSection } from "./SilenceSection";
@@ -47,11 +51,14 @@ const NAV: NavItem[] = [
   { id: "knowledge", label: "Knowledge base", icon: BookOpen },
   { id: "qualification", label: "Qualification", icon: ListChecks },
   { id: "objections", label: "Objections", icon: ShieldCheck },
+  { id: "learned-rules", label: "Learned rules", icon: GraduationCap },
   { id: "interest", label: "Interest rules", icon: Flame },
   { id: "silence", label: "Silence & hang-up", icon: Hourglass },
   { id: "feel", label: "Conversation feel", icon: Sparkles },
   { id: "window", label: "Campaign window", icon: Clock },
+  { id: "review-agent", label: "Review agent", icon: ClipboardCheck },
   { id: "ai-brain", label: "AI brain", icon: Brain },
+  { id: "history", label: "Change history", icon: ScrollText },
 ];
 
 function SettingsSkeleton() {
@@ -77,6 +84,7 @@ function SettingsSkeleton() {
 export function SettingsView() {
   const toast = useToast();
   const { data, error, mutate } = useSWR<AgentSettings>(keys.settings, { revalidateOnFocus: false });
+  const { mutate: mutateGlobal } = useSWRConfig();
   const [base, setBase] = useState<AgentSettings | null>(null);
   const [form, setForm] = useState<AgentSettings | null>(null);
   const [saving, setSaving] = useState(false);
@@ -162,13 +170,21 @@ export function SettingsView() {
         return merged as unknown as AgentSettings;
       });
       await mutate(res, { revalidate: false });
+      void mutateGlobal(keys.settingsHistory);
       toast({ tone: "success", title: "Settings saved", description: "They apply from the next call." });
     } catch (err) {
       toast({ tone: "error", title: "Couldn't save settings", description: errorMessage(err) });
     } finally {
       setSaving(false);
     }
-  }, [form, base, saving, errorCount, toast, mutate]);
+  }, [form, base, saving, errorCount, toast, mutate, mutateGlobal]);
+
+  // An undo from Change history replaced settings on the server: show them (only offered without unsaved edits).
+  const applyServerSettings = useCallback((s: AgentSettings) => {
+    const safe = coerce(s);
+    setBase(safe);
+    setForm(safe);
+  }, []);
 
   // Ctrl/Cmd + S saves.
   useEffect(() => {
@@ -189,8 +205,9 @@ export function SettingsView() {
       setBase(coerce(res));
       setForm(coerce(res));
       await mutate(res, { revalidate: false });
+      void mutateGlobal(keys.settingsHistory);
       setResetOpen(false);
-      toast({ tone: "success", title: "Settings reset to defaults" });
+      toast({ tone: "success", title: "Settings reset to defaults", description: "Changed your mind? Undo it under Change history." });
     } catch (err) {
       toast({ tone: "error", title: "Couldn't reset settings", description: errorMessage(err) });
     } finally {
@@ -237,14 +254,18 @@ export function SettingsView() {
               <KnowledgeBaseSection {...sectionProps} />
               <QuestionsSection {...sectionProps} />
               <ObjectionsSection {...sectionProps} />
+              <LearnedRulesSection {...sectionProps} />
               <InterestRulesSection {...sectionProps} />
               <SilenceSection {...sectionProps} />
               <ConversationSection {...sectionProps} />
               <CampaignWindowSection {...sectionProps} />
+              <ReviewAgentSection {...sectionProps} />
             </>
           )}
 
           <AiBrainCard />
+
+          {sectionProps ? <ChangeHistorySection {...sectionProps} dirty={dirty} onApplied={applyServerSettings} /> : null}
 
           {form ? (
             <div className="sticky bottom-4 z-20" role="region" aria-label="Save changes">
@@ -279,7 +300,7 @@ export function SettingsView() {
         onClose={() => !resetting && setResetOpen(false)}
         onConfirm={() => void doReset()}
         title="Reset to defaults?"
-        body="Every setting on this page - calling switches (both back on), greetings, script, knowledge base, questions, voice, tone and timings - goes back to the default. This can't be undone."
+        body="Every setting on this page - calling switches (both back on), greetings, script, knowledge base, learned rules, questions, voice, tone, timings and the review agent - goes back to the default. You can undo it afterwards under Change history."
         confirmLabel="Reset everything"
         danger
         busy={resetting}

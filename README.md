@@ -153,11 +153,19 @@ Every call shows its real average response time on the call summary, and **Analy
 | **Leads** | Import CSV (columns auto-detected, Indian numbers normalised, Excel-mangled numbers caught), add/edit, export |
 | **Lead board** | Kanban: **New → No answer → Cold → Warm → Hot**. Cards move automatically after each call; your team can drag them (or use the card menu) |
 | **Campaigns** | Auto-dialer: concurrency, retries for no-answer/busy, calling window, pause/resume |
-| **Calls** | Every call (filter by direction and outcome): rating ring, interest meter, summary, next action, qualification, recording player, clickable transcript, and the customer's timeline |
+| **Calls** | Every call (filter by direction and outcome): rating ring, interest meter, summary, next action, qualification, recording player, clickable transcript, the review agent's verdict (its times jump the recording there), and the customer's timeline |
 | **Inbound** | Phone-provider connection status + one-click connect; today / 7 / 30-day numbers (inbound calls, answered, missed, to call back, new and returning callers); live inbound calls; the inbound call list with a **To call back** tab, caller type, reason for calling and next step; click a call for its summary, a Call back button and the caller's timeline. A notice pops up when a call is missed |
 | **Customer timeline** (lead page, call page, inbound drawer) | Every call in both directions grouped by day with IST time, outcome, talk time, summary and next step, plus "added to campaign" and "lead created"; the next promised step on top |
 | **Live** | Ongoing calls (marked Inbound / Outbound, returning or new caller) with live transcript, levels, listen-in, hang-up |
-| **Settings** | Voice, **tone & accent** (warm / professional / energetic / calm, Hinglish / mostly Hindi / mostly English), script, knowledge base, questions, objection handling, interest rules, silence timings, fillers, pronunciation fixes, **calling switches + inbound greetings**, calling window |
+| **Call review** | The **review agent** (a second AI): every few calls it reviews the finished calls and shows where and why customers were lost, with quotes and timings from the calls as proof, plus suggested script changes to **Approve**, **Edit & approve** or **Reject**. Also: every review with each call's verdict, decided suggestions, and how it evaluates. The sidebar badge counts suggestions waiting for you |
+| **Settings** | Voice, **tone & accent** (warm / professional / energetic / calm, Hinglish / mostly Hindi / mostly English), script, knowledge base, questions, objection handling, **learned rules**, interest rules, silence timings, fillers, pronunciation fixes, **calling switches + inbound greetings**, calling window, **review agent**, and **change history** (every change for 30 days, each with **Undo**) |
+
+### The review agent (Call review page; settings under Settings → Review agent)
+1. **Which calls:** phone calls in which the customer spoke (outbound, plus inbound if switched on). Unanswered calls, voicemail and browser tests never count. Automatic reviews start every *N* new calls (default 5) and only look at calls made after the review agent was installed; **Run review now** takes the latest 5, 10 or 15 calls.
+2. **Measure (no AI, free):** numbered transcript turns plus timing facts from the stereo recording: slow replies, monologues, talking over the customer, dead air, hanging up during an agent reply, customers asking to repeat, questions asked twice.
+3. **Judge each call** (`review_model`, default gpt-4o-mini): outcome, whether / where / why the customer was lost, the agent's mistakes. **Proof check in code:** every quote must really be in the cited agent turn, every timing fact must exist; "lost because of the agent" needs a proven mistake at or before the moment the customer was lost. Normal reasons (not interested, wrong number, busy) never count against the agent.
+4. **Patterns:** a problem becomes a suggestion only when it is proven in at least *N* calls (default 2), each piece of evidence backed by that call's verified finding. A suggestion is one small change to one script setting (opening / closing lines, call purpose, objections, knowledge base additions, questions, silence lines, or a **learned rule**), validated like the Settings page. It may never touch the voice, switches or timings, and never invents company facts (those become notes for the team).
+5. **You decide:** only **Approve** writes a setting, recorded in **Settings → Change history** where it can be undone. Rejected changes are never suggested again. If the setting was edited after the suggestion, approval first shows what would be replaced and lets you edit (for added rules, starting from the current text with the new lines added).
 
 Business metrics count real phone calls only; browser test calls are kept out (toggle "Include test calls" in Analytics). "Dialed", "picked up", the funnel and "best time to call" count **outbound** calls only; inbound calls have their own numbers. The browser **Test agent** can rehearse both directions ("Customer calls us").
 
@@ -189,6 +197,10 @@ backend/app/
   services/plivo.py          Plivo REST                 services/vobiz.py  Vobiz REST + shared answer XML
   services/call_manager.py   call lifecycle             services/dialer.py  campaign auto-dialer
   services/analysis.py       post-call scoring (cold/warm/hot, rating, objections)
+  services/review/           review agent: evidence.py (recording + transcript facts, no AI), prompts.py (rubric use,
+                             JSON formats), agent.py (runs, proof checks, suggestions, approval)   routers/review.py
+  services/settings_rules.py settings validation (Settings page, review approvals)
+  services/agent_config.py   settings + change history + undo
   services/reporting.py      date ranges + analytics    services/pdf_report.py  PDF report
   routers/leads.py           leads, CSV import, Kanban board
   routers/analytics.py       analytics + PDF/CSV report downloads

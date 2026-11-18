@@ -167,3 +167,78 @@ class AgentSettings(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     data: Mapped[Any] = mapped_column(JSONText)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class SettingsChange(Base):
+    """One saved change of the agent settings (Settings page, an approved review suggestion, an undo or a
+    reset), with the old and new value of every setting it changed. Kept for SETTINGS_HISTORY_DAYS, then
+    removed; any entry can be undone from the Settings page."""
+
+    __tablename__ = "settings_changes"
+    __table_args__ = (Index("ix_settings_changes_created", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    source: Mapped[str] = mapped_column(String(20), default="settings")  # settings|review|undo|reset
+    label: Mapped[str] = mapped_column(String(300), default="")
+    changes: Mapped[Any] = mapped_column(JSONText)  # {key: {"old": value, "new": value}}
+    ref_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # review suggestion / undone change id
+    undone_by: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the undo entry, once undone
+
+
+class ReviewRun(Base):
+    """One run of the call-review agent over a batch of calls (automatic every N calls, or started by hand)."""
+
+    __tablename__ = "review_runs"
+    __table_args__ = (Index("ix_review_runs_created", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    trigger: Mapped[str] = mapped_column(String(10), default="auto")  # auto|manual
+    status: Mapped[str] = mapped_column(String(10), default="running", index=True)  # running|done|failed
+    stage: Mapped[str] = mapped_column(String(200), default="")  # progress, e.g. "Reviewing call 3 of 5"
+    model: Mapped[str] = mapped_column(String(80), default="")
+    call_count: Mapped[int] = mapped_column(Integer, default=0)
+    report: Mapped[Any] = mapped_column(JSONText, nullable=True)  # summary, stats, patterns, team notes
+    tokens: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ReviewCallReport(Base):
+    """The review agent's verdict on one call of a run: outcome, where (and why) the customer was lost,
+    and the agent's mistakes, each backed by a verified quote and/or a timing fact from the recording."""
+
+    __tablename__ = "review_call_reports"
+    __table_args__ = (UniqueConstraint("run_id", "call_id", name="uq_review_call_reports_run_call"),
+                      Index("ix_review_call_reports_call", "call_id"))
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("review_runs.id", ondelete="CASCADE"))
+    call_id: Mapped[int] = mapped_column(ForeignKey("calls.id", ondelete="CASCADE"))
+    evidence: Mapped[Any] = mapped_column(JSONText, nullable=True)  # timing analysis + numbered transcript
+    evaluation: Mapped[Any] = mapped_column(JSONText, nullable=True)  # the validated verdict
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ReviewSuggestion(Base):
+    """A change the review agent proposes to one setting. Nothing is applied until a person approves it."""
+
+    __tablename__ = "review_suggestions"
+    __table_args__ = (Index("ix_review_suggestions_status", "status", "id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("review_runs.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    field: Mapped[str] = mapped_column(String(60))
+    title: Mapped[str] = mapped_column(String(300), default="")
+    rationale: Mapped[str] = mapped_column(Text, default="")
+    expected_effect: Mapped[str] = mapped_column(Text, default="")
+    evidence: Mapped[Any] = mapped_column(JSONText, nullable=True)  # [{call_uuid, turn, quote, timing}]
+    base_value: Mapped[Any] = mapped_column(JSONText, nullable=True)  # the setting when it was proposed
+    proposed_value: Mapped[Any] = mapped_column(JSONText, nullable=True)
+    status: Mapped[str] = mapped_column(String(12), default="pending")  # pending|approved|rejected|superseded
+    decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    applied_value: Mapped[Any] = mapped_column(JSONText, nullable=True)  # what was saved (may be edited)
+    change_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the settings history entry

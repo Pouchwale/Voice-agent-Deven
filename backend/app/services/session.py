@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Awaitable, Callable
 
 from ..config import get_settings
-from . import repo
+from . import agent_config, repo
 from .audio import CallRecorder, EnergyVAD, Resampler, pcm_rms, rms_level, scale_volume
 from .events import bus, spawn
 from .llm import SentenceChunker, stream_reply, strip_end_token, warmup
@@ -334,6 +334,11 @@ class CallSession:
         self._prefetch: _Prefetch | None = None  # reply started before the final transcript (fast_replies)
         self._reply_user_text = ""            # what the reply being prepared answers (taken back if they go on)
         self.prefetch_used = 0
+        # facts for the call-review agent (saved in the call's metrics)
+        self.settings_rev = agent_config.current_revision()  # which version of the settings this call used
+        self.barge_ins = 0        # the customer cut the agent off
+        self.replies_held = 0     # a reply taken back because the customer went on talking
+        self.quick_replies = 0    # "Hello?" answered without the LLM
 
         # silence handling
         self.silence_stage = 0  # 0 normal, 1 asked "are you there?"
@@ -623,6 +628,7 @@ class CallSession:
         if kind is None or sum(1 for t in self._quick_replies if now - t < 30) >= QUICK_REPLY_LIMIT:
             return False
         self._quick_replies.append(now)
+        self.quick_replies += 1
         self._drop_prefetch("quick reply")
         lang = "english" if self.english else "hindi"
         reply = (HEAR_YOU_REPLY if kind == "hear_me" else HELLO_REPLY)[lang]
@@ -1304,6 +1310,7 @@ class CallSession:
         if not text:
             return
         log.info("reply held on %s: the customer went on talking", self.uuid)
+        self.replies_held += 1
         self._reply_user_text = ""
         await self.interrupt("customer went on")
         if self.history and self.history[-1] == {"role": "user", "content": text}:
@@ -1323,6 +1330,8 @@ class CallSession:
         if not (self.agent_audible() or self.responding()) or self.ending:
             return
         log.info("barge-in on %s (%s)", self.uuid, why)
+        if why in ("speech", "speech_overlap", "new_input"):
+            self.barge_ins += 1
         self._drop_prefetch("barge-in")
         was_audible = self.agent_audible()
         unplayed_ms = max(0, int((self.play_until - time.monotonic()) * 1000))
@@ -1499,6 +1508,12 @@ class CallSession:
         }
         if self.latencies:
             metrics["avg_latency_ms"] = int(sum(self.latencies) / len(self.latencies))
+        metrics.update({
+            "settings_rev": self.settings_rev, "barge_ins": self.barge_ins, "replies_held": self.replies_held,
+            "quick_replies": self.quick_replies, "background_ignored": self.background_ignored,
+            "early_replies": self.prefetch_used, "language": self.language_pref or "default",
+            "mood": self.mood or "neutral",
+        })
         status, end_reason = "completed", self.end_reason
         if self.direction == "inbound" and self.agent_audio_ms == 0 and self.t.channel == "phone":
             # The caller never heard us (greeting failed, or they hung up first): a missed call the team

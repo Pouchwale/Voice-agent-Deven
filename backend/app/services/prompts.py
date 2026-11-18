@@ -278,6 +278,9 @@ def static_system_prompt(cfg: dict[str, Any], direction: str = "outbound", purpo
         if mode == "inbound" else ""
     )
     window = f"between {cfg.get('call_window_start') or '09:30'} and {cfg.get('call_window_end') or '19:30'} IST"
+    learned = str(cfg.get("learned_rules") or "").strip()
+    learned_block = (f"\n# Learned rules (from reviews of our own calls, approved by the team: always follow them)\n"
+                     f"{learned}\n" if learned else "")
 
     return f"""{situation} You are an AI voice assistant working for the {company} team. {name_rule} {verb_hint}
 
@@ -341,7 +344,7 @@ The next message gives the current time (IST), the customer on this call and wha
 
 # Business knowledge
 {cfg.get('knowledge_base', '')}
-
+{learned_block}
 # Ending the call
 {ending}
 """

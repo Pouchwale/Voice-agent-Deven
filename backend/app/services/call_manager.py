@@ -888,6 +888,8 @@ class CallManager:
             await analyze_call(call_uuid)
         except Exception:  # noqa: BLE001
             log.exception("analysis crashed")
+        from .review import agent as review_agent  # (late import: review imports the settings store)
+        await review_agent.maybe_auto_run()  # every N new calls: an automatic call review
 
     async def _run_hooks(self, call_uuid: str, outcome: str) -> None:
         if call_uuid in self._finished:

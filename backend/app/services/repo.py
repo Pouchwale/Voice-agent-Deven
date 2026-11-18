@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from ..db import SessionLocal, utcnow
-from ..models import Call, Lead, TranscriptTurn
-from ..schemas import call_detail_out, call_list_out, lead_out
+from ..models import Call, Lead, ReviewCallReport, ReviewRun, TranscriptTurn
+from ..schemas import call_detail_out, call_list_out, iso, lead_out
 from .events import bus
 
 T = TypeVar("T")
@@ -31,7 +31,23 @@ def get_call_detail_dict(call_uuid: str) -> dict | None:
         call = db.scalar(
             select(Call).options(selectinload(Call.lead), selectinload(Call.turns)).where(Call.uuid == call_uuid)
         )
-        return call_detail_out(call) if call else None
+        if call is None:
+            return None
+        out = call_detail_out(call)
+        out["review"] = _latest_review(db, call.id)
+        return out
+
+
+def _latest_review(db, call_id: int) -> dict | None:
+    """The call-review agent's latest verdict on this call (from a finished review), or None."""
+    row = db.execute(select(ReviewCallReport, ReviewRun).join(ReviewRun, ReviewRun.id == ReviewCallReport.run_id)
+                     .where(ReviewCallReport.call_id == call_id, ReviewRun.status == "done")
+                     .order_by(ReviewRun.id.desc()).limit(1)).first()
+    if row is None:
+        return None
+    report, run = row
+    return {"run_id": run.id, "reviewed_at": iso(run.finished_at), "model": run.model,
+            "evaluation": report.evaluation, "facts": (report.evidence or {}).get("facts", [])}
 
 
 def get_lead_dict(lead_id: int | None) -> dict | None:

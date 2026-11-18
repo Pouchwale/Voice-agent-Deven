@@ -73,6 +73,10 @@ export const LANGUAGES: { value: string; label: string }[] = [
 ];
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+/** Same check as the backend (settings_rules._MODEL_NAME). */
+const REVIEW_MODEL = /^[a-z0-9][a-z0-9.-]{1,62}$/;
+export const LEARNED_RULES_MAX = 4000;
+const TEXT_MAX = 12000;
 
 function checkRange(v: number, min: number, max: number, unit: string): string | undefined {
   if (!Number.isFinite(v)) return "Required.";
@@ -110,6 +114,22 @@ export function validate(f: AgentSettings): FieldErrors {
       e[key] = `Keep it under ${SPOKEN_LINE_MAX} characters: it's spoken on the phone (now ${line.length}).`;
     }
   }
+  // Call review + history (ranges mirror backend/app/services/settings_rules.py)
+  const every = checkRange(f.review_every_calls, 3, 50, "calls");
+  if (every) e.review_every_calls = every;
+  else if (!Number.isInteger(f.review_every_calls)) e.review_every_calls = "Use a whole number.";
+  const proof = checkRange(f.review_min_evidence, 1, 5, "calls");
+  if (proof) e.review_min_evidence = proof;
+  else if (!Number.isInteger(f.review_min_evidence)) e.review_min_evidence = "Use a whole number.";
+  const days = checkRange(f.history_days, 1, 365, "days");
+  if (days) e.history_days = days;
+  else if (!Number.isInteger(f.history_days)) e.history_days = "Use a whole number.";
+  if (!REVIEW_MODEL.test(f.review_model.trim())) e.review_model = "Use an OpenAI model name like gpt-4o-mini.";
+  if (!f.review_rubric.trim()) e.review_rubric = "The review agent needs these rules (Restore default brings them back).";
+  else if (f.review_rubric.length > TEXT_MAX) e.review_rubric = `Keep it under ${TEXT_MAX.toLocaleString("en-IN")} characters.`;
+  if (f.learned_rules.length > LEARNED_RULES_MAX) {
+    e.learned_rules = `Keep it under ${LEARNED_RULES_MAX.toLocaleString("en-IN")} characters (now ${f.learned_rules.length.toLocaleString("en-IN")}): every call reads these rules.`;
+  }
   const badRule = f.pronunciations
     .map((l) => l.trim())
     .find((l) => l && !(l.includes("=") && l.split("=").slice(0, 2).every((p) => p.trim())));
@@ -138,6 +158,8 @@ export function normalize(f: AgentSettings): AgentSettings {
     qualification_questions: f.qualification_questions.map((q) => q.trim()).filter(Boolean),
     filler_words: f.filler_words.map((w) => w.trim()).filter(Boolean),
     pronunciations: f.pronunciations.map((l) => l.trim()).filter(Boolean),
+    learned_rules: f.learned_rules.trim(),
+    review_model: f.review_model.trim(),
   };
   for (const key of SPOKEN_LINES) out[key] = f[key].trim();
   return out;
@@ -193,5 +215,13 @@ export function coerce(d: AgentSettings): AgentSettings {
     inbound_unavailable_message: s(d.inbound_unavailable_message),
     speaking_tone: oneOf(d.speaking_tone, SPEAKING_TONES, "warm"),
     language_mix: oneOf(d.language_mix, LANGUAGE_MIXES, "hinglish"),
+    learned_rules: s(d.learned_rules),
+    review_enabled: bool(d.review_enabled, true),
+    review_every_calls: num(d.review_every_calls, 5),
+    review_min_evidence: num(d.review_min_evidence, 2),
+    review_model: s(d.review_model) || "gpt-4o-mini",
+    review_include_inbound: bool(d.review_include_inbound, true),
+    review_rubric: s(d.review_rubric),
+    history_days: num(d.history_days, 30),
   };
 }

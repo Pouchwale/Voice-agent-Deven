@@ -1,5 +1,5 @@
 import { isCallActive } from "./format";
-import type { AgentState, Campaign, CallListItem, LiveEvent } from "./types";
+import type { AgentState, Campaign, CallListItem, LiveEvent, ReviewStatus } from "./types";
 import { notifyUnauthorized } from "./auth";
 import { ReconnectingSocket, type SocketStatus } from "./ws";
 
@@ -88,6 +88,7 @@ export class LiveStore {
   private listeners = new Set<Listener>();
   private campaignListeners = new Set<(c: Campaign) => void>();
   private callListeners = new Set<(c: CallListItem) => void>();
+  private reviewListeners = new Set<(s: ReviewStatus) => void>();
   private socket: ReconnectingSocket | null = null;
   private status: SocketStatus = "closed";
   private synced = false;
@@ -142,6 +143,14 @@ export class LiveStore {
     this.callListeners.add(fn);
     return () => {
       this.callListeners.delete(fn);
+    };
+  }
+
+  /** The call-review agent's status changed (a review started, progressed or finished; a suggestion was decided). */
+  onReview(fn: (s: ReviewStatus) => void) {
+    this.reviewListeners.add(fn);
+    return () => {
+      this.reviewListeners.delete(fn);
     };
   }
 
@@ -212,6 +221,11 @@ export class LiveStore {
       case "campaign.update": {
         if (!ev.campaign || typeof ev.campaign !== "object") return;
         this.campaignListeners.forEach((fn) => fn(ev.campaign));
+        return;
+      }
+      case "review.update": {
+        if (!ev.status || typeof ev.status !== "object") return;
+        this.reviewListeners.forEach((fn) => fn(ev.status));
         return;
       }
       default:
