@@ -1,0 +1,532 @@
+/*
+ * PouchWale design for the dashboard: the "PouchWale" side of the design switch in the top bar.
+ *
+ * Every theme rule is scoped to <html data-design="pouchwale">, so the original design (globals.css) is
+ * exactly as before while the switch is on "Original". The theme re-maps the colour tokens (every utility
+ * follows) and restyles the shared building blocks: sidebar, top bar, cards, buttons, fields, tables, chips,
+ * dialogs.
+ *
+ * Colour direction: built for long working sessions. Large surfaces are calm (soft blue page, white cards) and
+ * the sidebar is charcoal black (PouchWale ink), a neutral anchor so the screen is not blue on blue; saturated
+ * colour is kept to small doses: the animated logo's blue (#0095d5, also the theme's blue, so only one blue is
+ * on screen), deep PouchWale pink for the main action, and orange / yellow only as small meaning-carrying
+ * accents (hot / warm). PouchWale's signature stays: Mada display caps, Mulish text, pill buttons with hard
+ * navy "stamp" shadows, chunky navy frames; cards sit on a soft grey shadow.
+ * Contrast (WCAG 2.2 AA, checked on every page): body text navy on white 14.6:1, muted text 6.3:1 on white and
+ * 5.8:1 on the page, links 5.6:1, sidebar text 13:1, white on the deep-pink button 4.8:1, field borders 3.6:1.
+ */
+
+/* ---------- Brand tokens (global: the switch shows the PouchWale swatch in both designs) ---------- */
+:root {
+  --pw-ink: #111111; /* sidebar */
+  --pw-ink-hover: #2b2b2b;
+  --pw-navy: #0b2a45; /* text, frames */
+  --pw-navy-hover: #143a5c;
+  --pw-blue: #0095d5; /* the animated logo's blue */
+  --pw-blue-600: #006da6; /* blue text, links, strong fills: 5.6:1 on white, 4.8:1 on the blue tint */
+  --pw-blue-700: #005f8f;
+  --pw-blue-tint: #9cd9ee; /* "cold", light icon circles */
+  --pw-blue-200: #bfe2f5;
+  --pw-blue-100: #ddeff9; /* table heads, selected rows, hover fills */
+  --pw-blue-50: #eef5fb; /* the page */
+  --pw-pink: #fe4587; /* accent: focus ring, active marks */
+  --pw-pink-600: #d52a6c; /* main action (white text 4.8:1) */
+  --pw-pink-700: #b81f5c;
+  --pw-orange: #ff561d; /* "hot" */
+  --pw-yellow: #f3e33f; /* "warm" (small icons only) */
+  --pw-white: #ffffff;
+  --pw-muted: #4b6176; /* secondary text */
+  --pw-faint: #7a93a8; /* de-emphasised numbers and icons (3.2:1, enough for large text) */
+  --pw-line: #d5e3ee; /* soft dividers */
+  --pw-field: #6e8ba3; /* field borders (3.6:1 on white) */
+  --pw-subtle: #e9f0f6; /* quiet fills */
+  --pw-font-display: var(--font-mada), var(--font-devanagari), "Arial Black", ui-sans-serif, system-ui, sans-serif;
+  --pw-font-body: var(--font-mulish), var(--font-devanagari), ui-sans-serif, system-ui, sans-serif;
+  --pw-shadow-press: 2px 2px 0 0 var(--pw-navy);
+  --pw-shadow-card: 0 5px 14px -4px rgb(16 24 40 / 0.16);
+  --pw-shadow-card-hover: 0 12px 24px -8px rgb(16 24 40 / 0.24);
+  --pw-shadow-float: 0 14px 30px -10px rgb(16 24 40 / 0.28);
+  --pw-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ---------- The design switch (both designs) ---------- */
+.design-swatch {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 0.16);
+}
+.design-swatch-original {
+  background: #0095d5;
+}
+.design-swatch-pouchwale {
+  background: conic-gradient(var(--pw-ink) 0 36%, var(--pw-blue) 0 70%, var(--pw-pink) 0);
+}
+
+/* Melt transition (lib/design-switch.ts): the design being left is a view-transition snapshot lying on top; a
+   keyframed clip-path melts its top edge down the screen (rounded drips) and uncovers the other design, which
+   is already in place underneath. Its shadow is drawn on the new design (.design-melt-under, so the snapshot
+   covers the half under itself). The effects layer (sparks, flakes, molten drops) is its own transition group
+   above both, and stays a moment after the transition while the last flakes settle. */
+html.design-melting::view-transition-group(*),
+html.design-melting::view-transition-image-pair(*),
+html.design-melting::view-transition-old(*),
+html.design-melting::view-transition-new(*) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html.design-melting::view-transition-old(root) {
+  z-index: 1;
+}
+.design-melt-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  overflow: hidden;
+  pointer-events: none;
+  view-transition-name: design-melt-fx;
+}
+.design-melt-under {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  overflow: hidden;
+  pointer-events: none;
+}
+.design-melt-rim,
+.design-melt-shadow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.design-melt-shadow path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* while the design swaps, nothing fades: colours change at once, inside the transition snapshot */
+html.design-instant *,
+html.design-instant *::before,
+html.design-instant *::after {
+  transition: none !important;
+}
+
+/* ======================================================================================================
+   PouchWale theme
+   ====================================================================================================== */
+
+:root[data-design="pouchwale"] {
+  --color-canvas: var(--pw-blue-50);
+  --color-surface: var(--pw-white);
+  --color-line: var(--pw-line);
+  --color-subtle: var(--pw-subtle);
+  --color-subtle-fg: var(--pw-muted);
+  --color-muted: var(--pw-muted);
+  --color-faint: var(--pw-faint);
+  --color-fg: var(--pw-navy);
+  --color-primary: var(--pw-blue-600);
+  --color-primary-hover: var(--pw-blue-700);
+  --color-primary-tint: var(--pw-blue-100);
+  --color-primary-tint-strong: var(--pw-blue-200);
+  --color-navy: var(--pw-navy);
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* chart colours (lib/theme.ts falls back to the original colours when these are not set) */
+  --theme-canvas: var(--pw-blue-50);
+  --theme-line: #dce7f0;
+  --theme-muted: var(--pw-muted);
+  --theme-faint: #9db2c4;
+  --theme-navy: var(--pw-pink);
+}
+
+:root[data-design="pouchwale"] body {
+  font-family: var(--pw-font-body);
+  font-weight: 500;
+}
+
+:root[data-design="pouchwale"] ::selection {
+  background: var(--pw-blue-200);
+  color: var(--pw-navy);
+}
+
+:root[data-design="pouchwale"] :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--pw-pink);
+  outline-offset: 2px;
+}
+
+/* ---------- Type: Mada display, ALL CAPS headings ---------- */
+:root[data-design="pouchwale"] .font-heading {
+  font-family: var(--pw-font-display);
+}
+:root[data-design="pouchwale"] :is(h1, h2, h3).font-heading {
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.005em;
+  line-height: 1.05;
+}
+:root[data-design="pouchwale"] h1.font-heading {
+  font-size: 32px;
+  line-height: 0.95;
+}
+@media (max-width: 639px) {
+  :root[data-design="pouchwale"] h1.font-heading {
+    font-size: 27px;
+  }
+}
+
+/* ---------- Frames and elevation ---------- */
+:root[data-design="pouchwale"] .border {
+  border-width: 2px;
+}
+:root[data-design="pouchwale"] .shadow-sm {
+  --tw-shadow: var(--pw-shadow-press);
+}
+:root[data-design="pouchwale"] .shadow-lg {
+  --tw-shadow: var(--pw-shadow-float);
+}
+/* cards and panels: navy frame on a soft grey shadow (chat bubbles and dashed drop zones excluded) */
+:root[data-design="pouchwale"] .rounded-xl.border:not(.border-dashed):not(.rounded-bl-sm):not(.rounded-br-sm) {
+  border-color: var(--pw-navy);
+  box-shadow: var(--pw-shadow-card);
+}
+
+/* ---------- Top bar and sidebar ---------- */
+:root[data-design="pouchwale"] header.sticky {
+  border-bottom: 2px solid var(--pw-navy);
+}
+/* charcoal-black sidebar: a neutral anchor next to the blue page; the blue logo tile and the white page pill
+   (with its pink shadow) stand out on it */
+:root[data-design="pouchwale"] #app-sidebar {
+  background: var(--pw-ink);
+  border-right-color: var(--pw-ink);
+  color: #d9d9d9;
+}
+:root[data-design="pouchwale"] #app-sidebar > div:first-child,
+:root[data-design="pouchwale"] #app-sidebar .border-t {
+  border-color: rgb(255 255 255 / 0.14);
+}
+:root[data-design="pouchwale"] #app-sidebar p.font-heading {
+  color: #bdbdbd;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+:root[data-design="pouchwale"] #app-sidebar button {
+  color: #d9d9d9;
+}
+:root[data-design="pouchwale"] #app-sidebar nav a,
+:root[data-design="pouchwale"] #app-sidebar .border-t button {
+  border-radius: 999px;
+  color: #d9d9d9;
+  font-weight: 700;
+  transition:
+    background-color 140ms var(--pw-ease),
+    color 140ms var(--pw-ease),
+    box-shadow 140ms var(--pw-ease);
+}
+:root[data-design="pouchwale"] #app-sidebar nav a:hover,
+:root[data-design="pouchwale"] #app-sidebar .border-t button:hover {
+  background: var(--pw-ink-hover);
+  color: var(--pw-white);
+}
+:root[data-design="pouchwale"] #app-sidebar nav a[aria-current="page"] {
+  background: var(--pw-white);
+  color: var(--pw-ink);
+  font-weight: 800;
+  box-shadow: 3px 3px 0 0 var(--pw-pink);
+}
+:root[data-design="pouchwale"] #app-sidebar nav a span.absolute {
+  display: none; /* the original's blue side stripe; the white pill marks the page here */
+}
+:root[data-design="pouchwale"] #app-sidebar nav a .tabular {
+  background: var(--pw-pink-600);
+  color: var(--pw-white);
+  font-weight: 800;
+}
+
+/* ---------- Buttons: navy-framed pills that "stamp" when pressed ---------- */
+:root[data-design="pouchwale"] .btn {
+  border: 2px solid var(--pw-navy);
+  border-radius: 999px;
+  font-family: var(--pw-font-body);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  box-shadow: var(--pw-shadow-press);
+  transition:
+    transform 140ms var(--pw-ease),
+    box-shadow 140ms var(--pw-ease),
+    background-color 140ms var(--pw-ease),
+    color 140ms var(--pw-ease);
+}
+:root[data-design="pouchwale"] .btn:not(:disabled):hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 0 var(--pw-navy);
+}
+:root[data-design="pouchwale"] .btn:not(:disabled):active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+:root[data-design="pouchwale"] .btn.bg-primary {
+  background: var(--pw-pink-600);
+  color: var(--pw-white);
+}
+:root[data-design="pouchwale"] .btn.bg-primary:not(:disabled):hover {
+  background: var(--pw-pink-700);
+}
+:root[data-design="pouchwale"] .btn.bg-white {
+  background: var(--pw-white);
+  color: var(--pw-navy);
+}
+:root[data-design="pouchwale"] .btn.bg-white:not(:disabled):hover {
+  background: var(--pw-blue-100);
+}
+:root[data-design="pouchwale"] .btn.bg-navy {
+  background: var(--pw-navy);
+  color: var(--pw-white);
+}
+:root[data-design="pouchwale"] .btn.bg-navy:not(:disabled):hover {
+  background: var(--pw-navy-hover);
+}
+:root[data-design="pouchwale"] .btn.bg-transparent {
+  border-color: transparent;
+  box-shadow: none;
+}
+:root[data-design="pouchwale"] .btn.bg-transparent:not(:disabled):hover {
+  background: var(--pw-blue-100);
+  transform: none;
+  box-shadow: none;
+}
+
+/* ---------- Segmented controls (and the design switch): pill with a navy choice ----------
+   Only framed radio groups (<Segmented>); card-style radio groups (e.g. Settings > Tone) keep the card look. */
+:root[data-design="pouchwale"] [role="radiogroup"].border {
+  border-color: var(--pw-navy);
+  border-radius: 999px;
+  background: var(--pw-white);
+}
+:root[data-design="pouchwale"] [role="radiogroup"].border > [role="radio"] {
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--pw-navy);
+}
+:root[data-design="pouchwale"] [role="radiogroup"].border > [role="radio"][aria-checked="true"].bg-primary-tint {
+  background: var(--pw-navy);
+  border-color: var(--pw-navy);
+  color: var(--pw-white);
+}
+:root[data-design="pouchwale"] [role="radiogroup"].border > [role="radio"][aria-checked="false"]:hover {
+  background: var(--pw-blue-100);
+}
+:root[data-design="pouchwale"] .design-swatch {
+  box-shadow: 0 0 0 1.5px var(--pw-white);
+}
+:root[data-design="pouchwale"] .design-toggle-switch {
+  border-color: var(--pw-navy);
+  border-radius: 999px;
+  background: var(--pw-navy);
+  box-shadow: 2px 2px 0 0 var(--pw-pink);
+}
+/* small on/off toggles (e.g. "Table" on chart cards) */
+:root[data-design="pouchwale"] button[aria-pressed].rounded-md.border {
+  border-color: var(--pw-navy);
+  border-radius: 999px;
+  color: var(--pw-navy);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+:root[data-design="pouchwale"] button[aria-pressed="true"].rounded-md.border {
+  background: var(--pw-navy);
+  color: var(--pw-white);
+}
+:root[data-design="pouchwale"] button[aria-pressed="false"].rounded-md.border:hover {
+  background: var(--pw-blue-100);
+}
+
+/* ---------- Fields ---------- */
+:root[data-design="pouchwale"] .field {
+  border: 2px solid var(--pw-field);
+  border-radius: 12px;
+  font-family: var(--pw-font-body);
+  font-weight: 600;
+  color: var(--pw-navy);
+}
+:root[data-design="pouchwale"] .field:hover:not(:disabled) {
+  border-color: var(--pw-navy);
+}
+:root[data-design="pouchwale"] .field:focus,
+:root[data-design="pouchwale"] .field:focus-visible {
+  border-color: var(--pw-navy);
+  box-shadow: 0 0 0 3px var(--pw-pink);
+}
+:root[data-design="pouchwale"] .field::placeholder {
+  color: var(--pw-muted);
+  font-weight: 500;
+}
+:root[data-design="pouchwale"] .field-label {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+:root[data-design="pouchwale"] input[type="checkbox"],
+:root[data-design="pouchwale"] input[type="radio"] {
+  accent-color: var(--pw-blue-600);
+}
+
+/* switches: navy-ringed track, logo blue when on (the phone design switch has its own look above) */
+:root[data-design="pouchwale"] [role="switch"]:not(.design-toggle-switch) {
+  box-shadow: 0 0 0 2px var(--pw-navy);
+}
+:root[data-design="pouchwale"] [role="switch"]:not(.design-toggle-switch)[aria-checked="true"] {
+  background: var(--pw-blue);
+}
+:root[data-design="pouchwale"] [role="switch"]:not(.design-toggle-switch)[aria-checked="false"] {
+  background: var(--pw-white);
+}
+:root[data-design="pouchwale"] [role="switch"]:not(.design-toggle-switch) > span:first-child {
+  box-shadow: 0 0 0 2px var(--pw-navy);
+}
+
+/* sliders */
+:root[data-design="pouchwale"] .range::-webkit-slider-runnable-track {
+  height: 8px;
+  background:
+    linear-gradient(var(--pw-blue), var(--pw-blue)) 0 / var(--fill, 50%) 100% no-repeat,
+    var(--pw-white);
+  box-shadow: 0 0 0 2px var(--pw-navy);
+}
+:root[data-design="pouchwale"] .range::-moz-range-track {
+  height: 8px;
+  background: var(--pw-white);
+  box-shadow: 0 0 0 2px var(--pw-navy);
+}
+:root[data-design="pouchwale"] .range::-moz-range-progress {
+  height: 8px;
+  background: var(--pw-blue);
+}
+:root[data-design="pouchwale"] .range::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  margin-top: -5px;
+  background: var(--pw-white);
+  border: 2px solid var(--pw-navy);
+  box-shadow: var(--pw-shadow-press);
+}
+:root[data-design="pouchwale"] .range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--pw-white);
+  border: 2px solid var(--pw-navy);
+}
+
+/* ---------- Tables ---------- */
+:root[data-design="pouchwale"] .data-table thead th {
+  background: var(--pw-blue-100);
+  color: var(--pw-navy);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 2px solid var(--pw-navy);
+}
+:root[data-design="pouchwale"] .data-table tbody tr:hover td {
+  background: #f3f8fc;
+}
+
+/* ---------- Chips (components/ui/Badge.tsx) ---------- */
+:root[data-design="pouchwale"] .chip {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+:root[data-design="pouchwale"] .chip.bg-white {
+  border-color: #b7c9d8;
+  color: var(--pw-navy);
+}
+/* white text on blue (hot chips, counts, the "Hot" meter): the deeper blue gives 5.6:1; the logo blue would
+   give 3.4:1. The logo tile itself (bg-brand without text-white) keeps the logo blue. */
+:root[data-design="pouchwale"] .bg-brand.text-white {
+  background-color: var(--pw-blue-600);
+  border-color: var(--pw-blue-600);
+}
+:root[data-design="pouchwale"] .chip.text-primary {
+  color: var(--pw-blue-700);
+}
+
+/* ---------- Number tiles (components/dashboard/KpiTile.tsx) ----------
+   White cards; the icon sits in a filled circle (PouchWale circle icons). Circles take turns through the
+   palette, except meaning-carrying icons: hot = orange, warm = yellow, cold = light blue. */
+:root[data-design="pouchwale"] .kpi-tile {
+  border-color: var(--pw-navy);
+  box-shadow: var(--pw-shadow-card);
+  transition:
+    transform 140ms var(--pw-ease),
+    box-shadow 140ms var(--pw-ease),
+    background-color 140ms var(--pw-ease);
+}
+:root[data-design="pouchwale"] .kpi-tile > span:first-child > span:first-child {
+  color: var(--pw-navy);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+:root[data-design="pouchwale"] .kpi-tile > span:first-child > span:last-child {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin: -7px 0;
+  border: 2px solid var(--pw-navy);
+  border-radius: 999px;
+  background: var(--pw-blue);
+  color: var(--pw-white);
+}
+:root[data-design="pouchwale"] .kpi-tile:nth-child(4n + 2) > span:first-child > span:last-child {
+  background: var(--pw-pink-600);
+}
+:root[data-design="pouchwale"] .kpi-tile:nth-child(4n + 3) > span:first-child > span:last-child {
+  background: var(--pw-navy);
+}
+:root[data-design="pouchwale"] .kpi-tile:nth-child(4n + 4) > span:first-child > span:last-child {
+  background: var(--pw-blue-tint);
+  color: var(--pw-navy);
+}
+:root[data-design="pouchwale"] .kpi-tile > span:first-child > span:last-child:has(> .lucide-flame) {
+  background: var(--pw-orange);
+  color: var(--pw-navy);
+}
+:root[data-design="pouchwale"] .kpi-tile > span:first-child > span:last-child:has(> .lucide-sun) {
+  background: var(--pw-yellow);
+  color: var(--pw-navy);
+}
+:root[data-design="pouchwale"] .kpi-tile > span:first-child > span:last-child:has(> .lucide-snowflake) {
+  background: var(--pw-blue-tint);
+  color: var(--pw-navy);
+}
+:root[data-design="pouchwale"] .kpi-tile .font-heading {
+  font-weight: 900;
+}
+:root[data-design="pouchwale"] :is(a, button).kpi-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--pw-shadow-card-hover);
+}
+
+/* ---------- Dialogs, drawers ---------- */
+:root[data-design="pouchwale"] [data-dialog-panel] {
+  border: 3px solid var(--pw-navy);
+  box-shadow: 8px 8px 0 0 var(--pw-navy);
+}

@@ -64,6 +64,13 @@ def _xml(content: str) -> Response:
     return Response(content=content, media_type="application/xml")
 
 
+@router.get("/ping")
+async def ping():
+    """Answers the check made before a call is dialed (services/preflight.py): asked through the public link,
+    this reply proves the link reaches this backend. It tells a visitor nothing else."""
+    return PlainTextResponse("ok")
+
+
 @router.post("/answer/{call_uuid}/{token}")
 async def answer(call_uuid: str, token: str, request: Request):
     if not telephony.verify_token(call_uuid, token):

@@ -9,6 +9,7 @@ import { useTestAgent } from "@/components/providers/TestAgentProvider";
 import { Dot } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { isLoginPath } from "@/lib/auth";
+import { DesignToggle } from "./DesignToggle";
 import { OfflineBanner } from "./OfflineBanner";
 import { ProviderStatus } from "./ProviderStatus";
 import { Sidebar } from "./Sidebar";
@@ -62,8 +63,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <Menu aria-hidden />
             </button>
-            <p className="font-heading text-[15px] font-semibold whitespace-nowrap lg:hidden">Voice Agent</p>
+            {/* min-w-0 + truncate: on the narrowest phones the title gives way to the design switch instead of
+                widening the page; wherever it fits it renders exactly as before. */}
+            <p className="min-w-0 truncate font-heading text-[15px] font-semibold lg:hidden">Voice Agent</p>
             <div className="ml-auto flex items-center gap-2">
+              <DesignToggle />
               <LiveIndicator />
               <ProviderStatus />
               <Button variant="primary" icon={<Headphones />} onClick={() => testAgent.open()}>

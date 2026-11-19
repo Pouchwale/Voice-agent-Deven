@@ -68,6 +68,37 @@ def test_speakable_applies_pronunciations_only_to_audio():
     assert speakable("PouchWale", {**cfg, "pronunciations": ["PouchWale -> पाउच वाले", "junk line"]}) == "पाउच वाले"
 
 
+def test_every_goodbye_names_the_company():
+    """The team wants each call to end on the brand ("reach out to PouchWale"): the LLM's goodbye rule in all
+    three call modes, and every fixed goodbye line in Hindi and English, with the company from Settings."""
+    from app.services.prompts import ENGLISH_LINES, fill_template, static_system_prompt
+
+    cfg = {**DEFAULT_AGENT_SETTINGS, "company_name": "Acme Packs"}
+    for direction, purpose in (("outbound", None), ("inbound", None), ("outbound", "callback")):
+        sp = static_system_prompt(cfg, direction, purpose)
+        ending = sp.split("# Ending the call", 1)[1]
+        assert "Your goodbye ALWAYS names Acme Packs" in ending, (direction, purpose)
+        assert "reach out to Acme Packs" in ending and "Acme Packs को" in ending, (direction, purpose)
+        assert "PouchWale" not in ending, (direction, purpose)
+    for key in ("closing_line", "inbound_closing_line", "silence_goodbye_text"):
+        line = fill_template(cfg[key], cfg, None)
+        assert "Acme Packs" in line and "{" not in line, key
+    for key in ("closing", "inbound_closing", "silence_goodbye"):
+        line = fill_template(ENGLISH_LINES[key], cfg, None)
+        assert "Acme Packs" in line and "{" not in line, key
+
+
+def test_upgrade_brings_branded_goodbyes_to_untouched_rows():
+    v6 = {**copy.deepcopy(DEFAULT_AGENT_SETTINGS), "_version": 6,
+          "closing_line": LEGACY_DEFAULTS["closing_line"][-1],
+          "inbound_closing_line": LEGACY_DEFAULTS["inbound_closing_line"][-1],
+          "silence_goodbye_text": "हमारी team की अपनी line।"}  # customised: must survive
+    assert upgrade_saved(v6) is True
+    assert v6["closing_line"] == DEFAULT_AGENT_SETTINGS["closing_line"]
+    assert v6["inbound_closing_line"] == DEFAULT_AGENT_SETTINGS["inbound_closing_line"]
+    assert v6["silence_goodbye_text"] == "हमारी team की अपनी line।"
+
+
 def test_settings_upgrade_replaces_only_untouched_defaults():
     legacy = {**copy.deepcopy(DEFAULT_AGENT_SETTINGS), **{k: copy.deepcopy(v[0]) for k, v in LEGACY_DEFAULTS.items()}}
     legacy.pop("pronunciations")                      # rows saved before the field existed

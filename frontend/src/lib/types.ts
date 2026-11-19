@@ -296,8 +296,6 @@ export interface AgentSettings {
   review_include_inbound: boolean;
   /** How calls are judged: the review agent's rubric. */
   review_rubric: string;
-  /** Settings change history is kept this many days (1-365). */
-  history_days: number;
 }
 
 export type SpeakingTone = "warm" | "professional" | "energetic" | "calm";
@@ -755,6 +753,8 @@ export interface SettingsChangeEntry {
   created_at: string;
   source: SettingsChangeSource;
   label: string;
+  /** The name of the person who made it ("" when none was given). */
+  actor: string;
   /** The change this one undid (source "undo") or the review suggestion it applied (source "review"). */
   ref_id: number | null;
   /** Set once undone: the id of the undo entry (-1 = undone, entry no longer kept). */
@@ -762,9 +762,49 @@ export interface SettingsChangeEntry {
   changes: { key: string; label: string; old: unknown; new: unknown }[];
 }
 
+/** One page of the history, newest first. Entries are kept forever. */
 export interface SettingsHistory {
-  days: number;
   items: SettingsChangeEntry[];
+  /** Older entries exist: load them with before_id = the last id here. */
+  has_more: boolean;
+  total: number;
+}
+
+// ---------------------------------------------------------------------------
+// Activity log (GET /api/activity): every change made in the dashboard
+// ---------------------------------------------------------------------------
+
+export type ActivityArea = "settings" | "leads" | "campaigns" | "calls" | "inbound" | "review" | "other";
+
+export interface ActivityDetails {
+  /** Old and new value of everything the change touched. */
+  changes?: { key: string; label: string; old: unknown; new: unknown }[];
+  /** Facts about what was added or deleted (label -> value). */
+  data?: Record<string, unknown>;
+  /** Names, when one action touched several things. */
+  items?: string[];
+  /** How many more there were than `items` lists. */
+  more?: number;
+}
+
+export interface ActivityEntry {
+  id: number;
+  created_at: string;
+  /** The name the person gave ("" when none). */
+  actor: string;
+  area: ActivityArea;
+  /** e.g. lead.update, campaign.start, settings.save */
+  action: string;
+  summary: string;
+  target_type: string | null;
+  target_id: string | null;
+  details: ActivityDetails;
+}
+
+export interface ActivityPage {
+  items: ActivityEntry[];
+  has_more: boolean;
+  total: number;
 }
 
 /** 409 detail of an undo whose settings were changed again since. */

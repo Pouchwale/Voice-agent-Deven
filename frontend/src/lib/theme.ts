@@ -1,21 +1,29 @@
 import type { Interest } from "./types";
 
-/** Raw palette values for places that need hex (SVG charts, three.js). Mirrors globals.css. */
+/**
+ * A palette colour for places that set colours directly (SVG chart fill/stroke, inline styles): the CSS
+ * variable `--theme-<name>` with the original colour as fallback. The original design never sets these
+ * variables, so it renders exactly the hex values below; the PouchWale design (app/pouchwale.css) sets some.
+ * Not for places that need a raw hex (canvas, three.js - the voice orb has its own ORB_COLOR).
+ */
+const themed = (name: string, hex: string) => `var(--theme-${name}, ${hex})`;
+
+/** Palette for SVG charts. Mirrors globals.css. */
 export const THEME = {
-  white: "#FFFFFF",
-  canvas: "#F5F8FB",
-  line: "#E2E8F0",
-  subtle: "#F1F5F9",
-  subtleFg: "#475569",
-  muted: "#64748B",
-  faint: "#94A3B8", // neutral chart series (total calls, end reasons)
-  fg: "#0F172A",
-  brand: "#0095D5", // exact logo blue
-  primary: "#0077B3",
-  primaryHover: "#00649A",
-  primaryTint: "#E6F4FB",
-  primaryTintStrong: "#CCE9F7",
-  navy: "#0B3B5C",
+  white: themed("white", "#FFFFFF"),
+  canvas: themed("canvas", "#F5F8FB"),
+  line: themed("line", "#E2E8F0"),
+  subtle: themed("subtle", "#F1F5F9"),
+  subtleFg: themed("subtle-fg", "#475569"),
+  muted: themed("muted", "#64748B"),
+  faint: themed("faint", "#94A3B8"), // neutral chart series (total calls, end reasons)
+  fg: themed("fg", "#0F172A"),
+  brand: themed("brand", "#0095D5"), // exact logo blue
+  primary: themed("primary", "#0077B3"),
+  primaryHover: themed("primary-hover", "#00649A"),
+  primaryTint: themed("primary-tint", "#E6F4FB"),
+  primaryTintStrong: themed("primary-tint-strong", "#CCE9F7"),
+  navy: themed("navy", "#0B3B5C"),
 } as const;
 
 /**

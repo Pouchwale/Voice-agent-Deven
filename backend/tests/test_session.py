@@ -157,7 +157,9 @@ def test_silence_prompt_then_goodbye_then_hangup(monkeypatch):
     cfg = _cfg()
     texts = [txt for role, txt, _ in _turns(s.uuid) if role == "agent"]
     assert texts[1] == cfg["silence_prompt_text"]
-    assert texts[2] == cfg["silence_goodbye_text"]
+    # placeholders are filled, never spoken literally: "{company_name} की तरफ़ से" -> "PouchWale की तरफ़ से"
+    assert texts[2] == cfg["silence_goodbye_text"].replace("{company_name}", cfg["company_name"])
+    assert "{" not in texts[2] and cfg["company_name"] in texts[2]
     # greeting(~0.9s wait + 0.2s audio) + 1s silence + prompt 0.2s + 0.5s + goodbye 0.2s
     assert 2.5 < elapsed < 6, elapsed
 

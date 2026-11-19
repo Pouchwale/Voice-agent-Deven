@@ -28,7 +28,7 @@ from ..db import SessionLocal, UTCDateTime, utcnow
 from ..defaults import DEFAULT_AGENT_SETTINGS
 from ..models import ACTIVE_CALL_STATUSES, Call, CampaignLead, Lead, TranscriptTurn
 from ..schemas import call_list_out, lead_out
-from . import inbound_audio, telephony
+from . import inbound_audio, preflight, telephony
 from .agent_config import load_agent_settings
 from .analysis import analyze_call
 from .events import bus, spawn
@@ -282,6 +282,7 @@ class CallManager:
                 return await tts_rest(text, cfg, 8000)
             except Exception as e:  # noqa: BLE001
                 log.warning("greeting TTS failed: %s", e)
+                preflight.note_voice_error(e)  # refused for lack of credit: the next call asks before it dials
                 return None
 
         return asyncio.create_task(synth())
@@ -318,6 +319,13 @@ class CallManager:
         problems = self.provider_problems(phone=True)
         if problems:
             raise CallError("Cannot place call: " + "; ".join(problems))
+        # Proven right now that the customer would pick up a silent line (the voice provider has no credit, or
+        # the tunnel the phone provider reaches us through is not running): say so on the dashboard instead of
+        # ringing them. Nothing is stored and the lead is untouched; a campaign pauses without using up its
+        # list (the dialer's rule for a 400). A check that cannot tell lets the call go ahead.
+        blockers = await preflight.call_blockers()
+        if blockers:
+            raise CallError(" ".join([preflight.REFUSED, *blockers]))
         call_uuid = call_uuid or uuidlib.uuid4().hex
 
         def create() -> tuple[dict, dict, bool]:
@@ -875,7 +883,33 @@ class CallManager:
                 db.commit()
 
         await run_db(lead_update)
+        if session.end_reason == "error":
+            # a voice provider without credit ends calls exactly like this: the next phone call asks it first
+            preflight.suspect_voice(f"call {session.uuid} ended with an error")
+            spawn(self._explain_error_end(session.uuid))
         spawn(self._analyze_then_hooks(session.uuid, outcome))
+
+    async def _explain_error_end(self, call_uuid: str) -> None:
+        """A call that ended with an error gets its reason written on it when the reason can be proven at
+        that moment: the voice provider has no credit. The call's page then says so instead of nothing."""
+        try:
+            if await preflight.voice_has_no_credit():
+                out = await run_db(self._note_error, call_uuid, preflight.NO_CREDIT_ON_CALL)
+                if out:
+                    bus.publish({"type": "call.update", "call": out})
+        except Exception:  # noqa: BLE001
+            log.exception("could not note why %s ended with an error", call_uuid)
+
+    @staticmethod
+    def _note_error(call_uuid: str, note: str) -> dict | None:
+        with SessionLocal() as db:
+            call = db.scalar(select(Call).options(selectinload(Call.lead)).where(Call.uuid == call_uuid))
+            if call is None or call.error:
+                return None  # a reason is already written on it
+            call.error = note
+            db.commit()
+            db.refresh(call)
+            return call_list_out(call)
 
     async def _analyze_then_hooks(self, call_uuid: str, outcome: str) -> None:
         await self._run_hooks(call_uuid, outcome)

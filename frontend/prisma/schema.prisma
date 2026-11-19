@@ -156,7 +156,7 @@ model AgentSettings {
   @@map("agent_settings")
 }
 
-// Settings change history: every save, approved review suggestion, reset and undo, kept history_days days.
+// Settings change history: every save, approved review suggestion, reset and undo. Kept forever.
 model SettingsChange {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now()) @map("created_at")
@@ -165,9 +165,27 @@ model SettingsChange {
   changes   String?  // JSON {key: {"old": value, "new": value}}
   refId     Int?     @map("ref_id") // the change an undo undid, or the review suggestion an approval applied
   undoneBy  Int?     @map("undone_by") // the undo entry, once undone (-1: nothing was left to put back)
+  actor     String?  // the name the person gave in the dashboard
 
   @@index([createdAt], map: "ix_settings_changes_created")
   @@map("settings_changes")
+}
+
+// Activity log: one row per change a person made through the dashboard (who, when, what). Append-only.
+model ActivityLog {
+  id         Int      @id @default(autoincrement())
+  createdAt  DateTime @default(now()) @map("created_at")
+  actor      String   @default("") // "" = no name was given
+  area       String   @default("other") // settings | leads | campaigns | calls | inbound | review | other
+  action     String   @default("") // e.g. lead.update, campaign.start, settings.save
+  summary    String   @default("")
+  targetType String?  @map("target_type")
+  targetId   String?  @map("target_id")
+  details    String?  // JSON {"changes": [...]} | {"data": {...}} | {"items": [...]} | {"change_id": n}
+
+  @@index([createdAt], map: "ix_activity_log_created")
+  @@index([area, id], map: "ix_activity_log_area")
+  @@map("activity_log")
 }
 
 // Call-review agent: one row per review of a batch of calls.

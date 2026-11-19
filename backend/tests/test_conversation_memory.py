@@ -320,7 +320,8 @@ def test_prompt_inbound_has_no_outbound_phrases():
     assert "Thank them for calling once, briefly, then help with what they asked" in inbound
     assert "offer to call them back at a time that suits them" in inbound
     assert 'first ask once "और कुछ जानना हो तो बताइए?"' in inbound
-    assert '"Call करने के लिए thank you जी, आपका दिन अच्छा रहे! [END_CALL]"' in inbound
+    assert '"Call करने के लिए thank you जी! कभी भी कुछ चाहिए हो, तो PouchWale को ज़रूर याद कीजिए। [END_CALL]"' in inbound
+    assert "Your goodbye ALWAYS names PouchWale" in inbound
     assert fill_template(CFG["inbound_purpose"], CFG, None) in inbound
     assert "PRIVACY" in inbound and "only after the caller brings up the topic or confirms who they are" in inbound
     assert static_system_prompt(CFG, "inbound") == inbound  # purpose defaults to the direction
@@ -529,8 +530,9 @@ def test_inbound_max_length_uses_inbound_closing(monkeypatch):
     s1, s2, elapsed = asyncio.run(scenario())
     assert s1.end_reason == s2.end_reason == "max_duration" and elapsed < 5
     inbound_closing = fill_template(DEFAULT_AGENT_SETTINGS["inbound_closing_line"], CFG, s1.lead)
-    assert _agent_turns(s1.uuid)[-1] == inbound_closing and "Call करने के लिए thank you" in inbound_closing
-    assert _agent_turns(s2.uuid)[-1] == DEFAULT_AGENT_SETTINGS["closing_line"]
+    assert _agent_turns(s1.uuid)[-1] == inbound_closing and "PouchWale को call करने के लिए thank you" in inbound_closing
+    outbound_closing = fill_template(DEFAULT_AGENT_SETTINGS["closing_line"], CFG, s2.lead)
+    assert _agent_turns(s2.uuid)[-1] == outbound_closing and "PouchWale को ज़रूर याद कीजिए" in outbound_closing
 
 
 def test_inbound_session_never_heard_is_failed(monkeypatch):

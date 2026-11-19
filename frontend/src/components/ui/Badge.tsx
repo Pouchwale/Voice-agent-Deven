@@ -40,9 +40,10 @@ export function Chip({
         : "text-[13px] px-2.5 py-0.5 gap-1.5 [&_svg]:size-3.5";
   const colorCls = custom ?? COLOR[color];
   return (
+    // `chip`: hook for the PouchWale design (app/pouchwale.css); no style of its own.
     <span
       title={title}
-      className={cn("inline-flex items-center whitespace-nowrap rounded-full border font-medium leading-5", colorCls, sz, className)}
+      className={cn("chip inline-flex items-center whitespace-nowrap rounded-full border font-medium leading-5", colorCls, sz, className)}
     >
       {icon}
       {children}

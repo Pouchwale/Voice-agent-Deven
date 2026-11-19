@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     # End-of-turn pause for the server VAD. 350 ms = fast replies (client's choice); measured with real
     # Sarvam: final transcript ~0.4 s after the customer stops. 250 ms split sentences mid-way.
     sarvam_stt_silence_ms: int = 350
+    # Vocabulary hints for speech recognition (off until compared on recorded calls). keyterms: comma-separated
+    # words the customer is likely to say ("three side seal, makhana, PouchWale"), up to 50, saaras:v4 only;
+    # prompt: a short terminology hint applied to the final transcript (any model).
+    sarvam_stt_keyterms: str = ""
+    sarvam_stt_prompt: str = ""
     sarvam_tts_model: str = "bulbul:v3"
 
     # --- Phone provider switch: "plivo" (active) or "vobiz" (kept, switch back any time) ---

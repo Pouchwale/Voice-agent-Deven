@@ -21,15 +21,17 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
+import { Chip } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { ConfirmDialog } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/States";
 import { useToast } from "@/components/ui/Toast";
+import { TypeConfirmDialog } from "@/components/ui/TypeConfirmDialog";
 import { useEntrance } from "@/hooks/useEntrance";
 import { api, errorMessage, keys } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { pluralize, titleCase } from "@/lib/format";
 import type { AgentSettings } from "@/lib/types";
 import { AiBrainCard } from "./AiBrainCard";
 import { CallingSection } from "./CallingSection";
@@ -61,6 +63,9 @@ const NAV: NavItem[] = [
   { id: "history", label: "Change history", icon: ScrollText },
 ];
 
+/** How many setting names the save popup lists before "and N more". */
+const SAVE_LIST_MAX = 12;
+
 function SettingsSkeleton() {
   return (
     <div className="space-y-6" role="status" aria-label="Loading settings">
@@ -88,14 +93,24 @@ export function SettingsView() {
   const [base, setBase] = useState<AgentSettings | null>(null);
   const [form, setForm] = useState<AgentSettings | null>(null);
   const [saving, setSaving] = useState(false);
+  // The "type CONFIRM" popup of a save is open.
+  const [confirmSave, setConfirmSave] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
+  // What each setting is called, for the list in the popup.
+  const { data: labels } = useSWR<Record<string, string>>(keys.settingsLabels, { revalidateOnFocus: false });
 
   const changes = useMemo(() => (form && base ? diffSettings(form, base) : {}), [form, base]);
   const changedCount = Object.keys(changes).length;
   const dirty = changedCount > 0;
   const errors = useMemo(() => (form ? validate(form) : {}), [form]);
   const errorCount = Object.keys(errors).length;
+  // What the save popup lists: worked out from the form as it is now, not frozen when the popup opened. (Ctrl/Cmd + S
+  // can open it while a field still holds a typed value that only lands in the form when the field loses focus.)
+  const savingKeys = useMemo(
+    () => (confirmSave && form && base ? Object.keys(diffSettings(normalize(form), base)) : []),
+    [confirmSave, form, base],
+  );
 
   // Adopt server data whenever it changes - unless the user has unsaved edits.
   const dirtyRef = useRef(dirty);
@@ -135,8 +150,9 @@ export function SettingsView() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
 
-  const save = useCallback(async () => {
-    if (!form || !base || saving) return;
+  /** What a save would send. With errors in the form it points at them instead; null = nothing to send. */
+  const pendingChanges = useCallback((): Partial<AgentSettings> | null => {
+    if (!form || !base || saving) return null;
     if (errorCount) {
       toast({
         tone: "error",
@@ -146,12 +162,27 @@ export function SettingsView() {
       const firstInvalid = document.querySelector<HTMLElement>('#main [aria-invalid="true"]');
       firstInvalid?.scrollIntoView({ block: "center" });
       firstInvalid?.focus({ preventScroll: true });
-      return;
+      return null;
     }
     const normalized = normalize(form);
     const body = diffSettings(normalized, base);
     if (!Object.keys(body).length) {
       setForm(normalized);
+      return null;
+    }
+    return body;
+  }, [form, base, saving, errorCount, toast]);
+
+  // Every way of saving (both Save buttons, Ctrl/Cmd + S) opens the popup first: the person gives their name and
+  // types CONFIRM, and only then is anything sent.
+  const askToSave = useCallback(() => {
+    if (pendingChanges()) setConfirmSave(true);
+  }, [pendingChanges]);
+
+  const save = useCallback(async () => {
+    const body = pendingChanges();
+    if (!body || !form) {
+      setConfirmSave(false);
       return;
     }
     setSaving(true);
@@ -176,8 +207,9 @@ export function SettingsView() {
       toast({ tone: "error", title: "Couldn't save settings", description: errorMessage(err) });
     } finally {
       setSaving(false);
+      setConfirmSave(false);
     }
-  }, [form, base, saving, errorCount, toast, mutate, mutateGlobal]);
+  }, [pendingChanges, form, toast, mutate, mutateGlobal]);
 
   // An undo from Change history replaced settings on the server: show them (only offered without unsaved edits).
   const applyServerSettings = useCallback((s: AgentSettings) => {
@@ -186,17 +218,17 @@ export function SettingsView() {
     setForm(safe);
   }, []);
 
-  // Ctrl/Cmd + S saves.
+  // Ctrl/Cmd + S asks to save (never while a popup is already open).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        if (dirty) void save();
+        if (dirty && !document.querySelector("[data-dialog-panel]")) askToSave();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [dirty, save]);
+  }, [dirty, askToSave]);
 
   async function doReset() {
     setResetting(true);
@@ -228,7 +260,7 @@ export function SettingsView() {
             <Button variant="secondary" icon={<RotateCcw />} onClick={() => setResetOpen(true)} disabled={!form}>
               Reset to defaults
             </Button>
-            <Button variant="primary" icon={<Save />} onClick={() => void save()} loading={saving} disabled={!dirty}>
+            <Button variant="primary" icon={<Save />} onClick={askToSave} loading={saving} disabled={!dirty}>
               Save
             </Button>
           </>
@@ -265,7 +297,7 @@ export function SettingsView() {
 
           <AiBrainCard />
 
-          {sectionProps ? <ChangeHistorySection {...sectionProps} dirty={dirty} onApplied={applyServerSettings} /> : null}
+          {sectionProps ? <ChangeHistorySection dirty={dirty} onApplied={applyServerSettings} /> : null}
 
           {form ? (
             <div className="sticky bottom-4 z-20" role="region" aria-label="Save changes">
@@ -286,7 +318,7 @@ export function SettingsView() {
                 <Button variant="secondary" size="sm" onClick={() => base && setForm(base)} disabled={!dirty || saving}>
                   Discard
                 </Button>
-                <Button variant="primary" size="sm" icon={<Save />} onClick={() => void save()} loading={saving} disabled={!dirty}>
+                <Button variant="primary" size="sm" icon={<Save />} onClick={askToSave} loading={saving} disabled={!dirty}>
                   Save changes
                 </Button>
               </div>
@@ -295,16 +327,43 @@ export function SettingsView() {
         </div>
       </div>
 
-      <ConfirmDialog
+      <TypeConfirmDialog
+        open={confirmSave}
+        onClose={() => setConfirmSave(false)}
+        onConfirm={() => void save()}
+        title="Save these changes?"
+        confirmLabel="Save changes"
+        busy={saving}
+      >
+        <p>
+          You are about to change {pluralize(savingKeys.length, "setting")}. They apply from the next call, and the change is
+          recorded with your name.
+        </p>
+        <ul className="mt-2.5 flex flex-wrap gap-1.5" aria-label="Settings that will change">
+          {savingKeys.slice(0, SAVE_LIST_MAX).map((key) => (
+            <li key={key}>
+              <Chip size="sm">{labels?.[key] ?? titleCase(key.replace(/_/g, " "))}</Chip>
+            </li>
+          ))}
+          {savingKeys.length > SAVE_LIST_MAX ? (
+            <li className="self-center text-[13px] text-muted">and {savingKeys.length - SAVE_LIST_MAX} more</li>
+          ) : null}
+        </ul>
+      </TypeConfirmDialog>
+
+      <TypeConfirmDialog
         open={resetOpen}
-        onClose={() => !resetting && setResetOpen(false)}
+        onClose={() => setResetOpen(false)}
         onConfirm={() => void doReset()}
         title="Reset to defaults?"
-        body="Every setting on this page - calling switches (both back on), greetings, script, knowledge base, learned rules, questions, voice, tone, timings and the review agent - goes back to the default. You can undo it afterwards under Change history."
         confirmLabel="Reset everything"
         danger
         busy={resetting}
-      />
+      >
+        Every setting on this page - calling switches (both back on), greetings, script, knowledge base, learned rules,
+        questions, voice, tone, timings and the review agent - goes back to the default. You can undo it afterwards under
+        Change history.
+      </TypeConfirmDialog>
     </div>
   );
 }

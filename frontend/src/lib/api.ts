@@ -1,6 +1,9 @@
+import { actorHeader, getActorName } from "./actor";
 import { notifyUnauthorized, type AuthStatus } from "./auth";
 import { apiUrl } from "./config";
 import type {
+  ActivityArea,
+  ActivityPage,
   AgentSettings,
   Campaign,
   CampaignCreate,
@@ -118,13 +121,18 @@ interface RequestOptions {
   as?: "json" | "blob" | "text";
   /** Give up after this many ms (0 = never). A hung backend must surface as an error, not an endless skeleton. */
   timeoutMs?: number;
+  /**
+   * Send the name of the person making the change (X-Actor). Only the Settings changes do (save, reset, undo): their
+   * confirm popup has just asked for it. No other request carries a name, and nothing else ever asks for one.
+   */
+  signed?: boolean;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const isAbort = (err: unknown) => err instanceof DOMException && err.name === "AbortError";
 
 export async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const { method = "GET", query, body, signal, as = "json", timeoutMs = DEFAULT_TIMEOUT_MS } = opts;
+  const { method = "GET", query, body, signal, as = "json", timeoutMs = DEFAULT_TIMEOUT_MS, signed = false } = opts;
   const headers: Record<string, string> = {};
   let payload: BodyInit | undefined;
   if (body instanceof FormData) {
@@ -134,6 +142,10 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
     payload = JSON.stringify(body);
   }
   if (as === "json") headers.Accept = "application/json";
+  if (signed) {
+    const actor = actorHeader(getActorName()); // the Settings confirm popup stored it a moment ago
+    if (actor) headers["X-Actor"] = actor;
+  }
 
   // One controller for the caller's signal and the timeout; it also covers reading the body.
   const ctrl = new AbortController();
@@ -251,6 +263,9 @@ export const keys = {
     `/api/campaigns/${id}${qs({ result: p.result, page: p.page ?? 1, page_size: p.page_size ?? 50 })}`,
   settings: "/api/settings",
   settingsHistory: "/api/settings/history",
+  settingsLabels: "/api/settings/labels",
+  activity: (p: { area?: ActivityArea; q?: string; before_id?: number; limit?: number } = {}) =>
+    `/api/activity${qs({ area: p.area, q: p.q, before_id: p.before_id, limit: p.limit })}`,
   voices: "/api/settings/voices",
   reviewStatus: "/api/review/status",
   reviewMethod: "/api/review/method",
@@ -374,19 +389,31 @@ export const api = {
 
   settings: {
     get: () => request<AgentSettings>(keys.settings),
-    update: (body: Partial<AgentSettings>) => request<AgentSettings>(keys.settings, { method: "PUT", body }),
-    reset: () => request<AgentSettings>("/api/settings/reset", { method: "POST" }),
+    // The three Settings changes are the only requests sent with the person's name (signed).
+    update: (body: Partial<AgentSettings>) => request<AgentSettings>(keys.settings, { method: "PUT", body, signed: true }),
+    reset: () => request<AgentSettings>("/api/settings/reset", { method: "POST", signed: true }),
     voices: () => request<Voice[]>(keys.voices),
     previewVoice: (body: PreviewVoiceBody, signal?: AbortSignal) =>
       request<Blob>("/api/settings/preview-voice", { method: "POST", body, as: "blob", signal, timeoutMs: 60_000 }),
     testProviders: () => request<TestProvidersResult>("/api/settings/test-providers", { method: "POST", timeoutMs: 60_000 }),
-    history: () => request<SettingsHistory>(keys.settingsHistory),
+    /** Newest first, kept forever. `before_id` loads the entries older than that one. */
+    history: (p: { before_id?: number; limit?: number } = {}) =>
+      request<SettingsHistory>(`${keys.settingsHistory}${qs({ before_id: p.before_id, limit: p.limit })}`),
+    /** What each setting is called on the Settings page. */
+    labels: () => request<Record<string, string>>(keys.settingsLabels),
     /** Puts back what that change replaced. 409 with detail.conflicts when a setting changed again since: repeat with force. */
     undo: (id: number, force = false) =>
       request<{ settings: AgentSettings; change: SettingsChangeEntry | Record<string, never> }>(
         `${keys.settingsHistory}/${id}/undo${force ? "?force=true" : ""}`,
-        { method: "POST" },
+        { method: "POST", signed: true },
       ),
+  },
+
+  /** Every change made in the dashboard: who, when, what. Read-only. */
+  activity: {
+    list: (p: { area?: ActivityArea; q?: string; before_id?: number; limit?: number } = {}) => request<ActivityPage>(keys.activity(p)),
+    /** The whole log as a CSV file (a plain link; the backend sends Content-Disposition: attachment). */
+    exportUrl: () => apiUrl("/api/activity/export.csv"),
   },
 
   review: {

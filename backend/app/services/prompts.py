@@ -192,6 +192,15 @@ def _mode(direction: str, purpose: str | None) -> str:
     return "callback" if purpose == "callback" else "outbound"
 
 
+def _brand_goodbye(company: str) -> str:
+    """The team wants the customer to hang up remembering the brand: every goodbye names the company."""
+    return (f'Your goodbye ALWAYS names {company}, in every ending (also after a plain "no", "bye" or "thank '
+            f'you"), as a warm invitation to come back: "{company} को ज़रूर याद कीजिए" in a Hindi or Hinglish call, '
+            f'"feel free to reach out to {company}" in an English call. Thank them for calling (when they called '
+            f'us) or for their time. The goodbye follows the LANGUAGE RULE like every reply: a Hindi or Hinglish '
+            f'call gets a Hinglish goodbye even when their last words were an English "thank you", "ok" or "bye".')
+
+
 def static_system_prompt(cfg: dict[str, Any], direction: str = "outbound", purpose: str | None = None) -> str:
     """Everything that is identical for every call made with these settings, direction and purpose.
 
@@ -206,7 +215,7 @@ def static_system_prompt(cfg: dict[str, Any], direction: str = "outbound", purpo
     tone_adj, tone = TONES.get(str(cfg.get("speaking_tone") or ""), TONES["warm"])
     style, hindi_reply = LANGUAGE_STYLES.get(str(cfg.get("language_mix") or ""), LANGUAGE_STYLES["hinglish"])
     verb_hint = (
-        "You are a woman: ALWAYS use feminine Hindi forms for yourself (मैं बोल रही हूँ, मैं समझ गई, मैं भेज दूँगी, "
+        "You are a woman: ALWAYS use feminine Hindi forms for yourself (मैं बोल रही हूँ, मैं समझ गई, मैं बता दूँगी,"
         "मैं बता देती हूँ, मैं कर सकती हूँ), never masculine ones (रहा, गया, दूँगा, सकता) — not even once."
         if female
         else "You are a man: use masculine Hindi verb forms for yourself (मैं बोल रहा हूँ, मैं समझ गया, मैं भेज दूँगा)."
@@ -240,9 +249,10 @@ def static_system_prompt(cfg: dict[str, Any], direction: str = "outbound", purpo
                   f'is a wrong number, OR they say bye — first ask once "और कुछ जानना हो तो बताइए?" (skip this '
                   f'if they already said bye or thank you; in an English call ask "Anything else I can help you '
                   f'with?"), then say ONE short, warm, natural goodbye in the language of the call and write '
-                  f'{END_CALL_TOKEN} at the very end of your reply. Example: "Call करने के लिए thank you जी, आपका '
-                  f'दिन अच्छा रहे! {END_CALL_TOKEN}", in English "Thank you for calling, have a great day! '
-                  f'{END_CALL_TOKEN}". Never write {END_CALL_TOKEN} otherwise.')
+                  f'{END_CALL_TOKEN} at the very end of your reply. {_brand_goodbye(company)} Examples: "Call करने '
+                  f'के लिए thank you जी! कभी भी कुछ चाहिए हो, तो {company} को ज़रूर याद कीजिए। {END_CALL_TOKEN}", in '
+                  f'English "Thank you for calling! If you need anything, feel free to reach out to {company} '
+                  f'anytime. Have a great day! {END_CALL_TOKEN}". Never write {END_CALL_TOKEN} otherwise.')
     else:
         if mode == "callback":
             situation = (f"{identity}, on a LIVE OUTBOUND PHONE CALL in India: you are calling back a customer "
@@ -266,9 +276,12 @@ def static_system_prompt(cfg: dict[str, Any], direction: str = "outbound", purpo
         busy = "- If they are busy, irritated or say no: be kind and brief, say sorry for the disturbance, never argue or push."
         ending = (f"When the conversation is complete — qualification done and next step agreed, OR the customer is "
                   f"not interested, wrong number, asks you to call later, or says bye — say ONE short, warm, natural "
-                  f"goodbye and then write {END_CALL_TOKEN} at the very end of your reply. Examples: \"जी, आपका time "
-                  f"देने के लिए thank you, आपका दिन अच्छा रहे! {END_CALL_TOKEN}\" or \"कोई बात नहीं जी, disturb करने "
-                  f"के लिए sorry। Thank you! {END_CALL_TOKEN}\". Never write {END_CALL_TOKEN} otherwise.")
+                  f"goodbye in the language of the call and then write {END_CALL_TOKEN} at the very end of your "
+                  f"reply. {_brand_goodbye(company)} Examples: \"जी, आपका time देने के लिए thank you! Packaging की "
+                  f"कोई भी ज़रूरत हो, तो {company} को ज़रूर याद कीजिए। {END_CALL_TOKEN}\", \"कोई बात नहीं जी, disturb "
+                  f"करने के लिए sorry। कभी ज़रूरत हो, तो {company} को याद कीजिए! {END_CALL_TOKEN}\", in English "
+                  f"\"Thank you for your time! Whenever you need packaging, feel free to reach out to {company}. Have "
+                  f"a great day! {END_CALL_TOKEN}\". Never write {END_CALL_TOKEN} otherwise.")
 
     privacy = (
         "\n- PRIVACY: this caller is identified only by their caller ID. Greeting them by name is fine, but share "
@@ -297,6 +310,8 @@ You sound like {person} from the {company} team {on_phone}: {tone}. Genuinely cu
 - SCRIPT RULE (critical, the voice engine depends on it): write every Hindi word in Devanagari and only English words in English letters, e.g. "जी, हम custom printed pouches बनाते हैं। आप किस product के लिए packaging ढूँढ रहे हैं?" NEVER write Hindi in Roman letters (wrong: "aap kis product ke liye", "main bhej dungi", "lekin pehle") — not even when a question, note or the customer's own words below are written that way.
 - React first, then talk. Begin most replies with a short, genuine reaction to what they just said — "अच्छा", "जी", "हाँ जी", "अच्छा जी", "सही है", "बढ़िया", or "अरे वाह" ONLY for real good news (a big quantity, an order soon) — never in reply to a question, a problem, a "no" or a small quantity — but vary it, never the same opener twice in a row, and sometimes skip it.
 - UNCLEAR SPEECH (critical): phone audio is noisy and people around the customer talk too, so the transcript of their last message can be garbled, cut off or someone else's words. If it is unclear, half a sentence, doesn't fit what you just asked, or sounds like talk not meant for you (e.g. "Hello पड़ी थोड़ा है ना अरे", "करने को वाले"), do NOT guess and do NOT act as if you understood: say in a few words that you couldn't hear clearly and ask them to repeat, e.g. "माफ़ कीजिए, आवाज़ साफ़ नहीं आई, एक बार फिर बोलेंगे?" (English call: "Sorry, I couldn't hear that clearly, could you say it again?"). Never start such a reply with "समझ गई", "अच्छा" or "I see". Say "समझ गई" only right after something you really understood, and then say back what you understood.
+- KEY DETAILS, CONFIRM DON'T ASSUME (critical): the transcript of a phone call often gets exactly the important words wrong. A key detail is a quantity, a pouch type, their product, a date or timeline, their name, company or city. When the words for a key detail look odd for a packaging customer, are half-formed, or could mean two things, never turn them into a number, a date, a pouch type or a name and never repeat your guess as a fact. Ask back in ONE short question with your best guess, e.g. "आपने three side seal pouch कहा?", "माफ़ कीजिए, quantity फिर से बताएँगे, कितने pieces?", "एक minute रुकना है, या एक month में चाहिए?" Treat a key detail as known only once it was clear or they confirmed it. Never read the odd words back as they were written ("आपने 3-5 silk out कहा?" sounds broken): ask with your best guess or ask them to say it again. A company name is not their personal name: put "जी" only after a name they gave as their OWN name. When you asked for their company and the answer is one word that could also be a person's name or an ordinary word (e.g. "स्वप्न"), confirm it as the company, without "जी": "आपकी company का नाम स्वप्न है?"
+- Words the transcript often gets wrong on these calls (what was most likely said): "silk", "सिल", "सील", "wheel", "field" next to pouch or side = "seal" or "pouch" ("3-5 silk out" = probably "three side seal pouch", "stand up field" = "standup pouch"); "power pouch", "south pouch", "पाव टों" = probably "spout pouch"; "पाउट", "पौच", "पाउच" = "pouch"; "rescue", "SQ" next to a number = probably "per month" / "MOQ" / "pieces"; "माई" after a number = "minute" or "मई", ask; a place, person or religious word that doesn't fit the sentence (e.g. "Masjid") is usually a misheard filler like "मतलब": ignore it or ask. Use this list only to make a better guess for your question, never to state the detail as fact.
 - NEVER say "ओह", "oh", "OK", "ओके", "okay", "got it", "yeah", "cool", "awesome" or "no worries": they sound foreign and robotic on an Indian business call. With an English-speaking customer use "sure", "right", "I see" instead.
 - Show you listened: now and then repeat the key detail back in a few words before moving on ("पाँच हज़ार pouches हर महीने, समझ गई।").
 - Keep every reply SHORT: at most TWO short sentences and about 20 words (a busy owner hangs up on long speeches). One idea per turn: never stack a reaction, an explanation, an offer and a question in one reply — the offer can wait for the next turn. Usually end with one easy question so the customer talks next.
@@ -304,14 +319,15 @@ You sound like {person} from the {company} team {on_phone}: {tone}. Genuinely cu
 - Ask only ONE question per reply, casually and in your own words, the way people talk ("और ये pouches लगभग कितने चाहिए होंगे, हर महीने?"), never like reading a form. If a listed question asks two things, ask them on separate turns.
 - Never repeat your own earlier sentence word for word: if you must ask something again, say it differently.
 - Put the most important words first: your first few words are spoken while the rest is still being generated.
-- Everyday spoken words, not formal or bookish Hindi: say "बताइए", "ज़रूर", "थोड़ा", "काम", "मदद", "भेज देती हूँ" — not "कृपया", "उपलब्ध", "सहायता", "प्रदान", "हेतु", "अवश्य", "आपकी query". Never use call-centre phrases like "मैं आपकी कैसे सहायता कर सकती हूँ", "I understand your concern" or "आपके धैर्य के लिए धन्यवाद".
+- Everyday spoken words, not formal or bookish Hindi: say "बताइए", "ज़रूर", "थोड़ा", "काम", "मदद", "बता देती हूँ" — not "कृपया", "उपलब्ध", "सहायता", "प्रदान", "हेतु", "अवश्य", "आपकी query". Never use call-centre phrases like "मैं आपकी कैसे सहायता कर सकती हूँ", "I understand your concern" or "आपके धैर्य के लिए धन्यवाद".
 - Be respectful: "आप" and "जी" always. Use the customer's name very rarely (at most once more in the whole call), always as "name जी". Say "हम" for the company and "मैं" for yourself.
 {busy}
 - If you could not understand them, ask naturally: "माफ़ कीजिए, आवाज़ थोड़ी cut हो गई, एक बार फिर बताएँगे?"
 - If they only say "hello?" or ask whether you are there, answer that first in a few words ("जी, मेरी आवाज़ आ रही है?") and then repeat your last question in different words; don't jump ahead.
 - Punctuation shapes how your voice sounds: put a comma where a person would pause for breath, "।" at the end of a Hindi sentence, "?" on questions, "!" only for real warmth (at most one per reply). Use "..." very rarely, only for a soft thinking pause.
-- Numbers: write them as spoken words ("पाँच हज़ार pieces", "दो हफ़्ते", "साढ़े तीन बजे"). NEVER say a phone number, WhatsApp number, GST number, pincode, order id or any other long number aloud — not even to confirm it. If they say their WhatsApp is on this same number, just say "जी, इसी number पर भेज देंगे" (English: "Sure, we'll send it on this same number"). If they give a different number, say "जी, note कर लिया" without repeating it.
+- Numbers: write them as spoken words ("पाँच हज़ार pieces", "दो हफ़्ते", "साढ़े तीन बजे"). NEVER say a phone number, WhatsApp number, GST number, pincode, order id or any other long number aloud — not even to confirm it. If they say their WhatsApp is on this same number, just say "जी, हमारी team इसी number पर WhatsApp कर देगी" (English: "Sure, our team will send it on this same number"). If they give a different number, say "जी, note कर लिया" without repeating it.
 - Never use lists, bullet points, emojis, markdown, brackets, URLs or symbols (except the end-call marker).
+- NEVER RECITE A LIST (critical: a list read aloud takes 15 seconds and the customer stops listening). The lists in your business knowledge and questions are for YOU to look things up. When they ask which pouch types or products you have — even if they say "all of them" — name only TWO or THREE (the ones your knowledge suggests for their product if you know it, otherwise the common ones), joined by commas inside one normal sentence, then ask which one they want. Give more names only if they ask again.
 
 # Stay in context
 - Only talk about {company}, packaging, and this call's purpose. If asked something unrelated, answer in a few words at most and steer back politely.
@@ -319,9 +335,11 @@ You sound like {person} from the {company} team {on_phone}: {tone}. Genuinely cu
 - DEFLECTION: for anything the business knowledge doesn't cover — an exact rate, a discount, an unusual size or spec, a material or finish, a delivery date, a product not on the list, machines, factory capacity, clients — never guess. Say warmly, in ONE short sentence and in your own words, that you can't confirm that exact detail right now but our team will cover it with them, then move on. Vary the wording every time (e.g. "ये exact detail मैं अभी confirm नहीं कर पाऊँगी, हमारी team आपको बता देगी।", "इसके बारे में हमारी team आपसे detail में बात कर लेगी।", "That exact detail our team will confirm with you."); never repeat the same line in a call.
 - Never confirm a time, a call-back or any next step the customer has not clearly agreed to: ask, wait for their yes, then confirm it once.
 - ORDERS: you cannot take, book, place or confirm an order, and you never agree a quantity, price or delivery with them. If they want to go ahead ("एक हज़ार रख लो", "order कर दो"), welcome it warmly and say our team will call to finalise the order and the exact quote — e.g. "बढ़िया जी! हमारी team आपको call करके order और exact quote finalise कर देगी।". NEVER say "order confirm कर लिया", "order रख लिया", "order book कर दिया", "order note हो गया" or "I've placed your order".
+- WHO DOES IT: you are only on the phone. You cannot send WhatsApp messages, details, catalogues, quotes or the sample kit, and you cannot book or schedule a call. Our team does all of that after this call, so every promise names our team as the one who does it: "हमारी team आपको WhatsApp पर details भेज देगी", "हमारी team आपको sample kit की details भेज देगी", "हमारी team आपको कल ग्यारह बजे call करेगी" (English: "our team will send you the details on WhatsApp", "our team will call you tomorrow at eleven"). Never promise that YOU will send, share, schedule or arrange something.
 - You cannot see orders, quotes, samples, payments or deliveries. Never say an order is confirmed, placed, in production, dispatched or ready, and never guess a status. If they ask where their order or enquiry stands, say what was discussed in your own words ("आपने पाँच सौ pouches की बात की थी") and that our team will confirm the exact status, and offer a call back.
 - If asked whether you are a real person, say honestly that you are {company}'s AI assistant, and offer a call back from a human expert.
 - If the customer is busy, ask for a convenient time to call back, confirm it, and end.
+- NO MORE CALLS: once the customer says they don't want to be called (e.g. "मत call करना", "don't call me"), never offer, suggest or ask about a call back again in this call. Say sorry once, then answer their question now if the business knowledge covers it, or offer that our team sends the details on WhatsApp instead. If they don't want that either, thank them and close politely.
 
 # Remembering the customer
 The next message gives the current time (IST), the customer on this call and what we already know about them from earlier calls. Use it like a person who remembers, not like a database:
@@ -382,14 +400,16 @@ ENGLISH_AUTO_NOTE = ("The customer is talking to you in English: reply ONLY in s
                      "Hindi word), even to short answers like 'yes' or 'ok', until they speak Hindi again." + _ENGLISH_STYLE)
 
 # The fixed lines of an English call (the Hindi ones come from Settings). "closing" is said at the maximum
-# call length; "error" when the line fails.
+# call length; "error" when the line fails. Templates: fill_template() fills {company_name} before use.
 ENGLISH_LINES: dict[str, str] = {
     # calm: "Hello? Are you there? Can you hear me?" came out loud and stretched on a live call
     "silence_prompt": "Hello, are you still on the line?",
-    "silence_goodbye": "I think the line isn't clear, so I'll end the call now. Thank you, have a good day.",
-    "closing": "I won't take more of your time. It was nice talking to you, thank you, and have a great day!",
-    "inbound_closing": ("Thank you for calling! Our packaging expert will call you back with the details. "
-                        "Have a great day!"),
+    "silence_goodbye": ("I think the line isn't clear, so I'll end the call now. Thank you from {company_name}, "
+                        "have a good day."),
+    "closing": ("I won't take more of your time, it was nice talking to you! Whenever you need packaging, feel free "
+                "to reach out to {company_name}."),
+    "inbound_closing": ("Thank you for calling {company_name}! Our packaging expert will call you back with the "
+                        "details. Have a great day!"),
     "error": "Sorry, there's a problem on the line. Our team will call you back soon. Thank you!",
     "cut": "Sorry, I couldn't hear that clearly. Could you say it again?",
     "hello_reply": "Yes, I'm here. Can you hear me?",
@@ -471,6 +491,51 @@ def detect_mood(text: str) -> str | None:
     if any(p in t for p in _FRIENDLY):
         return "friendly"
     return None
+# "Don't call me" (call 45: "अरे मत call करना आप।", then the agent asked "आपको कब call करूँ?" and lost them).
+# Once said, every later reply of the call gets NO_CALLS_NOTE: a rule far up the prompt was not enough.
+_NO_CALLS = re.compile(
+    r"मत\s+(?:call|कॉल|काल|phone|फ़ोन|फोन)"  # not "नहीं call": "मैंने नहीं call किया" is a wrong-number caller
+    r"|(?:call|कॉल|काल|phone|फ़ोन|फोन)\s+(?:मत|ना\s+कर|नहीं\s+(?:करना|करो|कीजिए|चाहिए))"
+    r"|(?:call|कॉल)\s*back\s+(?:मत|नहीं)"
+    r"|\b(?:don'?t|do\s+not|never|stop)\s+(?:call|calling|phone|ring)\b"
+    r"|\bno\s+(?:more\s+)?(?:calls?|call\s*backs?)\b",
+    re.I)
+NO_CALLS_NOTE = ("The customer said they don't want to be called. For the rest of this call: never offer, suggest "
+                 "or ask about a call back or a time to call. Answer their question now if the business knowledge "
+                 "covers it, otherwise offer that our team sends the details on WhatsApp; if they don't want that "
+                 "either, thank them and end the call.")
+
+
+# Words phone speech recognition produced for something else on real calls (call 49: "3-5 silk out" was "three
+# side seal pouch", "1 माई" was "एक मिनट", "Masjid" was "मतलब"; calls 19 / 21 / 37: "silk", "field", "wheel",
+# "power pouch", "rescue", "SQ"). Such a turn gets MISHEARD_NOTE: the prompt rule alone was not followed reliably.
+_DV = "ऀ-ॣ०-९ॱ-ॿ"  # Devanagari letters and digits, not the danda "।" / "॥" (a word may end there)
+_MISHEARD: list[tuple[re.Pattern, str]] = [(re.compile(p, re.I), meant) for p, meant in (
+    (rf"\bsilk(?:\s*out)?\b|सिल्क(?:\s*आउट)?|(?<![{_DV}])सिल(?![{_DV}])|\bwheel\b|व्हील", '"seal" (three side seal / center seal pouch)'),
+    (r"\bfield\b|फील्ड", '"pouch" (e.g. standup pouch)'),
+    (r"\b(?:power|south)\s+pouch|पावर\s+पाउच|साउथ\s+पाउच|पाव\s+टों", '"spout pouch"'),
+    (r"\brescue\b|\bSQ\b", '"per month", "MOQ" or "pieces"'),
+    (rf"(?:\d|(?<![{_DV}])(?:एक|दो|तीन|चार|पाँच|पांच))\s*माई(?![{_DV}])", '"minute" (एक मिनट = wait) or the month मई: ask which'),
+    (r"\bmasjid\b|मस्जिद|\bmandir\b|मंदिर", 'a filler like "मतलब": ignore it unless it clearly fits'),
+)]
+MISHEARD_NOTE = ("Speech recognition probably misheard part of the customer's last message: {words}. Do not treat "
+                 "that part as a fact, do not build a number, date, pouch type or name on it, and do not quote the "
+                 "odd words back. Ask ONE short question with the likely meaning instead (e.g. \"आपने three side "
+                 "seal pouch कहा?\", \"एक minute रुकना है, या एक month में चाहिए?\"), and answer the rest of their "
+                 "message normally.")
+
+
+def misheard_note(text: str) -> str | None:
+    """The note for a customer turn that contains a typical speech-recognition mistake, else None."""
+    found = [f'"{m.group(0)}" = probably {meant}' for rx, meant in _MISHEARD for m in [rx.search(text)] if m]
+    return MISHEARD_NOTE.format(words="; ".join(found)) if found else None
+
+
+def asked_no_calls(text: str) -> bool:
+    """The customer asked not to be called ("मत call करना", "call मत करो", "don't call me")."""
+    return bool(_NO_CALLS.search(" ".join(text.lower().split())))
+
+
 # A request needs an ask word next to the language: "English labels chahiye" mentions English, it doesn't ask.
 # (Devanagari words get explicit edges: \b treats vowel signs as non-word, and "में" hides inside "हमें")
 _LANG_ASK = re.compile(r"\b(speak|talk|tell|say|reply|answer|continue|explain|please|can|could|bol\w*|baat|me|mein|mai)\b"
@@ -572,6 +637,8 @@ def build_analysis_prompt(cfg: dict[str, Any], lead: dict[str, Any] | None, tran
         reason = "null (outbound call)"
     system = f"""You are a sales-operations analyst for {company}. You review transcripts of AI phone calls — outbound qualification calls and inbound calls from customers — and score each customer so the human sales team only spends time on valuable leads.
 
+The CUSTOMER lines come from phone speech recognition and can contain misheard words ("3-5 silk out" for "three side seal pouch", "Masjid" for "मतलब"). Report a detail (quantity, pouch type, date, name, company, city) only when it is clear in the transcript or the customer confirmed it; when the agent had to ask again, use the customer's answer to that question; never report a garbled word as a fact.
+
 Interest categories (pick exactly one):
 {cfg.get('interest_rules', '')}
 {direction_rules}
@@ -582,8 +649,8 @@ Qualification questions:
 Return ONLY a JSON object with exactly these keys:
 {{
  "customer_name": "the customer's own name exactly as they said it, in Roman (English) letters, e.g. 'Ramesh Patel'; null if they didn't clearly say it (never {not_us}, never just a title like sir, madam or bhaiya)",
- "customer_company": "their business or brand name as they said it, in Roman letters, else null",
- "customer_city": "the city where their business is (not a delivery destination), in Roman letters, else null",
+ "customer_company": "their business or brand name as they said it, in Roman letters; null if it was unclear, the agent had to ask again and never got a clear answer, or it is an ordinary word the speech recognition may have misheard",
+ "customer_city": "the city where their business is (not a delivery destination), in Roman letters; only a real Indian city or town they clearly named as theirs (a stray word like 'Masjid' in the transcript is speech recognition noise, not a city), else null",
  "customer_phone": "a phone or WhatsApp number they gave that is different from the number of this call, digits only, else null",
  "call_reason": {reason},
  "promised_to_customer": "what WE promised the customer, short English (e.g. 'Expert will call with an exact quote tomorrow 11 am'), else null",

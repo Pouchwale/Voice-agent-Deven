@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import Response
 
 from ..config import get_settings
+from ..defaults import SETTING_LABELS
 from ..schemas import VoicePreview
 from ..services import inbound_audio, telephony
 from ..services.agent_config import (UndoError, list_history, load_agent_settings, reset_agent_settings,
@@ -45,11 +46,17 @@ def reset():
     return saved
 
 
+@router.get("/labels")
+def labels():
+    """What each setting is called on the Settings page (the confirm popup lists what a save will change)."""
+    return SETTING_LABELS
+
+
 @router.get("/history")
-def history(limit: int = 300):
-    """Saved changes within history_days, newest first (each: which settings, old -> new, Undo state)."""
-    return {"days": int(load_agent_settings().get("history_days") or 30),
-            "items": list_history(max(1, min(limit, 1000)))}
+def history(limit: int = 50, before_id: int | None = None):
+    """Every saved change, newest first (each: who, which settings, old -> new, Undo state). Kept forever;
+    `before_id` loads the entries older than that one."""
+    return list_history(max(1, min(limit, 200)), before_id)
 
 
 @router.post("/history/{change_id}/undo")

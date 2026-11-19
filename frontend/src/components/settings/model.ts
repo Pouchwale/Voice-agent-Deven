@@ -121,9 +121,6 @@ export function validate(f: AgentSettings): FieldErrors {
   const proof = checkRange(f.review_min_evidence, 1, 5, "calls");
   if (proof) e.review_min_evidence = proof;
   else if (!Number.isInteger(f.review_min_evidence)) e.review_min_evidence = "Use a whole number.";
-  const days = checkRange(f.history_days, 1, 365, "days");
-  if (days) e.history_days = days;
-  else if (!Number.isInteger(f.history_days)) e.history_days = "Use a whole number.";
   if (!REVIEW_MODEL.test(f.review_model.trim())) e.review_model = "Use an OpenAI model name like gpt-4o-mini.";
   if (!f.review_rubric.trim()) e.review_rubric = "The review agent needs these rules (Restore default brings them back).";
   else if (f.review_rubric.length > TEXT_MAX) e.review_rubric = `Keep it under ${TEXT_MAX.toLocaleString("en-IN")} characters.`;
@@ -222,6 +219,5 @@ export function coerce(d: AgentSettings): AgentSettings {
     review_model: s(d.review_model) || "gpt-4o-mini",
     review_include_inbound: bool(d.review_include_inbound, true),
     review_rubric: s(d.review_rubric),
-    history_days: num(d.history_days, 30),
   };
 }

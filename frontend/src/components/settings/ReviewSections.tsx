@@ -15,9 +15,11 @@ import { ErrorState } from "@/components/ui/States";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/Toast";
+import { TypeConfirmDialog } from "@/components/ui/TypeConfirmDialog";
+import { useLogPages } from "@/hooks/useLogPages";
 import { ApiError, api, errorMessage, keys } from "@/lib/api";
 import { formatShortDateTime, pluralize } from "@/lib/format";
-import type { AgentSettings, ReviewMethod, ReviewModelChoice, SettingsChangeEntry, SettingsHistory, UndoConflict } from "@/lib/types";
+import type { AgentSettings, ReviewMethod, ReviewModelChoice, SettingsChangeEntry, UndoConflict } from "@/lib/types";
 import { LEARNED_RULES_MAX, type SectionProps } from "./model";
 import { NumberField, SettingsSection } from "./SettingsSection";
 
@@ -208,32 +210,36 @@ export function ReviewAgentSection({ form, set, errors }: SectionProps) {
 
 const PAGE = 15;
 
-export function ChangeHistorySection({
-  form,
-  set,
-  errors,
-  dirty,
-  onApplied,
-}: SectionProps & { dirty: boolean; onApplied: (settings: AgentSettings) => void }) {
+export function ChangeHistorySection({ dirty, onApplied }: { dirty: boolean; onApplied: (settings: AgentSettings) => void }) {
   const toast = useToast();
   const { mutate: mutateGlobal } = useSWRConfig();
-  const { data, error, mutate } = useSWR<SettingsHistory>(keys.settingsHistory, { revalidateOnFocus: false });
+  // Kept forever: the newest entries arrive first, older ones are loaded as the list is opened further.
+  const log = useLogPages<SettingsChangeEntry>(keys.settingsHistory, (beforeId) => api.settings.history({ before_id: beforeId, limit: 50 }), {
+    revalidateOnFocus: false,
+  });
   const [shown, setShown] = useState(PAGE);
   const [busy, setBusy] = useState<number | null>(null);
+  // The entry whose Undo is waiting for the "type CONFIRM" popup.
+  const [asking, setAsking] = useState<SettingsChangeEntry | null>(null);
   const [conflict, setConflict] = useState<{ entry: SettingsChangeEntry; message: string; items: UndoConflict[] } | null>(null);
-  const items = data?.items ?? [];
+  const { items } = log;
 
-  async function undo(entry: SettingsChangeEntry, force = false) {
+  function askToUndo(entry: SettingsChangeEntry) {
     if (dirty) {
       toast({ tone: "info", title: "Save or discard your changes first", description: "Undo replaces settings, so unsaved edits would be lost." });
       return;
     }
+    setAsking(entry);
+  }
+
+  async function undo(entry: SettingsChangeEntry, force = false) {
     setBusy(entry.id);
     try {
       const res = await api.settings.undo(entry.id, force);
       onApplied(res.settings);
       setConflict(null);
-      await Promise.all([mutate(), mutateGlobal(keys.settings, res.settings, { revalidate: false })]);
+      log.patch(entry.id, { undone_by: "id" in res.change ? res.change.id : -1 });
+      await Promise.all([log.mutate(), mutateGlobal(keys.settings, res.settings, { revalidate: false })]);
       toast({ tone: "success", title: "Undone", description: `${entry.label}. Changed your mind? Undo the undo below.` });
     } catch (err) {
       const conflicts = err instanceof ApiError && err.status === 409 ? conflictsOf(err.data) : null;
@@ -241,36 +247,41 @@ export function ChangeHistorySection({
         setConflict({ entry, message: errorMessage(err), items: conflicts });
       } else {
         toast({ tone: "error", title: "Couldn't undo", description: errorMessage(err) });
-        void mutate();
+        void log.mutate();
       }
     } finally {
       setBusy(null);
+      setAsking(null);
     }
+  }
+
+  async function showMore() {
+    if (shown + PAGE > items.length && log.hasMore) {
+      try {
+        await log.loadOlder();
+      } catch (err) {
+        toast({ tone: "error", title: "Couldn't load older changes", description: errorMessage(err) });
+        return;
+      }
+    }
+    setShown((n) => n + PAGE);
   }
 
   return (
     <SettingsSection
       id="history"
       title="Change history"
-      subtitle={`Every change to these settings: your saves, approved review suggestions, resets and undos. Undo puts the earlier values back.`}
+      subtitle="Every change to these settings, kept forever: who made it, when, and the old and new values (your saves, approved review suggestions, resets and undos). Undo puts the earlier values back."
       icon={<ScrollText />}
+      actions={
+        <Link href="/activity" className="text-[13px] font-medium text-primary hover:underline">
+          Open Activity log
+        </Link>
+      }
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <NumberField
-          label="Keep history for"
-          value={form.history_days}
-          onChange={(v) => set("history_days", v)}
-          min={1}
-          max={365}
-          unit="days"
-          error={errors.history_days}
-          hint="Older changes are removed from the list (and can no longer be undone)."
-        />
-      </div>
-
-      {error && !data ? (
-        <ErrorState error={error} onRetry={() => void mutate()} title="Couldn't load the change history" compact />
-      ) : !data ? (
+      {log.error && !items.length ? (
+        <ErrorState error={log.error} onRetry={() => void log.mutate()} title="Couldn't load the change history" compact />
+      ) : !log.loaded ? (
         <div className="space-y-2" role="status" aria-label="Loading the change history">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-14 rounded-lg" />
@@ -278,24 +289,44 @@ export function ChangeHistorySection({
         </div>
       ) : !items.length ? (
         <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-sm text-muted">
-          No changes in the last {pluralize(data.days, "day")}.
+          No changes yet. Every change you save will be listed here.
         </p>
       ) : (
         <div>
           <ul className="divide-y divide-line rounded-lg border border-line">
             {items.slice(0, shown).map((entry) => (
-              <HistoryRow key={entry.id} entry={entry} busy={busy === entry.id} disabled={busy !== null} onUndo={() => void undo(entry)} />
+              <HistoryRow key={entry.id} entry={entry} busy={busy === entry.id} disabled={busy !== null} onUndo={() => askToUndo(entry)} />
             ))}
           </ul>
-          {items.length > shown ? (
+          {log.total > shown ? (
             <div className="mt-3 flex justify-center">
-              <Button variant="secondary" size="sm" onClick={() => setShown((n) => n + PAGE)}>
-                Show more ({items.length - shown})
+              <Button variant="secondary" size="sm" onClick={() => void showMore()} loading={log.loadingOlder}>
+                Show more ({log.total - shown})
               </Button>
             </div>
           ) : null}
         </div>
       )}
+
+      <TypeConfirmDialog
+        open={!!asking}
+        onClose={() => setAsking(null)}
+        onConfirm={() => asking && void undo(asking)}
+        title="Undo this change?"
+        confirmLabel="Undo"
+        busy={busy !== null}
+      >
+        {asking ? (
+          <>
+            <p>The settings below go back to the values they had before this change:</p>
+            <p className="text-mixed mt-1.5 font-medium break-words">{asking.label}</p>
+            <p className="tabular mt-1 text-[13px] text-muted">
+              {formatShortDateTime(asking.created_at)}
+              {asking.actor ? ` · ${asking.actor}` : ""} · {pluralize((asking.changes ?? []).length, "setting")}
+            </p>
+          </>
+        ) : null}
+      </TypeConfirmDialog>
 
       <ConfirmDialog
         open={!!conflict}
@@ -354,6 +385,7 @@ function HistoryRow({
               {SOURCE_LABEL[entry.source] ?? entry.source}
             </Chip>
             <span className="tabular text-[12px] text-muted">{formatShortDateTime(entry.created_at)}</span>
+            {entry.actor ? <span className="text-mixed text-[12px] font-semibold break-words">{entry.actor}</span> : null}
             {undone ? (
               <Chip size="xs" color="white">
                 Undone

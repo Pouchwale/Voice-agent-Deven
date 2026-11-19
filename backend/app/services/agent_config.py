@@ -4,15 +4,15 @@ from __future__ import annotations
 import copy
 import re
 import threading
-from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 
-from ..db import SessionLocal, utcnow
+from ..db import SessionLocal
 from ..defaults import DEFAULT_AGENT_SETTINGS, DROPPED_FILLERS, LEGACY_DEFAULTS, SETTING_LABELS, SETTINGS_VERSION
 from ..models import AgentSettings, SettingsChange
 from ..schemas import iso
+from . import audit
 
 _lock = threading.Lock()
 _cache: dict[str, Any] | None = None
@@ -93,7 +93,7 @@ def apply_settings_change(patch: dict[str, Any], *, source: str = "settings", la
                 if k in DEFAULT_AGENT_SETTINGS and v is not None:
                     current[k] = v
             changes = _diff(before, current)
-            change_id = _record(db, changes, source, label, ref_id, current) if changes else None
+            change_id = _record(db, changes, source, label, ref_id) if changes else None
             if row is None:
                 row = AgentSettings(id=1, data=current)
                 db.add(row)
@@ -121,7 +121,7 @@ def reset_agent_settings() -> dict[str, Any]:
                 kept = {k: v for k, v in (row.data or {}).items() if str(k).startswith("_") and k != VERSION_KEY}
                 after = {**copy.deepcopy(DEFAULT_AGENT_SETTINGS), VERSION_KEY: SETTINGS_VERSION, **kept}
                 changes = _diff(before, after)
-                change_id = (_record(db, changes, "reset", "Reset all settings to defaults", None, after)
+                change_id = (_record(db, changes, "reset", "Reset all settings to defaults", None)
                              if changes else None)
                 row.data = after
                 db.commit()
@@ -148,16 +148,19 @@ def _default_label(source: str, changes: dict[str, Any]) -> str:
     return f"Changed {shown}"
 
 
-def _record(db, changes: dict[str, Any], source: str, label: str, ref_id: int | None,
-            effective: dict[str, Any]) -> int:
-    """Insert a history entry (same transaction as the save) and drop entries older than history_days."""
+_ACTIVITY_ACTION = {"settings": "settings.save", "review": "settings.review", "undo": "settings.undo",
+                    "reset": "settings.reset"}
+
+
+def _record(db, changes: dict[str, Any], source: str, label: str, ref_id: int | None) -> int:
+    """Insert a history entry and its activity-log entry in the same transaction as the save, with the name
+    of the person who made the change. Entries are kept forever: nothing here (or anywhere) deletes one."""
     entry = SettingsChange(source=source, label=(label or _default_label(source, changes))[:300],
-                           changes=changes, ref_id=ref_id)
+                           changes=changes, ref_id=ref_id, actor=audit.current_actor() or None)
     db.add(entry)
     db.flush()
-    days = int(effective.get("history_days") or DEFAULT_AGENT_SETTINGS["history_days"])
-    db.execute(delete(SettingsChange).where(SettingsChange.created_at < utcnow() - timedelta(days=days),
-                                            SettingsChange.id != entry.id))
+    audit.record(db, area="settings", action=_ACTIVITY_ACTION.get(source, "settings.save"), summary=entry.label,
+                 target_type="settings_change", target_id=entry.id, details={"change_id": entry.id})
     return entry.id
 
 
@@ -176,29 +179,22 @@ def current_revision() -> int:
     return _revision
 
 
-def prune_history() -> int:
-    """Remove entries older than history_days. Returns how many were removed."""
-    days = int(load_agent_settings().get("history_days") or DEFAULT_AGENT_SETTINGS["history_days"])
+def list_history(limit: int = 50, before_id: int | None = None) -> dict[str, Any]:
+    """Every saved change, newest first, each as {key, label, old, new} per setting. Nothing is ever removed:
+    `before_id` continues after the last entry of the previous page."""
     with SessionLocal() as db:
-        n = db.execute(delete(SettingsChange).where(SettingsChange.created_at < utcnow() - timedelta(days=days)))
-        db.commit()
-        return int(n.rowcount or 0)
-
-
-def list_history(limit: int = 300) -> list[dict[str, Any]]:
-    """Newest first, within history_days, each change as {key, label, old, new}."""
-    days = int(load_agent_settings().get("history_days") or DEFAULT_AGENT_SETTINGS["history_days"])
-    with SessionLocal() as db:
-        rows = db.scalars(select(SettingsChange)
-                          .where(SettingsChange.created_at >= utcnow() - timedelta(days=days))
-                          .order_by(SettingsChange.id.desc()).limit(limit)).all()
-        return [_entry_out(r) for r in rows]
+        query = select(SettingsChange)
+        if before_id is not None:
+            query = query.where(SettingsChange.id < before_id)
+        rows = list(db.scalars(query.order_by(SettingsChange.id.desc()).limit(limit + 1)).all())
+        total = int(db.scalar(select(func.count(SettingsChange.id))) or 0)
+        return {"items": [_entry_out(r) for r in rows[:limit]], "has_more": len(rows) > limit, "total": total}
 
 
 def _entry_out(r: SettingsChange) -> dict[str, Any]:
     return {
         "id": r.id, "created_at": iso(r.created_at), "source": r.source, "label": r.label, "ref_id": r.ref_id,
-        "undone_by": r.undone_by,
+        "undone_by": r.undone_by, "actor": r.actor or "",
         "changes": [{"key": k, "label": SETTING_LABELS.get(k, k), "old": v.get("old"), "new": v.get("new")}
                     for k, v in (r.changes or {}).items()],
     }

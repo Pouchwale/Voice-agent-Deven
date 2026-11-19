@@ -96,6 +96,20 @@ def _offline(monkeypatch):
     monkeypatch.setattr(review_agent, "maybe_auto_run", no_auto_review)
     monkeypatch.setattr(review_agent, "_ask_json", offline_model)
     monkeypatch.setattr(inbound_audio, "tts_rest", fake_clip_tts)
+    # The checks made before a call is dialed (services/preflight.py) never reach the voice provider or the
+    # public link from tests: both answer "fine" here, and nothing learnt in one test carries into the next.
+    # tests/test_call_preflight.py installs its own answers.
+    from app.services import preflight
+
+    async def voice_fine() -> int:
+        return 200
+
+    async def link_fine(url: str) -> tuple[int, str]:
+        return 200, ""
+
+    preflight.reset()
+    monkeypatch.setattr(preflight, "_voice_status", voice_fine)
+    monkeypatch.setattr(preflight, "_link_answer", link_fine)
     # Vobiz account API (setup checks, call-record back-fill): answered locally, never the network.
     # Tests that need real-looking answers install tests.fakes.FakeVobizAPI on top of this.
     monkeypatch.setattr(vobiz, "_client", lambda timeout: httpx.AsyncClient(

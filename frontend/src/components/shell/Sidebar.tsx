@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   ChartColumn,
   ClipboardCheck,
+  History,
   LayoutDashboard,
   Megaphone,
   PhoneCall,
@@ -36,6 +37,7 @@ const NAV: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/inbound", label: "Inbound", icon: PhoneIncoming },
   { href: "/live", label: "Live", icon: Radio },
   { href: "/review", label: "Call review", icon: ClipboardCheck },
+  { href: "/activity", label: "Activity log", icon: History },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

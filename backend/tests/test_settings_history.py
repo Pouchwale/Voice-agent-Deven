@@ -1,4 +1,4 @@
-"""Settings history: every saved change is listed (old -> new), kept for history_days, and can be undone."""
+"""Settings history: every saved change is listed (old -> new), kept forever, and can be undone."""
 from __future__ import annotations
 
 from datetime import timedelta
@@ -110,20 +110,39 @@ def test_internal_facts_are_not_history_and_survive_a_reset(client):
     assert all(not c["key"].startswith("_") for e in _history(client) for c in e["changes"])
 
 
-def test_history_is_kept_for_history_days(client):
+def test_history_is_kept_forever(client):
     client.put("/api/settings", json={"voice": "ishita"})
     old_id = _history(client)[0]["id"]
     with SessionLocal() as db:
         db.execute(update(SettingsChange).where(SettingsChange.id == old_id)
-                   .values(created_at=utcnow() - timedelta(days=31)))
+                   .values(created_at=utcnow() - timedelta(days=400)))
         db.commit()
-    assert all(e["id"] != old_id for e in _history(client))  # hidden at once
-    assert agent_config.prune_history() >= 1  # and removed by the daily clean-up
+    client.put("/api/settings", json={"tts_pace": 1.1})  # a later save must not remove anything
+    assert any(e["id"] == old_id for e in _history(client))
     with SessionLocal() as db:
-        assert db.get(SettingsChange, old_id) is None
-    # a longer window keeps more
-    client.put("/api/settings", json={"history_days": 90})
-    assert _history(client)[0]["changes"][0]["key"] == "history_days"
+        assert db.get(SettingsChange, old_id) is not None
+    # an entry that old can still be undone
+    assert client.post(f"/api/settings/history/{old_id}/undo").status_code == 200
+    # the "keep history for N days" setting is gone: a browser tab that still sends it is ignored
+    r = client.put("/api/settings", json={"history_days": 1})
+    assert r.status_code == 200 and "history_days" not in r.json()
+    assert not hasattr(agent_config, "prune_history")
+
+
+def test_history_loads_older_entries_page_by_page(client):
+    for voice in ("ishita", "shreya", "kavya", "ishita", "shreya"):
+        client.put("/api/settings", json={"voice": voice})
+    first = client.get("/api/settings/history", params={"limit": 2}).json()
+    assert len(first["items"]) == 2 and first["has_more"] is True and first["total"] >= 5
+    older = client.get("/api/settings/history", params={"limit": 2, "before_id": first["items"][-1]["id"]}).json()
+    assert len(older["items"]) == 2 and older["items"][0]["id"] < first["items"][-1]["id"]
+    assert {"actor", "changes", "undone_by"} <= set(first["items"][0])
+
+
+def test_setting_names_for_the_confirm_popup(client):
+    labels = client.get("/api/settings/labels").json()
+    assert labels["voice"] == "Voice" and labels["opening_line"] == "Opening line"
+    assert set(DEFAULT_AGENT_SETTINGS) <= set(labels)  # every setting has a name
 
 
 def test_every_change_bumps_the_revision_calls_record(client):

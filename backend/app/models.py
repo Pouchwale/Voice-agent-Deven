@@ -171,8 +171,8 @@ class AgentSettings(Base):
 
 class SettingsChange(Base):
     """One saved change of the agent settings (Settings page, an approved review suggestion, an undo or a
-    reset), with the old and new value of every setting it changed. Kept for SETTINGS_HISTORY_DAYS, then
-    removed; any entry can be undone from the Settings page."""
+    reset), with the old and new value of every setting it changed and the name of the person who made it.
+    Kept forever (never deleted); any entry can be undone from the Settings page."""
 
     __tablename__ = "settings_changes"
     __table_args__ = (Index("ix_settings_changes_created", "created_at"),)
@@ -184,6 +184,27 @@ class SettingsChange(Base):
     changes: Mapped[Any] = mapped_column(JSONText)  # {key: {"old": value, "new": value}}
     ref_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # review suggestion / undone change id
     undone_by: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the undo entry, once undone
+    actor: Mapped[str | None] = mapped_column(String(80), nullable=True)  # the name given in the dashboard
+
+
+class ActivityLog(Base):
+    """One change a person made through the dashboard: who (the name they gave), when, what, and where it
+    applies the old and new values. Append-only: an entry is never edited and never deleted.
+    Written by services/audit.py (settings changes add theirs in the same transaction as the change)."""
+
+    __tablename__ = "activity_log"
+    __table_args__ = (Index("ix_activity_log_created", "created_at"), Index("ix_activity_log_area", "area", "id"))
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    actor: Mapped[str] = mapped_column(String(80), default="")  # "" = no name was given
+    area: Mapped[str] = mapped_column(String(20), default="other")  # settings|leads|campaigns|calls|inbound|review|other
+    action: Mapped[str] = mapped_column(String(40), default="")  # e.g. lead.update, campaign.start, settings.save
+    summary: Mapped[str] = mapped_column(String(400), default="")
+    target_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # lead|campaign|call|...
+    target_id: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    # {"changes": [{key,label,old,new}]} | {"data": {label: value}} | {"items": [...]} | {"change_id": n}
+    details: Mapped[Any] = mapped_column(JSONText, nullable=True)
 
 
 class ReviewRun(Base):

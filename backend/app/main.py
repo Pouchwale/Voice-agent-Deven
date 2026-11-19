@@ -12,11 +12,12 @@ from fastapi.middleware.gzip import GZipMiddleware
 from . import models  # noqa: F401  (register tables)
 from .config import get_settings
 from .db import Base, engine
-from .routers import (analytics, auth, calls, campaigns, dashboard, inbound, inbound_stats, leads, live, review,
-                      settings as settings_router, telephony)
+from .routers import (activity, analytics, auth, calls, campaigns, dashboard, inbound, inbound_stats, leads, live,
+                      review, settings as settings_router, telephony)
 from .security import AccessGuard
 from .services import inbound_audio, inbound_sync
-from .services.agent_config import load_agent_settings, prune_history
+from .services.agent_config import load_agent_settings
+from .services.audit import AuditMiddleware
 from .services.analysis import analyze_call
 from .services.call_manager import manager
 from .services.dialer import dialer
@@ -147,7 +148,6 @@ async def lifespan(app: FastAPI):
     if review_agent.recover_on_startup():
         log.warning("a call review was interrupted by the restart: marked failed")
     review_agent.ensure_since()  # automatic reviews start with the calls made from now on
-    prune_history()  # settings changes older than history_days
     spawn(review_agent.maybe_auto_run())  # calls that finished while the backend was down
     if settings.public_base_url.startswith("https://") and not settings.dashboard_password:
         log.warning("Dashboard is local-only: set DASHBOARD_PASSWORD to allow access through %s",
@@ -167,6 +167,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
 # Order matters: the last added is the outermost. CORS must wrap the guard so 401s carry CORS headers.
+# The activity log is the innermost: it only ever sees requests the guard let through.
+app.add_middleware(AuditMiddleware)
 app.add_middleware(AccessGuard)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.add_middleware(
@@ -178,7 +180,8 @@ app.add_middleware(
 )
 
 for r in (auth.router, leads.router, calls.router, campaigns.router, dashboard.router, analytics.router,
-          settings_router.router, live.router, inbound.router, inbound_stats.router, review.router):
+          settings_router.router, live.router, inbound.router, inbound_stats.router, review.router,
+          activity.router):
     app.include_router(r)
 # Plivo and Vobiz share one webhook / media-stream router (same protocol); URLs use the active provider's prefix.
 for prefix in ("/plivo", "/vobiz"):

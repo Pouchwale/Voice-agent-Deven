@@ -41,13 +41,14 @@ from ..config import get_settings
 from . import agent_config, repo
 from .audio import CallRecorder, EnergyVAD, Resampler, pcm_rms, rms_level, scale_volume
 from .events import bus, spawn
-from .llm import SentenceChunker, stream_reply, strip_end_token, warmup
+from .llm import ListFlattener, SentenceChunker, stream_reply, strip_end_token, warmup
 from .numbers import LONG_DIGITS
 from .prompts import (ENGLISH_AUTO_NOTE, ENGLISH_FILLERS, ENGLISH_LINES, ENGLISH_PREFERRED_NOTE, ENGLISH_TURN_NOTE,
-                      HEAR_YOU_REPLY, HELLO_REPLY, LISTENING_SOUNDS, MOOD_NOTES, MOOD_PACE, detect_mood,
-                      fill_template, greeting_for, hello_check, language_request, lead_context, spoke_english,
+                      HEAR_YOU_REPLY, HELLO_REPLY, LISTENING_SOUNDS, MOOD_NOTES, MOOD_PACE, NO_CALLS_NOTE,
+                      asked_no_calls, detect_mood, fill_template, misheard_note, greeting_for, hello_check, language_request, lead_context, spoke_english,
                       spoke_hindi, static_system_prompt)
 from .sarvam import RealtimeSTT, TTSStream, tts_rest
+from .shipping_price import fix_shipping_amount, kit_shipping_amount
 
 log = logging.getLogger("session")
 settings = get_settings()
@@ -97,6 +98,14 @@ LISTEN_GAP_SEC = 6.0         # at most one every this many seconds (and two per 
 LISTEN_PAUSE = (0.16, 0.3)   # s of quiet inside their sentence that invites one (STT ends a turn at 0.35 s)
 QUICK_REPLY_LIMIT = 2        # "Hello?" answered without the LLM at most this often per 30 s
 QUICK_REPLY_ECHO_SEC = 5.0   # another "Hello" this soon after the instant answer is the same one
+
+# False start: a short sound from the customer in the first moments of the agent's sentence cuts the agent off,
+# and speech recognition then labels that fragment with a stock phrase ("ठीक है?", "हाँ", "Okay"). Measured on a
+# live call: a 0.4 s sound that began 0.6 s after the agent started speaking became the customer's "ठीक है?" and
+# was answered as agreement. The customer had heard a word or two, so it cannot be an answer to that sentence:
+# it is not counted as their words, and the agent answers what they really said once more, from the start.
+FALSE_START_HEARD_SEC = 1.5  # the agent's sentence had been audible for at most this long when their sound began
+FALSE_START_FINAL_SEC = 3.0  # the transcript of that sound arrives within this long after the cut
 
 
 def _turn_key(text: str) -> str:
@@ -311,6 +320,14 @@ class CallSession:
         self._stt_speech_start_at = 0.0    # last STT vad.speech_start
         self._speaking_since = 0.0         # when the agent's current speech began
         self._barge_pending = False        # an overlap barge-in is already on its way
+        # the last time the customer's voice cut a reply off: when, and how much of it they had heard (false starts)
+        self._cut: dict[str, Any] | None = None
+        self._last_reply: dict[str, Any] | None = None  # the reply spoken last: its turn, what it answered, its text
+        self._turn_heard_from = 0.0        # when the current reply's own audio starts playing
+        self._retry_next = False           # the next reply is a second try after a false start...
+        self._retry_turn = 0               # ...and this is its turn (a second try is never tried again)
+        self._turn_counts: tuple[int, int, int] | None = None  # (turn, English streak, short answers) before it
+        self.false_starts = 0              # replies started again after such a cut
 
         # loudness of the customer's own speech (phone): decides who may cut the agent off (see _voice_level)
         self._frame_levels: deque[tuple[float, int]] = deque(maxlen=2000)  # (time, RMS) of the last ~40 s
@@ -322,6 +339,7 @@ class CallSession:
         self._lang_auto = False
         self._english_streak = 0
         self.tts_cfg = cfg  # what the voice engine reads with (English calls: en-IN)
+        self.no_calls = False  # they said "don't call me": no call-back offers for the rest of the call
 
         # human touches
         self.mood: str | None = None          # irritated / busy / friendly / brief (from their words)
@@ -408,8 +426,8 @@ class CallSession:
     async def _prepare_clips(self) -> None:
         """Pre-synthesise short lines so they play with zero latency."""
         texts: dict[str, str] = {
-            "silence_prompt": self.cfg.get("silence_prompt_text", ""),
-            "silence_goodbye": self.cfg.get("silence_goodbye_text", ""),
+            "silence_prompt": self._cfg_line("silence_prompt_text"),
+            "silence_goodbye": self._cfg_line("silence_goodbye_text"),
             "closing": self._closing_text(),
             "error": ERROR_LINE,
             "hello_reply": HELLO_REPLY["hindi"],
@@ -443,7 +461,7 @@ class CallSession:
 
     async def _prepare_english_clips(self) -> None:
         """The English call's fixed lines, fillers and listening sounds, built when the call switches."""
-        texts = {f"en_{k}": v for k, v in ENGLISH_LINES.items()}
+        texts = {f"en_{k}": fill_template(v, self.cfg, self.lead) for k, v in ENGLISH_LINES.items()}
         if self.cfg.get("fillers_enabled", True):
             for i, w in enumerate(ENGLISH_FILLERS):
                 texts[f"en_filler_{i}"] = w + "..."
@@ -496,10 +514,10 @@ class CallSession:
         call's language."""
         if self.english:
             en_key = "inbound_closing" if key == "closing" and self.direction == "inbound" else key
-            return f"en_{en_key}", ENGLISH_LINES.get(en_key, "")
+            return f"en_{en_key}", fill_template(ENGLISH_LINES.get(en_key, ""), self.cfg, self.lead)
         texts = {
-            "silence_prompt": self.cfg.get("silence_prompt_text", ""),
-            "silence_goodbye": self.cfg.get("silence_goodbye_text", ""),
+            "silence_prompt": self._cfg_line("silence_prompt_text"),
+            "silence_goodbye": self._cfg_line("silence_goodbye_text"),
             "closing": self._closing_text(),
             "error": ERROR_LINE,
         }
@@ -582,7 +600,8 @@ class CallSession:
         if lang_note is False:
             return
         mood, _ = self._next_mood(text)
-        notes = [n for n in ((MOOD_NOTES.get(mood) if mood else None), lang_note) if n]
+        no_calls = NO_CALLS_NOTE if self.no_calls or asked_no_calls(text) else None
+        notes = [n for n in ((MOOD_NOTES.get(mood) if mood else None), no_calls, misheard_note(text), lang_note) if n]
         self._drop_prefetch("replaced")
         pf = _Prefetch(_turn_key(text), len(self.history), tuple(notes))
         messages = self._messages([*self.history, {"role": "user", "content": text}], notes)
@@ -858,6 +877,8 @@ class CallSession:
                 log.info("near-silent speech ignored on %s (level %d): %s", self.uuid, level, text)
                 await self._emit_transcript("user", f"(background voice, ignored) {text}", True)
                 return
+            if await self._false_start(text, now):
+                return  # not their answer: shown live, not saved as their words; the agent's reply starts again
             if self._filter_on():
                 self._voice_levels.append(level)
             self.last_user_activity = now
@@ -883,6 +904,46 @@ class CallSession:
             await self.t.send_event({"type": "error", "detail": data.get("message", "STT error")})
             if self.stt and self.stt.failed:
                 await self._speak_clip_and_end("error", "error")
+
+    async def _false_start(self, text: str, now: float) -> bool:
+        """True when `text` is the transcript of a sound that cut the agent off as it began to speak and is
+        only an acknowledgement ("ठीक है?", "हाँ", "Okay"). See FALSE_START_HEARD_SEC. A real interruption
+        ("रुकिए", "नहीं, मुझे...") is never one, and neither is an acknowledgement later in the sentence
+        (that one is the customer's answer, as before)."""
+        cut, self._cut = self._cut, None  # the transcript right after the cut, whatever it says
+        if (cut is None or cut["again"] or now - cut["at"] > FALSE_START_FINAL_SEC
+                or cut["heard"] > FALSE_START_HEARD_SEC or not is_backchannel(text)
+                or self.pending_user or self.agent_audible() or self.responding()):
+            return False
+        prev = self._cancelled_reply
+        if prev is not None and not prev.done():
+            await asyncio.wait({prev}, timeout=1.0)  # the cut reply notes what it answered and had said so far
+        reply = self._last_reply
+        if (reply is None or reply["turn"] != cut["turn"] or self.ending or self.pending_user
+                or self.agent_audible() or self.responding()):
+            return False
+        # Take the cut reply back out of the conversation the model sees (the customer heard a word or two of it)
+        # and answer the same words again, through the normal path: a whole reply, in the same voice.
+        said = {"role": "assistant", "content": reply["text"]}
+        asked = {"role": "user", "content": reply["user"]}
+        if len(self.history) < 2 or self.history[-1] != said or self.history[-2] != asked:
+            return False  # not what we expect to undo: leave everything as it is
+        del self.history[-2:]
+        self.turns = max(0, self.turns - 1)
+        counts = self._turn_counts
+        if counts is not None and counts[0] == cut["turn"]:
+            _, self._english_streak, self._short_answers = counts
+        self.false_starts += 1
+        log.info("false start on %s: %r came %.1f s into the agent's reply: not counted, the reply starts again",
+                 self.uuid, text, cut["heard"])
+        await self._emit_transcript("user", f"(short sound as the agent began speaking, not counted) {text}", True)
+        self.last_user_activity = now
+        self.silence_stage = 0
+        self.pending_user.insert(0, reply["user"])
+        self._pending_since = now
+        self._retry_next = True
+        self._start_response()
+        return True
 
     def _is_ignorable_backchannel(self, text: str, now: float) -> bool:
         """A short acknowledgement said while the agent is talking is not a turn of its own.
@@ -954,6 +1015,12 @@ class CallSession:
         self._turn_seq += 1
         turn = self._turn_seq
         self._active_turn = turn
+        if self._retry_next:  # the second try after a false start: if this one is cut too, their word stands
+            self._retry_next = False
+            self._retry_turn = turn
+        # answering a turn counts it (English turns in a row, short answers in a row): a false start puts these
+        # back, so the same words answered twice are counted once
+        self._turn_counts = (turn, self._english_streak, self._short_answers)
         self._agent_turn_text = ""
         self._agent_turn_started = False
         self._agent_turn_db_id = None
@@ -986,7 +1053,11 @@ class CallSession:
         # else for an English turn only (the Hindi greeting otherwise pulls the reply into Hinglish)
         language_note = self._update_language(user_text)
         mood_note = self._update_mood(user_text)
-        notes = [n for n in (mood_note, language_note) if n]
+        if not self.no_calls and asked_no_calls(user_text):
+            self.no_calls = True
+            log.info("session %s: customer asked not to be called", self.uuid)
+        no_calls_note = NO_CALLS_NOTE if self.no_calls else None
+        notes = [n for n in (mood_note, no_calls_note, misheard_note(user_text), language_note) if n]
         prefetch = self._claim_prefetch(user_text, history_len, notes)  # started when they stopped talking
         tts, connect_task = self._take_tts(on_audio)
         tts.on_sentence_end = on_sentence_end
@@ -1002,14 +1073,22 @@ class CallSession:
         try:
             messages = self._messages(self.history, notes)
             chunker = SentenceChunker()
+            flat = ListFlattener()  # a list the model wrote anyway is said (and kept) as one short sentence
             first = True
             raw = ""
-            async for tok in self._reply_tokens(messages, turn, prefetch):
+
+            async def reply_text() -> AsyncIterator[tuple[str, str]]:
+                async for token in self._reply_tokens(messages, turn, prefetch):
+                    yield token, flat.feed(token)
+                yield "", flat.flush()
+
+            async for tok, speech in reply_text():
                 raw += tok
-                for sentence in chunker.feed(tok):
+                for sentence in (chunker.feed(speech) if speech else ()):
                     sentence, ended = strip_end_token(sentence)
                     end_call |= ended
                     sentence = self._no_long_numbers(sentence)
+                    sentence = self._real_kit_price(sentence, user_text, spoken)
                     if first and self._filler_played:
                         sentence = self._strip_leading_filler(sentence)
                     first = False if sentence else first
@@ -1019,6 +1098,7 @@ class CallSession:
             tail, ended = strip_end_token(chunker.flush())
             end_call |= ended or strip_end_token(raw)[1]
             tail = self._no_long_numbers(tail)
+            tail = self._real_kit_price(tail, user_text, spoken)
             if tail:
                 if first and self._filler_played:
                     tail = self._strip_leading_filler(tail)
@@ -1066,6 +1146,7 @@ class CallSession:
             cut = turn != self._active_turn  # barge-in happened while generating
             if text and (not cut or self._turn_first_audio):
                 self._agent_turn_text = text
+                self._last_reply = {"turn": turn, "user": user_text, "text": text}
                 self.history.append({"role": "assistant", "content": text})
                 self.agent_words += len(text.split())
                 latency = int((self._turn_first_audio - self._turn_user_end) * 1000) if self._turn_first_audio else None
@@ -1205,6 +1286,13 @@ class CallSession:
             return sentence
         return re.sub(r"[ 	]{2,}", " ", LONG_DIGITS.sub("this same one" if self.english else "यही", sentence)).strip()
 
+    def _real_kit_price(self, sentence: str, user_text: str, spoken: list[str]) -> str:
+        """Safety net behind the knowledge base: a rupee amount said about the sample kit is always its real
+        shipping charge ("एक सौ उनसठ रुपये" -> "₹199", spoken "one ninety nine रुपये"), on the call and in the
+        transcript alike."""
+        context = f"{user_text} {spoken[-1] if spoken else ''}"
+        return fix_shipping_amount(sentence, kit_shipping_amount(self.cfg.get("knowledge_base")), context)
+
     def _strip_leading_filler(self, sentence: str) -> str:
         fillers = ENGLISH_FILLERS if self.english else self.cfg.get("filler_words") or []
         words = [w.strip().lower() for w in fillers]
@@ -1255,11 +1343,12 @@ class CallSession:
         if turn != self._active_turn or self.ending or not pcm:
             return
         now = time.monotonic()
+        start = max(now, self.play_until)
         if count_first and not self._turn_first_audio:
             self._turn_first_audio = now
+            self._turn_heard_from = start  # when the customer starts hearing this reply (after a filler, if any)
         if self.state != "speaking":
             await self._set_state("speaking")
-        start = max(now, self.play_until)
         dur = len(pcm) / 2 / self.t.out_rate
         self.play_until = start + dur
         self.agent_audio_ms += int(dur * 1000)
@@ -1334,6 +1423,14 @@ class CallSession:
             self.barge_ins += 1
         self._drop_prefetch("barge-in")
         was_audible = self.agent_audible()
+        if why in ("speech", "speech_overlap"):
+            # for false starts: how much of this reply the customer had heard when their sound began
+            now = time.monotonic()
+            first = self._turn_first_audio
+            began = self._stt_speech_start_at if self._stt_speech_start_at > first else now
+            self._cut = ({"at": now, "heard": max(0.0, began - self._turn_heard_from), "turn": self._active_turn,
+                          "again": self._active_turn == self._retry_turn}
+                         if was_audible and first and not self.greeting_playing else None)
         unplayed_ms = max(0, int((self.play_until - time.monotonic()) * 1000))
         self._active_turn = -2  # invalidates audio of the current turn
         task = self._respond_task
@@ -1360,6 +1457,11 @@ class CallSession:
         chose to call, so a real enquiry may run longer; the line promises an expert call-back)."""
         key = "inbound_closing_line" if self.direction == "inbound" else "closing_line"
         return fill_template(self.cfg.get(key) or self.cfg.get("closing_line", ""), self.cfg, self.lead)
+
+    def _cfg_line(self, key: str) -> str:
+        """A fixed line from Settings with its {company_name} / {lead_name_ji} placeholders filled in (spoken
+        as written otherwise)."""
+        return fill_template(self.cfg.get(key) or "", self.cfg, self.lead).strip()
 
     async def _watchdog(self) -> None:
         if self.direction == "inbound":
@@ -1511,6 +1613,7 @@ class CallSession:
         metrics.update({
             "settings_rev": self.settings_rev, "barge_ins": self.barge_ins, "replies_held": self.replies_held,
             "quick_replies": self.quick_replies, "background_ignored": self.background_ignored,
+            "false_starts": self.false_starts,
             "early_replies": self.prefetch_used, "language": self.language_pref or "default",
             "mood": self.mood or "neutral",
         })

@@ -107,6 +107,130 @@ class SentenceChunker:
         return s
 
 
+# =====================================================================
+# A list the model wrote anyway -> one sentence a person would say
+# =====================================================================
+_LIST_ITEM = re.compile(r"[ \t]*(?:[-*•–—]|\d{1,2}[.)])[ \t]+(?=\S)")     # "- x", "* x", "• x", "1. x", "2) x"
+_MAYBE_ITEM = re.compile(r"[ \t]*(?:[-*•–—]|\d{1,2}[.)]?)?[ \t]*")         # could still become one of those
+_DEVANAGARI = re.compile(r"[ऀ-ॿ]")
+_SENTENCE_END = "।.!?"
+_ITEM_TAIL = " \t.;,।:"  # what a list line may end with: dropped (the commas between items replace it)
+_BARE_MARKERS = ("-", "*", "•", "–", "—")
+
+
+class ListFlattener:
+    """Turns a bullet or numbered list in the reply into one flowing sentence, as the reply streams.
+
+    The prompt forbids lists, but with lists in the business knowledge the model still writes one now and
+    then ("which pouch types do you have?"). The voice then reads it line by line with a pause after every
+    line: measured on a live call, a five-line list took 15 s. Here the markers and line breaks go, the items
+    are joined with commas, and at most `max_items` are said, followed by "वगैरह" ("and more" in an English
+    reply) - the two or three examples a person would give on the phone.
+
+    Text without line breaks comes out exactly as it went in. The result is what is spoken AND what is kept
+    as the agent's words (transcript, history), so the two never differ.
+    """
+
+    def __init__(self, max_items: int = 3):
+        self.max_items = max_items
+        self._line = ""      # the start of the current line, held back until we know if it is a list item
+        self._kind = ""      # "" not known yet | "text" | "item" | "drop"
+        self._held = ""      # punctuation / spaces at the end of an item so far (dropped if the line ends there)
+        self._in_list = False
+        self._items = 0
+        self._dropped = 0
+        self._tail = ""      # the last character given out
+        self._hindi = False  # the reply has Devanagari in it: "वगैरह।" rather than "and more."
+
+    def feed(self, piece: str) -> str:
+        out: list[str] = []
+        for ch in piece:
+            if ch == "\r":
+                continue
+            if ch == "\n":
+                self._end_line(out)
+            else:
+                self._char(ch, out)
+        return "".join(out)
+
+    def flush(self) -> str:
+        """Whatever is still held when the reply ends (and the closing of an unfinished list)."""
+        out: list[str] = []
+        self._end_line(out)
+        if self._in_list:
+            self._close_list(out, last=True)
+        return "".join(out)
+
+    def _put(self, out: list[str], text: str) -> None:
+        if text:
+            out.append(text)
+            self._tail = text[-1]
+            if not self._hindi and _DEVANAGARI.search(text):
+                self._hindi = True
+
+    def _char(self, ch: str, out: list[str]) -> None:
+        if self._kind == "text":
+            self._put(out, ch)
+        elif self._kind == "item":
+            self._item_char(ch, out)
+        elif self._kind == "":
+            self._line += ch
+            m = _LIST_ITEM.match(self._line)
+            if m:
+                self._begin_item(out)
+                if self._kind == "item":
+                    for c in self._line[m.end():]:
+                        self._item_char(c, out)
+            elif not _MAYBE_ITEM.fullmatch(self._line):
+                self._begin_text(out)
+                self._put(out, self._line)
+        # "drop": an item beyond max_items is not said
+
+    def _item_char(self, ch: str, out: list[str]) -> None:
+        if ch in _ITEM_TAIL:
+            self._held += ch
+        else:
+            self._put(out, self._held + ch)
+            self._held = ""
+
+    def _begin_item(self, out: list[str]) -> None:
+        self._in_list = True
+        self._items += 1
+        if self._items > self.max_items:
+            self._dropped += 1
+            self._kind = "drop"
+            return
+        self._kind = "item"
+        if self._items > 1:
+            self._put(out, ", ")
+        elif self._tail and not self._tail.isspace():
+            self._put(out, " ")
+
+    def _begin_text(self, out: list[str]) -> None:
+        if self._in_list:
+            self._close_list(out)
+        elif self._tail and not self._tail.isspace():
+            self._put(out, " ")  # a plain line break is just a space when spoken
+        self._kind = "text"
+
+    def _close_list(self, out: list[str], last: bool = False) -> None:
+        if self._dropped:
+            self._put(out, " वगैरह" if self._hindi else " and more")
+        if self._tail not in _SENTENCE_END:
+            self._put(out, "।" if self._hindi else ".")
+        if not last:
+            self._put(out, " ")
+        self._in_list, self._items, self._dropped = False, 0, 0
+
+    def _end_line(self, out: list[str]) -> None:
+        if self._kind == "":
+            held = self._line.strip()
+            if held and held not in _BARE_MARKERS:  # a short line that never became an item ("12", "1.")
+                self._begin_text(out)
+                self._put(out, held)
+        self._line, self._kind, self._held = "", "", ""
+
+
 async def warmup() -> None:
     """Open the HTTPS connection to OpenAI ahead of the first reply (free metadata call)."""
     if not settings.openai_ready:

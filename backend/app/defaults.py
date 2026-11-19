@@ -4,7 +4,7 @@ Facts about PouchWale come from the PouchWale team (MOQ, per-piece pricing, samp
 which product) and the brand kit. Anything not written in the knowledge base (exact rates, delivery dates,
 unusual sizes or finishes) is never quoted: the agent says the team will cover it.
 """
-from .defaults_legacy import V4_TEXTS
+from .defaults_legacy import V4_TEXTS, V6_TEXTS
 
 # How the call-review agent judges a call (Settings -> Review agent, editable). The review code adds the
 # evidence (numbered transcript turns T#, timing facts F# from the recording) and the answer format.
@@ -125,7 +125,9 @@ DEFAULT_AGENT_SETTINGS: dict = {
         "Size / dimensions: the customer gives us the pouch size they need, and our team also helps them choose "
         "the right size.\n"
         "Free sample kit: the kit is free, the customer pays only ₹199 shipping (\"Sample kit free है, बस one "
-        "ninety nine rupees shipping charges लगते हैं\"). Suggest it to customers who are undecided or comparing.\n"
+        "ninety nine rupees shipping charges लगते हैं\"). The shipping charge is exactly one hundred and ninety-nine "
+        "rupees: always say it as \"one ninety nine rupees\", in Hindi calls too. Our team sends the sample kit "
+        "details on WhatsApp after the call. Suggest it to customers who are undecided or comparing.\n"
         "Certifications: GMP, ISO 9001, ISO 14001, ISO 45001, EcoVadis Silver 2024.\n"
         "\n"
         "Which pouch for which product (suggest these; for a product not listed, the team advises):\n"
@@ -172,7 +174,8 @@ DEFAULT_AGENT_SETTINGS: dict = {
         "- Undecided / wants to see the quality first: suggest the free sample kit (only ₹199 shipping).\n"
         "- Need it urgently / lead time: we have fast turnaround; ask the date they need it by; the exact delivery "
         "date the team confirms.\n"
-        "- Send details / catalogue: agree, confirm WhatsApp on this number, ask one qualifying question first.\n"
+        "- Send details / catalogue: agree that our team will send them on WhatsApp, confirm WhatsApp on this "
+        "number, ask one qualifying question first.\n"
         "- Call later / busy: ask a convenient time, confirm it, end politely.\n"
         "If they push back twice on the same thing, or ask for a final price, a discount or firm dates, hand off: "
         "offer a call back from our team."
@@ -185,15 +188,16 @@ DEFAULT_AGENT_SETTINGS: dict = {
         "cold: picked up and cut the call, did not engage, not interested, no need, wrong person/number, or "
         "asked not to be called."
     ),
-    # Said when the call hits its maximum length: wraps up warmly, promises nothing.
-    "closing_line": "अच्छा जी, मैं आपका ज़्यादा time नहीं लूँगी। आपसे बात करके अच्छा लगा, thank you! आपका दिन अच्छा रहे।",
+    # Said when the call hits its maximum length: wraps up warmly, promises nothing, names the brand last.
+    "closing_line": ("अच्छा जी, मैं आपका ज़्यादा time नहीं लूँगी, आपसे बात करके अच्छा लगा! Packaging की कोई भी ज़रूरत "
+                     "हो, तो {company_name} को ज़रूर याद कीजिए।"),
 
     # ---------------- silence handling ----------------
     "silence_timeout_sec": 10,
     # Calm on purpose: "हेलो...?" with drawn-out dots came out as a loud, stretched "हेलोooo?" on a live call.
     "silence_prompt_text": "हेलो, मेरी आवाज़ आ रही है आपको?",
     "silence_final_wait_sec": 3,
-    "silence_goodbye_text": "लगता है line पर आवाज़ नहीं आ रही है। कोई बात नहीं, आपका दिन अच्छा रहे। Thank you!",
+    "silence_goodbye_text": "लगता है line पर आवाज़ नहीं आ रही है। कोई बात नहीं, {company_name} की तरफ़ से thank you, आपका दिन अच्छा रहे!",
 
     # ---------------- conversation feel ----------------
     # Played only when a reply is slow. Neutral on purpose: they play before the reply is known, so
@@ -248,7 +252,8 @@ DEFAULT_AGENT_SETTINGS: dict = {
     ),
     # Said when an inbound call reaches inbound_max_call_sec.
     "inbound_closing_line": (
-        "अच्छा जी, मैं आपकी details हमारे expert को दे देती हूँ, वो आपको जल्दी call करेंगे। Call करने के लिए thank you!"
+        "अच्छा जी, मैं आपकी details हमारे expert को दे देती हूँ, वो आपको जल्दी call करेंगे। {company_name} को call करने "
+        "के लिए thank you!"
     ),
     "inbound_max_call_sec": 600,  # callers with a real enquiry talk longer than cold calls
     # Our call back to someone whose inbound call we missed (an OUTBOUND call, but they called us first).
@@ -280,9 +285,6 @@ DEFAULT_AGENT_SETTINGS: dict = {
     "review_model": "gpt-4o-mini",   # OpenAI model for reviews (live calls keep OPENAI_MODEL)
     "review_include_inbound": True,  # inbound calls are reviewed too (outbound always)
     "review_rubric": REVIEW_RUBRIC,  # how calls are judged (editable)
-
-    # ---------------- settings history ----------------
-    "history_days": 30,  # saved changes stay listed (with Undo) this many days
 }
 
 # Allowed values of the choice settings (validated on save, used by the prompt).
@@ -309,7 +311,9 @@ SETTING_LABELS: dict[str, str] = {
     "language_mix": "Language mix", "learned_rules": "Learned rules", "review_enabled": "Review agent",
     "review_every_calls": "Review every N calls", "review_min_evidence": "Proof needed (calls)",
     "review_model": "Review model", "review_include_inbound": "Review inbound calls",
-    "review_rubric": "How calls are judged", "history_days": "Keep history (days)",
+    "review_rubric": "How calls are judged",
+    # no longer a setting (the history is kept forever); the name stays for old history entries that list it
+    "history_days": "Keep history (days)",
 }
 
 SPEAKING_TONES = ("warm", "professional", "energetic", "calm")
@@ -318,14 +322,20 @@ INBOUND_OFF_ACTIONS = ("message", "reject")
 
 # Earlier shipped defaults. A saved value still equal to one of these was never customised, so the
 # one-time upgrade (services/agent_config.py) replaces it with the current default.
-SETTINGS_VERSION = 6
+SETTINGS_VERSION = 8
 LEGACY_DEFAULTS: dict[str, list] = {
-    # version 4 texts, before the PouchWale team's facts (MOQ, per-piece pricing, sample kit, product -> pouch)
-    **{k: [v] for k, v in V4_TEXTS.items()},
+    # version 4 texts, before the PouchWale team's facts (MOQ, per-piece pricing, sample kit, product -> pouch);
+    # version 6-7 texts, before "our team sends the details" and the exact ₹199 wording
+    **{k: [v] + ([V6_TEXTS[k]] if k in V6_TEXTS else []) for k, v in V4_TEXTS.items()},
     "opening_line": ["नमस्ते {lead_name_ji}! मैं {company_name} से बोल रही हूँ। क्या अभी दो minute बात कर सकते हैं?"],
-    "closing_line": ["आपका time देने के लिए बहुत-बहुत धन्यवाद! Have a great day."],
+    # version 6 goodbyes (no company name: the team wants every goodbye to name the brand)
+    "closing_line": ["आपका time देने के लिए बहुत-बहुत धन्यवाद! Have a great day.",
+                     "अच्छा जी, मैं आपका ज़्यादा time नहीं लूँगी। आपसे बात करके अच्छा लगा, thank you! आपका दिन अच्छा रहे।"],
+    "inbound_closing_line": ["अच्छा जी, मैं आपकी details हमारे expert को दे देती हूँ, वो आपको जल्दी call करेंगे। "
+                             "Call करने के लिए thank you!"],
     "silence_prompt_text": ["Hello? क्या आप call पर हैं? मेरी आवाज़ आ रही है?", "हेलो...? मेरी आवाज़ आ रही है आपको?"],
-    "silence_goodbye_text": ["आप respond नहीं कर रहे हैं, इसलिए हम अभी call end कर रहे हैं। Thank you!"],
+    "silence_goodbye_text": ["आप respond नहीं कर रहे हैं, इसलिए हम अभी call end कर रहे हैं। Thank you!",
+                             "लगता है line पर आवाज़ नहीं आ रही है। कोई बात नहीं, आपका दिन अच्छा रहे। Thank you!"],
     "filler_words": [["हम्म", "अच्छा", "जी", "ओके", "हाँ जी", "ओह, got it"]],
     "filler_delay_ms": [650],
 }

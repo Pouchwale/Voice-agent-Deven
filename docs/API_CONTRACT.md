@@ -191,6 +191,8 @@ interface Voice { id: string; name: string; gender: "female" | "male"; }
 - Requests whose browser `Origin` is not one of the configured dashboard origins get **403** (CSRF protection).
 - Phone-provider webhooks (`/plivo/*`, `/vobiz/*`) use their own tokens (per call, or the static inbound secret) and
   are unaffected. The public ngrok tunnel only exposes `/plivo/*` and `/vobiz/*`.
+- `GET /plivo/ping` and `GET /vobiz/ping` → `ok` (text, no token, no data): the pre-dial check requests it through the
+  public link to prove the tunnel reaches this backend.
 
 ## REST endpoints
 
@@ -285,6 +287,12 @@ interface LeadTimeline {
 - `POST /api/calls` body `{ lead_id: number }` → `CallListItem` (starts a real phone call via the active provider, Plivo or Vobiz).
   400 with `detail` if the phone provider / AI is not configured, or **"Outbound calling is turned off in Settings."** when
   `outbound_enabled` is false; 404 unknown lead; 409 Do-Not-Call lead or a lead already on a live call (either direction).
+  Also 400 **"Cannot place call: …"** when the pre-dial check (`services/preflight.py`) proves the customer would pick up
+  a dead line: the voice provider answers 402 (no credit; asked only after a failure was seen) and/or the ngrok tunnel
+  service answers `ERR_NGROK_3200` (tunnel offline). Nothing is stored and the lead is untouched; the dialer pauses a
+  campaign on it (no attempt used). An unclear answer from either check never refuses a call.
+  A phone call that ended with `end_reason "error"` while the voice provider had no credit gets
+  `error: "The voice service (Sarvam) had no credits left, …"` on its `CallDetail`.
   *Callback mode*: when the lead's latest inbound call in the last 7 days was missed and nobody has spoken with them
   since, the agent opens with `callback_greeting` and follows `inbound_purpose` (direction stays "outbound"). Same for
   campaign dials.
@@ -417,24 +425,68 @@ interface InboundSetup {
 - Review / history settings (part of `AgentSettings`, validated like the rest): `learned_rules` (text, max 4000
   characters, added to every call's instructions), `review_enabled` (bool), `review_every_calls` (3..50),
   `review_min_evidence` (1..5), `review_model` (OpenAI model name, `^[a-z0-9][a-z0-9.-]{1,62}$`),
-  `review_include_inbound` (bool), `review_rubric` (text), `history_days` (1..365). Template texts (`opening_line`,
+  `review_include_inbound` (bool), `review_rubric` (text). Template texts (`opening_line`,
   greetings, closing lines, silence lines, purposes) are rejected with 422 when they contain an unknown `{placeholder}`.
+  (`history_days` no longer exists: the history is kept forever. A client that still sends it is ignored.)
+- `GET /api/settings/labels` → `Record<string, string>`: what each setting is called on the Settings page.
 
-### Settings change history (every save, reset, approved review suggestion and undo)
+### Who made a change: the `X-Actor` header
+The dashboard sends `X-Actor: <percent-encoded name>` (`encodeURIComponent`; names may be in Hindi) with exactly three
+requests: `PUT /api/settings`, `POST /api/settings/reset` and `POST /api/settings/history/{id}/undo`. Their confirm
+popup on the Settings page asks for the name and the word CONFIRM first. No other dashboard request carries a name and
+no other page asks for one (`request()` in `lib/api.ts`: the `signed` option).
+The backend decodes the header, drops control characters, collapses spaces and keeps at most 60 characters, and stores
+it with the settings history entry and the activity-log entry of that change. A change that arrives without the header
+is logged with an empty name. It is a label, not authentication.
+
+### Settings change history (every save, reset, approved review suggestion and undo; kept forever)
 ```ts
 type SettingsChangeEntry = {
   id: number; created_at: string; source: "settings" | "review" | "undo" | "reset"; label: string;
+  actor: string;              // the name sent with the change ("" when none)
   ref_id: number | null;      // undo: the entry it undid · review: the suggestion it applied
   undone_by: number | null;   // set once undone (-1: nothing was left to put back)
   changes: { key: string; label: string; old: unknown; new: unknown }[];  // label = the Settings page label
 };
 ```
-- `GET /api/settings/history?limit=300` (1..1000) → `{ days: number; items: SettingsChangeEntry[] }` (newest first; entries older
-  than `history_days` are hidden and removed daily). A save that changes nothing creates no entry.
+- `GET /api/settings/history?limit=50&before_id=` (limit 1..200) → `{ items: SettingsChangeEntry[]; has_more: boolean;
+  total: number }` (newest first; nothing is ever removed). `before_id` = the last id of the previous page loads the
+  older entries. A save that changes nothing creates no entry.
 - `POST /api/settings/history/{id}/undo?force=false` → `{ settings: AgentSettings; change: SettingsChangeEntry }`. Puts back
   the old values of exactly the settings that entry changed (the undo is itself an entry, so it can be undone too).
-  404 unknown/expired entry · 409 `"This change was already undone."` · 409 when one of those settings changed again
+  404 unknown entry · 409 `"This change was already undone."` · 409 when one of those settings changed again
   since, with `detail = { message, conflicts: { key, label, now, after_change, restore }[] }`: repeat with `force=true`.
+
+### Activity log (every change made through the dashboard; read-only, append-only)
+```ts
+type ActivityEntry = {
+  id: number; created_at: string;
+  actor: string;                     // the name sent with the change: Settings saves / resets / undos; "" otherwise
+  area: "settings" | "leads" | "campaigns" | "calls" | "inbound" | "review" | "other";
+  action: string;                    // lead.create | lead.update | lead.delete | lead.bulk_delete | lead.import |
+                                     // campaign.create | campaign.start | campaign.pause | campaign.delete |
+                                     // call.start | call.hangup | call.reanalyze | call.delete |
+                                     // inbound.connect | inbound.disconnect | review.start | suggestion.reject |
+                                     // suggestion.approve | settings.save | settings.reset | settings.undo |
+                                     // settings.review | other
+  summary: string;                   // e.g. "Edited lead Asha Patel (+9196...): Company, Notes"
+  target_type: string | null; target_id: string | null;
+  details: {
+    changes?: { key: string; label: string; old: unknown; new: unknown }[];  // edits, and every settings change
+    data?: Record<string, unknown>;  // what was added or deleted (a deleted lead's fields stay readable here)
+    items?: string[]; more?: number; // bulk delete: the names, and how many more there were
+    change_id?: number;              // settings entries: the id in the settings history
+  };
+};
+```
+- `GET /api/activity?limit=50&before_id=&area=&q=` (limit 1..200) → `{ items: ActivityEntry[]; has_more: boolean;
+  total: number }`, newest first. `area` narrows to one area (422 for an unknown one), `q` searches the summary and the
+  name, `before_id` loads the entries older than that one. `total` counts the entries matching `area` / `q`.
+- `GET /api/activity/export.csv` → the whole log, oldest first (`id, time_ist, person, area, action, what, details`).
+- Entries are written by the backend when a POST / PUT / PATCH / DELETE under `/api/` succeeds (2xx) and changed
+  something. Failed requests, requests that change nothing, `/api/auth/*`, `/api/settings/preview-voice`,
+  `/api/settings/test-providers` and `/api/campaigns/csv/preview` leave no entry. There is no endpoint that edits or
+  deletes an entry.
 
 ### Call review (the review agent)
 Reviews finished phone calls in which the customer spoke (outbound, plus inbound when `review_include_inbound`),

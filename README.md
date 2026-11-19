@@ -18,10 +18,10 @@ Lead list ──► Campaign dialer ──► Plivo (or Vobiz) ──► custome
 | Part | Tech |
 |---|---|
 | Backend | Python 3.13, FastAPI, SQLAlchemy 2 + SQLite (WAL), Prisma-compatible schema |
-| Frontend | Next.js 15 (React 19), Tailwind, anime.js, three.js, SWR. Fonts Inter + Hanken Grotesk, blue/white theme from the PouchWale logo |
+| Frontend | Next.js 15 (React 19), Tailwind, anime.js, three.js, SWR. Fonts Inter + Hanken Grotesk, blue/white theme from the PouchWale logo; optional **PouchWale design** (switch in the top bar, Mada + Mulish) |
 | Telephony | Plivo (active) or Vobiz, switched with `TELEPHONY_PROVIDER`: outbound and inbound calls, bidirectional media stream, call recording |
 | Speech-to-text | Sarvam **Saaras v3** realtime streaming (`saaras:v3-realtime`, `codemix` = Hindi in Devanagari + English words in English) |
-| Text-to-speech | Sarvam **Bulbul v3** streaming, female voice **`suhani`** (warm, temperature 0.7) |
+| Text-to-speech | Sarvam **Bulbul** streaming. The voice chosen in **Settings → Voice** decides the model: the "(v4)" voices (e.g. Sarika · conversational) use **Bulbul v4** (`bulbul:v4-flash`), the older voices use **Bulbul v3** (`SARVAM_TTS_MODEL`, default voice `suhani`) |
 | Brain | OpenAI **gpt-4o-mini**, max 120 tokens, temperature 0.6 |
 
 ---
@@ -29,6 +29,8 @@ Lead list ──► Campaign dialer ──► Plivo (or Vobiz) ──► custome
 ## 1. Run it locally
 
 Ports **8100** (backend) and **3100** (frontend) are used so this runs next to your other projects.
+
+Easiest: double-click **`start-all.bat`**. It starts the backend, the tunnel and the dashboard, each in its own window, and only the parts that are not running yet (so after a computer restart, or when one window was closed, just run it again). Or one by one:
 
 ```powershell
 .\start-backend.ps1     # creates the venv on first run, then http://localhost:8100
@@ -75,6 +77,12 @@ The phone provider is chosen by `TELEPHONY_PROVIDER` in `backend/.env` (`plivo` 
 
 Every call is recorded twice: a local stereo WAV (left = customer, right = agent, `backend/data/recordings/`) and the provider's own recording as a backup.
 
+**A call that would go dead is not dialed.** Two problems make a call ring and then drop at once: the voice service (Sarvam) has no credit left, or the ngrok tunnel is not running (the phone company then can't reach the agent). Just before dialing, the backend checks for both. When one is proven, the customer's phone never rings and **Call now** says why: *"Cannot place call: Sarvam (the voice service) has no credits left. Add credits in the Sarvam dashboard, then call again."* or *"Cannot place call: The ngrok tunnel is not running. Run start-all.bat, then call again."* Nothing is saved and the lead is not touched. A running campaign pauses instead of using up its list; resume it once the problem is fixed.
+- The credit check runs only after something failed (a call that ended with an error, a greeting the voice service refused), so a normal call is not slowed down. It costs two characters of Sarvam credit, and the first good answer switches it off again.
+- The tunnel check asks the public link (`/plivo/ping`) at most once a minute.
+- A check that gets no clear answer never holds a call back.
+- A call that ended with an error while Sarvam had no credit says so on its call page.
+
 ### Inbound calls (customers calling your number)
 1. Open **Inbound** → **Connect inbound on Plivo** (or Vobiz). This creates (or updates) the provider application `GP3-Voice-Agent-Inbound` with this backend's answer + hangup URLs and attaches your number to it. If the number currently goes somewhere else (an IVR app or a SIP trunk) you are shown where, and asked before it is moved; **Disconnect** puts the previous routing back.
 2. Call your number from a mobile to test. The card shows the last inbound call received.
@@ -108,13 +116,15 @@ Two lines are always kept free for inbound callers while campaigns run. Both **I
 
 | Moment | What the agent does |
 |---|---|
-| Customer picks up | Waits ~1 s in case they say "Hello?", then the **permission-first** greeting (synthesised while ringing): "नमस्ते राहुल जी! मैं PouchWale से बोल रही हूँ। बस दो minute लूँगी, अभी बात कर सकते हैं?" ("PouchWale" is spoken as पाउचवाले, see Settings → Pronunciation fixes) |
+| Customer picks up | Waits ~1 s in case they say "Hello?", then the **permission-first** greeting (synthesised while ringing): "नमस्ते राहुल जी! मैं PouchWale से बोल रही हूँ। बस दो minute लूँगी, अभी बात कर सकते हैं?" (the company name is always spoken "पाउच वाले", however it is written: "PouchWale", "Pouch Wale", "pouchwale", "पाउच वाले"… in Hindi and English calls alike. This is built into `speakable()` in `services/sarvam.py`, not a Settings rule; other words are fixed in Settings → Pronunciation fixes) |
 | "Haan, boliye" | One-line reason for the call, then the qualification questions, one at a time |
 | Busy / call later | Asks a convenient time, confirms it, ends politely (callback time saved) |
 | Customer talks | Live transcription; **350 ms** of silence = "done talking" |
 | Customer pauses mid-sentence | "हमें pouch चाहिए, और…": the agent waits a moment instead of jumping in |
 | Slow reply | Natural Hindi filler so the line never goes dead: "हम्म, एक second…" after a question, "जी, समझ गई…" after a statement. Never the same one twice in a row, not before every reply |
 | Customer interrupts | Stops instantly (barge-in). "haan" / "ji" / "ok" do **not** interrupt |
+| Both start talking at once (false start) | A short sound from the customer in the first 1.5 s of the agent's reply can cut the agent off, and speech recognition then labels the fragment "ठीक है?" / "हाँ" / "Okay". That is not counted as the customer's words: the agent answers what they really said again, once (the call's `false_starts` metric counts it). Real words ("रुकिए…") and an acknowledgement later in the sentence are handled as before |
+| Asked "which types / products do you have?" | Names two or three in one sentence, never a list. If the AI writes a bullet or numbered list anyway, it is spoken (and saved in the transcript) as one sentence with at most three items plus "वगैरह": a five-line list took 16 s on a live call, now about 9 s |
 | **10 s silence** | "हेलो…? मेरी आवाज़ आ रही है आपको?" |
 | **3 s more silence** | "लगता है line पर आवाज़ नहीं आ रही है। कोई बात नहीं, आपका दिन अच्छा रहे। Thank you!" → hangs up |
 | Done / not interested / wrong number | Short goodbye → hangs up |
@@ -158,7 +168,20 @@ Every call shows its real average response time on the call summary, and **Analy
 | **Customer timeline** (lead page, call page, inbound drawer) | Every call in both directions grouped by day with IST time, outcome, talk time, summary and next step, plus "added to campaign" and "lead created"; the next promised step on top |
 | **Live** | Ongoing calls (marked Inbound / Outbound, returning or new caller) with live transcript, levels, listen-in, hang-up |
 | **Call review** | The **review agent** (a second AI): every few calls it reviews the finished calls and shows where and why customers were lost, with quotes and timings from the calls as proof, plus suggested script changes to **Approve**, **Edit & approve** or **Reject**. Also: every review with each call's verdict, decided suggestions, and how it evaluates. The sidebar badge counts suggestions waiting for you |
-| **Settings** | Voice, **tone & accent** (warm / professional / energetic / calm, Hinglish / mostly Hindi / mostly English), script, knowledge base, questions, objection handling, **learned rules**, interest rules, silence timings, fillers, pronunciation fixes, **calling switches + inbound greetings**, calling window, **review agent**, and **change history** (every change for 30 days, each with **Undo**) |
+| **Activity log** | Every change anyone makes in the dashboard, newest first: **when** and **what**, with the old and new values; changes to Settings also show **who** made them. Search by person or change, filter by area (Settings, Leads, Campaigns, Calls, Inbound, Call review), **Download CSV**. Entries are kept forever and can't be edited or deleted |
+| **Settings** | Voice, **tone & accent** (warm / professional / energetic / calm, Hinglish / mostly Hindi / mostly English), script, knowledge base, questions, objection handling, **learned rules**, interest rules, silence timings, fillers, pronunciation fixes, **calling switches + inbound greetings**, calling window, **review agent**, and **change history** (every change kept forever, with who made it, each with **Undo**). Saving, resetting and undoing ask for your name and the word **CONFIRM** first |
+
+### Confirm popup and activity log
+- **Type CONFIRM:** on the Settings page, **Save** (both buttons and Ctrl/Cmd + S), **Reset to defaults** and **Undo** open a popup that lists what is about to change. The button stays off until the person has given their name and typed `CONFIRM` (capitals not required). Cancel or Esc sends nothing.
+- **The name, in Settings only:** changing a setting directly changes how the voice agent behaves on calls, so only those changes are made under a name. The dashboard has no user accounts: the popup asks for the name, remembers it on that computer (browser storage) to pre-fill the popup next time, and it can be corrected there every time. **No other page asks for a name or for CONFIRM**, and no other request carries one. It is a label, not a login: nothing checks that the name is true.
+- **What is logged:** every successful change made through the dashboard: settings (save, reset, undo, approved review suggestion), leads (add, edit, board move, delete, bulk delete, CSV import), campaigns (create, start, pause, delete), calls (start, hang up, re-analyse, delete), inbound connect / disconnect, review runs and rejected suggestions. Settings saves, resets and undos carry the person's name; everything else is logged with what changed and when, without a name. Requests that fail or change nothing leave no entry. A deleted lead's or call's details stay readable in the log.
+- **What is not:** what the system does by itself (dialing, call results, automatic reviews: the Calls and Call review pages are their record), previews and tests that change nothing, and sign-in.
+- **Where:** table `activity_log` (append-only); settings changes also keep their full old → new values in `settings_changes`. Code: `backend/app/services/audit.py` (one middleware records every change, so the calling and campaign code is untouched; a route nobody described still gets a plain entry) and `routers/activity.py`; dashboard: `lib/actor.ts`, `components/ui/TypeConfirmDialog.tsx`, `components/activity/`.
+
+### Two designs: Original and PouchWale
+The switch in the top bar (**Original | PouchWale**; on phones and tablets a round switch with the PouchWale colour dot) changes only how the dashboard looks: same pages, data and buttons. The choice is remembered per browser (not a server setting) and applied before the page is drawn, so a reload never flashes the other design; other open tabs follow. Switching plays a **melt** (about 1.5 s): the design on screen melts away from the top like a thick layer, with molten drips and a soft shadow under its edge, throwing off sparks, ash and paper flakes and falling molten drops, and uncovers the other design underneath; it is skipped when the computer asks for reduced motion.
+- **Original:** `frontend/src/app/globals.css`, unchanged.
+- **PouchWale:** `frontend/src/app/pouchwale.css`, every rule scoped to `<html data-design="pouchwale">`. Calm for long sessions: charcoal-black sidebar, soft blue page, white cards with navy frames and soft grey shadows, deep PouchWale pink for the main action, Mada headings and Mulish text; every text colour passes WCAG AA. The animated blue logo stays as it is, and the theme's blue is that logo blue. Logic: `lib/design.ts` (applies the saved choice before the first paint) and `lib/design-switch.ts` (switch + melt); the switch is `components/shell/DesignToggle.tsx`. Chart colours in `lib/theme.ts` are CSS variables with the original colour as fallback.
 
 ### The review agent (Call review page; settings under Settings → Review agent)
 1. **Which calls:** phone calls in which the customer spoke (outbound, plus inbound if switched on). Unanswered calls, voicemail and browser tests never count. Automatic reviews start every *N* new calls (default 5) and only look at calls made after the review agent was installed; **Run review now** takes the latest 5, 10 or 15 calls.
@@ -189,18 +212,20 @@ Business metrics count real phone calls only; browser test calls are kept out (t
 ```
 backend/app/
   main.py                    FastAPI app, startup (DB + migration, dialer, watchdog)
-  services/session.py        real-time conversation engine (STT → LLM → TTS, barge-in, fillers, silence, spare TTS socket)
+  services/session.py        real-time conversation engine (STT → LLM → TTS, barge-in, false starts, fillers, silence, spare TTS socket)
   services/sarvam.py         Saaras v3 realtime STT + Bulbul v3 streaming/REST TTS
   services/llm.py            GPT-4o-mini streaming, early first-clause chunking, prompt cache
   services/prompts.py        agent prompt (static part first for caching) + scoring prompt
   services/telephony.py      active phone provider (TELEPHONY_PROVIDER)   routers/telephony.py  webhooks + media stream (/plivo, /vobiz)
   services/plivo.py          Plivo REST                 services/vobiz.py  Vobiz REST + shared answer XML
   services/call_manager.py   call lifecycle             services/dialer.py  campaign auto-dialer
+  services/preflight.py      checks before dialing: voice credit (after a failure), ngrok tunnel up (/plivo/ping)
   services/analysis.py       post-call scoring (cold/warm/hot, rating, objections)
   services/review/           review agent: evidence.py (recording + transcript facts, no AI), prompts.py (rubric use,
                              JSON formats), agent.py (runs, proof checks, suggestions, approval)   routers/review.py
   services/settings_rules.py settings validation (Settings page, review approvals)
-  services/agent_config.py   settings + change history + undo
+  services/agent_config.py   settings + change history (kept forever) + undo
+  services/audit.py          activity log: who changed what, for every change made in the dashboard   routers/activity.py
   services/reporting.py      date ranges + analytics    services/pdf_report.py  PDF report
   routers/leads.py           leads, CSV import, Kanban board
   routers/analytics.py       analytics + PDF/CSV report downloads

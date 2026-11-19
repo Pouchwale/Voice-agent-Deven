@@ -97,6 +97,25 @@ def _tts_lang(cfg: dict) -> str:
 _RULE_SPLIT = re.compile(r"\s*(?:=|->|→)\s*")
 _MARKUP = re.compile(r"[*#`~|<>\[\]{}_]+")  # never meant to be read aloud
 
+# The company name is always said "पाउच वाले", however it was written: "PouchWale", "Pouch Wale", "pouchwale",
+# "Pouch-Wale", "पौचवाले"... Built in (not a Settings rule), so it can't be deleted or mistyped, and applied after
+# the team's own pronunciation fixes (so a rule for the email address, or the team's own Devanagari spelling,
+# still wins). Measured on 2026-11-19 with the Sarika (v4) voice, each take sent back through speech recognition:
+# written in English letters with a space ("Pouch Wale") the Hindi voice said "पूच / टॉउच वाले"; written
+# "पाउचवाले" it was heard as "पाउच वाले" in 5 of 5 takes ("पाउच वाले" with a space: 4 of 5, so both Devanagari
+# spellings are kept as written), and an English call reading "Pouch Waale" in 2 of 2.
+_BRAND_LATIN = re.compile(r"(?<![A-Za-z0-9])pouch[\s_-]*waa?ley?(?![A-Za-z0-9])", re.IGNORECASE)
+_BRAND_DEVANAGARI = re.compile(r"(?:पाउच|पौच|पोच|पूच)\s*वाले")
+_BRAND_MISSPELT = re.compile(r"(?:पौच|पोच|पूच)\s*वाले")  # Devanagari spellings that sound wrong
+BRAND_SPOKEN_DEVANAGARI = "पाउचवाले"  # Hindi / Marathi voices
+BRAND_SPOKEN_LATIN = "Pouch Waale"    # English (and the other languages' voices)
+
+
+def _say_brand(text: str, lang: str) -> str:
+    if lang.startswith(("hi", "mr")):
+        return _BRAND_MISSPELT.sub(BRAND_SPOKEN_DEVANAGARI, _BRAND_LATIN.sub(BRAND_SPOKEN_DEVANAGARI, text))
+    return _BRAND_LATIN.sub(BRAND_SPOKEN_LATIN, _BRAND_DEVANAGARI.sub(BRAND_SPOKEN_LATIN, text))
+
 
 @functools.lru_cache(maxsize=32)
 def _pronunciation_rules(lines: tuple[str, ...]) -> list[tuple[re.Pattern, str]]:
@@ -111,12 +130,14 @@ def _pronunciation_rules(lines: tuple[str, ...]) -> list[tuple[re.Pattern, str]]
 
 
 def speakable(text: str, cfg: dict) -> str:
-    """Text as it should be spoken: pronunciation fixes ("PouchWale = पाउचवाले") applied, numbers as a
-    person says them ("10,000" -> "दस हज़ार" in Hindi calls), phone numbers and other long digit strings never
-    read out, stray markup removed. Only the audio uses this; transcripts keep the original spelling."""
+    """Text as it should be spoken: pronunciation fixes ("GST = जी एस टी") applied, the company name always as
+    "पाउच वाले" (_say_brand), numbers as a person says them ("10,000" -> "दस हज़ार" in Hindi calls), phone numbers
+    and other long digit strings never read out, stray markup removed. Only the audio uses this; transcripts keep
+    the original spelling."""
     out = text
     for pattern, spoken in _pronunciation_rules(tuple(cfg.get("pronunciations") or ())):
         out = pattern.sub(spoken, out)
+    out = _say_brand(out, _tts_lang(cfg))
     out = speak_numbers_hindi(out) if _tts_lang(cfg).startswith("hi") else LONG_DIGITS.sub("", out)
     out = _MARKUP.sub(" ", out)
     return re.sub(r"[ \t]{2,}", " ", out).strip()
@@ -384,6 +405,19 @@ class TTSStream:
 # =====================================================================
 # Realtime STT
 # =====================================================================
+def stt_hints(model: str, keyterms: str, prompt: str) -> dict[str, str]:
+    """Optional vocabulary hints for the realtime STT URL. keyterms: up to 50 terms of up to 64 characters,
+    sent only to saaras:v4 (saaras:v3-realtime rejects them as invalid_request and the call would get no
+    transcripts). prompt: a terminology hint applied to final transcripts."""
+    out: dict[str, str] = {}
+    terms = list(dict.fromkeys(t.strip()[:64] for t in (keyterms or "").split(",") if t.strip()))[:50]
+    if terms and str(model).startswith("saaras:v4"):
+        out["keyterms"] = json.dumps(terms, ensure_ascii=False)
+    if (prompt or "").strip():
+        out["prompt"] = prompt.strip()
+    return out
+
+
 class RealtimeSTT:
     """Saaras v3 realtime streaming STT with server-side VAD and partial transcripts."""
 
@@ -419,6 +453,7 @@ class RealtimeSTT:
             "silence_duration_ms": str(settings.sarvam_stt_silence_ms),
             "min_speech_duration_ms": "200",
         }
+        q.update(stt_hints(settings.sarvam_stt_model, settings.sarvam_stt_keyterms, settings.sarvam_stt_prompt))
         return f"{settings.sarvam_ws_url}/speech-to-text-realtime/ws?{urllib.parse.urlencode(q)}"
 
     async def start(self) -> None:

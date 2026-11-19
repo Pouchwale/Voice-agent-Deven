@@ -18,6 +18,7 @@ from typing import Any
 
 from ..config import get_settings
 from ..defaults import DEFAULT_AGENT_SETTINGS
+from . import preflight
 from .audio import wav_bytes
 from .prompts import fill_template
 from .sarvam import speakable, tts_rest, voice_for
@@ -90,6 +91,7 @@ async def build(text: str, cfg: dict[str, Any]) -> bytes | None:
         pcm = await tts_rest(text, cfg, RATE)
     except Exception as e:  # noqa: BLE001
         log.warning("inbound clip failed (%s...): %s", text[:30], e)
+        preflight.note_voice_error(e)  # refused for lack of credit: phone calls ask before they dial
         return None
     if not pcm:
         return None

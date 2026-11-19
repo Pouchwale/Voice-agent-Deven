@@ -18,7 +18,7 @@ _NUMERIC_LIMITS = {
     "silence_timeout_sec": (3, 60), "silence_final_wait_sec": (1, 30), "filler_delay_ms": (200, 3000),
     "max_call_sec": (30, 1800), "tts_pace": (0.5, 2.0), "tts_temperature": (0.01, 1.0),
     "inbound_max_call_sec": (60, 3600),
-    "review_every_calls": (3, 50), "review_min_evidence": (1, 5), "history_days": (1, 365),
+    "review_every_calls": (3, 50), "review_min_evidence": (1, 5),
 }
 # Lines filled in with fill_template(): an unknown {placeholder} would be spoken literally on the call.
 TEMPLATE_FIELDS = ("opening_line", "closing_line", "silence_prompt_text", "silence_goodbye_text", "call_purpose",

@@ -63,8 +63,9 @@ export function KpiTile({
       {caption ? <span className="mt-2 block text-[13px] text-muted">{caption}</span> : null}
     </>
   );
+  // `kpi-tile`: hook for the PouchWale design (app/pouchwale.css); no style of its own.
   const cls = cn(
-    "block h-full rounded-xl border border-line bg-white p-4 transition-colors",
+    "kpi-tile block h-full rounded-xl border border-line bg-white p-4 transition-colors",
     (href || onClick) && "hover:border-primary-tint-strong hover:bg-canvas",
     className,
   );
