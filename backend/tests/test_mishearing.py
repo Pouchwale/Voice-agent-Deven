@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 
 from app.defaults import DEFAULT_AGENT_SETTINGS
-from app.services.prompts import build_analysis_prompt, misheard_note, static_system_prompt
+from app.services.prompts import (COMPANY_NAME_NOTE, build_analysis_prompt, company_name_note, misheard_note,
+                                  static_system_prompt)
 
 from .fakes import FakeSTT, ScriptedLLM
 from .test_humanize_live import _session, _wait, fakes  # noqa: F401  (fakes: autouse fixture)
@@ -54,6 +55,35 @@ def test_a_misheard_turn_gets_the_note_for_that_reply_only(monkeypatch):
     assert '"minute"' in notes[1]
 
 
+def test_company_name_turns_are_recognised():
+    asked = "जी, हम custom printed pouches बनाते हैं। आपकी company का नाम क्या है?"
+    assert company_name_note("Omix Foods.", asked)                                   # answering the question
+    assert company_name_note("हमारी company का नाम Omix है।")                        # told without being asked
+    assert company_name_note("My brand name is Obix", "आप क्या बनाते हैं?")
+    assert company_name_note("spices बेचते हैं", "आपका product क्या है?") is None    # an ordinary turn
+    assert company_name_note("नाम राहुल है", "आपका नाम क्या है?") is None            # their own name: said back once
+
+
+def test_the_company_name_turn_gets_the_note_for_that_reply_only(monkeypatch):
+    """The customer's company name is never said back (2026-11-20: "Obix" came through as "Omix"; the prompt rule
+    alone still let the model say "जी, ठीक है Omix जी" in 4 of 6 tries, the note on the turn: 0 of 9)."""
+    async def scenario():
+        llm = ScriptedLLM(["जी, आपकी company का नाम क्या है?", "जी, ठीक है। आपका product क्या है?", "जी, बढ़िया।"])
+        s, _ = await _session("+919480000082", llm, monkeypatch)
+        run = asyncio.create_task(s.run())
+        await _wait(lambda: s.greeted and s.state == "listening")
+        stt = FakeSTT.instances[-1]
+        for i, said in enumerate(("हाँ जी बताइए", "Omix Foods", "spices के लिए चाहिए।"), 1):
+            await stt.say(said)
+            await _wait(lambda: len(llm.calls) == i and s.state == "listening")
+        run.cancel()
+        return llm
+
+    llm = asyncio.run(scenario())
+    notes = [" ".join([m["content"] for m in call if m["role"] == "system"][2:]) for call in llm.calls]
+    assert COMPANY_NAME_NOTE not in notes[0] and COMPANY_NAME_NOTE in notes[1] and COMPANY_NAME_NOTE not in notes[2]
+
+
 def test_stt_vocabulary_hints_are_off_by_default_and_safe():
     import json
     import urllib.parse
@@ -74,6 +104,9 @@ def test_stt_vocabulary_hints_are_off_by_default_and_safe():
 
 def test_prompts_say_confirm_dont_assume():
     sp = static_system_prompt(dict(DEFAULT_AGENT_SETTINGS), "outbound", None)
-    assert "KEY DETAILS, CONFIRM DON'T ASSUME" in sp and "आपकी company का नाम स्वप्न है?" in sp
+    assert "KEY DETAILS, CONFIRM DON'T ASSUME" in sp
+    # the customer's company name is never said back or confirmed (2026-11-20: "Obix" came through as "Omix")
+    assert "THEIR COMPANY OR BRAND NAME: never say it back, never ask to confirm it" in sp
+    assert "आपकी company का नाम" not in sp
     analysis = build_analysis_prompt(dict(DEFAULT_AGENT_SETTINGS), None, "CUSTOMER: Masjid", "outbound")[0]["content"]
     assert "never report a garbled word as a fact" in analysis and "'Masjid'" in analysis

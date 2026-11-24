@@ -20,7 +20,7 @@ from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy import select
 
 from ..db import SessionLocal
-from ..models import ACTIVE_CALL_STATUSES, Call
+from ..models import Call
 from ..services import inbound_audio, telephony
 from ..services.audio import pcm16_to_ulaw, ulaw_to_pcm16
 from ..services.call_manager import manager
@@ -96,31 +96,7 @@ async def ring(call_uuid: str, token: str, request: Request):
 
 
 async def _handle_hangup(call_uuid: str, data: dict) -> None:
-    manager.mark_hangup_received(call_uuid)  # the line is down: no REST hang-up needed later
-    session = manager.sessions.get(call_uuid)
-    if session is not None:
-        if not session.ending:
-            await session.end("user_hangup")
-        return
-    row = await run_db(_call_row, call_uuid)
-    if not row or row["status"] not in ACTIVE_CALL_STATUSES:
-        return
-    code = str(data.get("HangupCauseCode") or "")
-    cause = str(data.get("HangupCause") or data.get("HangupCauseName") or "").upper()
-    call_status = str(data.get("CallStatus") or "").lower()
-    if row["answered"]:
-        await manager.finish_unanswered(call_uuid, "failed", "error",
-                                        error=f"Answered but no media stream ({cause or code}).")
-        return
-    status, reason = telephony.HANGUP_CODE_MAP.get(code, (None, None))
-    if status is None:
-        if "BUSY" in cause or call_status == "busy" or "REJECT" in cause:
-            status, reason = "busy", "busy"
-        elif call_status in ("failed",) or "INVALID" in cause:
-            status, reason = "failed", "error"
-        else:
-            status, reason = "no_answer", "no_answer"
-    await manager.finish_unanswered(call_uuid, status, reason, error=(cause or None) if status == "failed" else None)
+    await manager.provider_hangup(call_uuid, data)
 
 
 @router.post("/hangup/{call_uuid}/{token}")

@@ -1259,3 +1259,23 @@ def test_rate_limit_ignores_calls_missed_while_offline(client):
                   analysis_status="skipped", provider_call_id=f"rv-off-{i}", created_at=now - timedelta(minutes=i + 1))
     assert _stream_uuid(_answer(client, "rv-off-real", "919300000731").text)  # answered, not a busy tone
     _end_my_calls()
+
+
+def test_memory_switch_off_calls_a_missed_caller_like_a_new_one(client):
+    """"Remember earlier calls" off: no "you called us earlier" apology; the switch is saved and nothing is deleted."""
+    lead_id = _lead("+919300000971", "Pooja Shah")
+    missed = _add_call(lead_id=lead_id, direction="inbound", from_number="+919300000971", status="no_answer",
+                       end_reason="inbound_off", analysis_status="skipped", provider_call_id="inb-switch-old",
+                       created_at=utcnow() - timedelta(days=1))
+    assert client.get("/api/settings").json()["caller_memory"] is True  # on unless someone turns it off
+    assert client.put("/api/settings", json={"caller_memory": False}).json()["caller_memory"] is False
+    try:
+        out = client.post("/api/calls", json={"lead_id": lead_id}).json()
+        prep = manager.prepared[out["uuid"]]
+        lead_d = lead_out(_get_lead(lead_id))
+        assert prep["purpose"] == "outbound"
+        assert prep["greeting_text"] == fill_template(_cfg()["opening_line"], _cfg(), lead_d).strip()
+        client.post(f"/api/calls/{out['uuid']}/hangup")
+        assert client.get(f"/api/calls/{missed}").status_code == 200  # the earlier call is still there
+    finally:
+        client.put("/api/settings", json={"caller_memory": True})

@@ -1,0 +1,748 @@
+{
+ "meta": {
+  "when": "2026-11-20 00:54",
+  "current": "gpt-4o-mini",
+  "repeats": 2,
+  "prompt_tokens": 5339,
+  "lines": [
+   "हाँ जी बोलिए, कौन बोल रहे हैं?",
+   "मुझे अपने spices के लिए pouch चाहिए था।",
+   "Rate क्या है आपका? एक pouch कितने का पड़ेगा?",
+   "Minimum order कितना लेना पड़ेगा?",
+   "Sample मिल सकता है क्या पहले?",
+   "अभी मैं थोड़ा busy हूँ, बाद में बात करते हैं।",
+   "मेरे पास already एक supplier है।",
+   "देखिए, मुझे दोबारा call मत करना।"
+  ]
+ },
+ "results": {
+  "gpt-4o-mini": {
+   "effort": null,
+   "error": "",
+   "runs": [
+    {
+     "first_ms": 744,
+     "sentence_ms": 843,
+     "total_ms": 1282,
+     "text": "जी, मैं PouchWale की voice assistant हूँ। हम custom pouch बनाते हैं — जैसे namkeen, dry fruits, spices के packets होते हैं, वैसे आपके brand के लिए custom printed। आप किस product के लिए packaging ढूंढ रहे हैं?",
+     "prompt_tokens": 5339,
+     "cached_tokens": 5248,
+     "output_tokens": 52,
+     "line": 0,
+     "repeat": 0
+    },
+    {
+     "first_ms": 846,
+     "sentence_ms": 993,
+     "total_ms": 1402,
+     "text": "अरे वाह, समझ गई! हम spices के लिए custom printed pouches बनाते हैं। आपको किस तरह का pouch चाहिए? जैसे center seal, 3 side seal, या stand-up pouch?",
+     "prompt_tokens": 5339,
+     "cached_tokens": 5248,
+     "output_tokens": 40,
+     "line": 1,
+     "repeat": 0
+    },
+    {
+     "first_ms": 1123,
+     "sentence_ms": 1161,
+     "total_ms": 1605,
+     "text": "जी, मैं समझ गई। हम price per piece में quote करते हैं, और ये product size और quantity पर depend करता है। हमारी team आपको exact per-piece quote देगी। आप किस product के लिए packaging ढूंढ रहे हैं?",
+     "prompt_tokens": 5342,
+     "cached_tokens": 5248,
+     "output_tokens": 48,
+     "line": 2,
+     "repeat": 0
+    },
+    {
+     "first_ms": 702,
+     "sentence_ms": 843,
+     "total_ms": 980,
+     "text": "जी, MOQ एक हज़ार pieces से start होता है। आप किस product के लिए packaging ढूँढ रहे हैं?",
+     "prompt_tokens": 5336,
+     "cached_tokens": 5248,
+     "output_tokens": 25,
+     "line": 3,
+     "repeat": 0
+    },
+    {
+     "first_ms": 746,
+     "sentence_ms": 757,
+     "total_ms": 1102,
+     "text": "जी, बिल्कुल! हम एक free sample kit देते हैं, बस one ninety nine rupees shipping charges लगते हैं। क्या आप sample kit के लिए interested हैं?",
+     "prompt_tokens": 5336,
+     "cached_tokens": 5248,
+     "output_tokens": 33,
+     "line": 4,
+     "repeat": 0
+    },
+    {
+     "first_ms": 1118,
+     "sentence_ms": 1190,
+     "total_ms": 1307,
+     "text": "कोई बात नहीं, Rahul जी! आपको कब call करूँ, ये बताइए?",
+     "prompt_tokens": 5373,
+     "cached_tokens": 5248,
+     "output_tokens": 19,
+     "line": 5,
+     "repeat": 0
+    },
+    {
+     "first_ms": 808,
+     "sentence_ms": 873,
+     "total_ms": 1177,
+     "text": "सही है, Rahul जी! क्या मैं जान सकती हूँ कि आप अपने current supplier से क्या improve करना चाहेंगे?",
+     "prompt_tokens": 5337,
+     "cached_tokens": 5248,
+     "output_tokens": 24,
+     "line": 6,
+     "repeat": 0
+    },
+    {
+     "first_ms": 816,
+     "sentence_ms": 934,
+     "total_ms": 1212,
+     "text": "जी, माफ कीजिए, आपको परेशान करने के लिए। अगर आपको packaging की कोई ज़रूरत हो, तो हमारी team WhatsApp पर details भेज सकती है। क्या आप वो चाहेंगे?",
+     "prompt_tokens": 5458,
+     "cached_tokens": 5248,
+     "output_tokens": 41,
+     "line": 7,
+     "repeat": 0
+    },
+    {
+     "first_ms": 764,
+     "sentence_ms": 857,
+     "total_ms": 1381,
+     "text": "जी, मैं PouchWale की voice assistant हूँ। हम custom pouch बनाते हैं — जैसे namkeen, dry fruits, spices के packets होते हैं, वैसे आपके brand के लिए custom printed। आप किस product के लिए packaging ढूंढ रहे हैं?",
+     "prompt_tokens": 5339,
+     "cached_tokens": 5248,
+     "output_tokens": 52,
+     "line": 0,
+     "repeat": 1
+    },
+    {
+     "first_ms": 779,
+     "sentence_ms": 933,
+     "total_ms": 1233,
+     "text": "अरे वाह, spices के लिए pouch चाहिए! हम custom pouch बनाते हैं — जैसे spices के packets होते हैं। आपको किस तरह का pouch चाहिए? जैसे Center Seal, 3 Side Seal, Stand-Up या Spout Pouch?",
+     "prompt_tokens": 5339,
+     "cached_tokens": 5248,
+     "output_tokens": 48,
+     "line": 1,
+     "repeat": 1
+    },
+    {
+     "first_ms": 903,
+     "sentence_ms": 916,
+     "total_ms": 1287,
+     "text": "जी, मैं समझ गई। हम price per piece बताते हैं, ना कि per kg। हमारी team आपको exact per-piece quote बताएगी। क्या आप मुझे बता सकते हैं कि आप किस product के लिए packaging ढूंढ रहे हैं?",
+     "prompt_tokens": 5342,
+     "cached_tokens": 5248,
+     "output_tokens": 47,
+     "line": 2,
+     "repeat": 1
+    },
+    {
+     "first_ms": 866,
+     "sentence_ms": 1082,
+     "total_ms": 1360,
+     "text": "जी, MOQ एक हज़ार pieces से start होता है। क्या आप मुझे बता सकते हैं, आप किस product के लिए packaging ढूंढ रहे हैं?",
+     "prompt_tokens": 5336,
+     "cached_tokens": 5248,
+     "output_tokens": 32,
+     "line": 3,
+     "repeat": 1
+    },
+    {
+     "first_ms": 877,
+     "sentence_ms": 897,
+     "total_ms": 1326,
+     "text": "जी, बिल्कुल! हम free sample kit देते हैं, बस one ninety nine rupees shipping charges लगते हैं। क्या आप sample kit के लिए interested हैं?",
+     "prompt_tokens": 5336,
+     "cached_tokens": 5248,
+     "output_tokens": 32,
+     "line": 4,
+     "repeat": 1
+    },
+    {
+     "first_ms": 730,
+     "sentence_ms": 768,
+     "total_ms": 1102,
+     "text": "जी, कोई बात नहीं। आप कब बात करना चाहेंगे, मुझे बता दीजिए।",
+     "prompt_tokens": 5373,
+     "cached_tokens": 5248,
+     "output_tokens": 19,
+     "line": 5,
+     "repeat": 1
+    },
+    {
+     "first_ms": 792,
+     "sentence_ms": 947,
+     "total_ms": 1180,
+     "text": "अरे वाह, ये तो बढ़िया है! क्या आप मुझे बता सकते हैं कि आप अपने supplier से क्या improve करना चाहेंगे? शायद हम आपकी मदद कर सकें।",
+     "prompt_tokens": 5337,
+     "cached_tokens": 5248,
+     "output_tokens": 35,
+     "line": 6,
+     "repeat": 1
+    },
+    {
+     "first_ms": 847,
+     "sentence_ms": 971,
+     "total_ms": 1573,
+     "text": "माफ़ कीजिए, आपको परेशान करने के लिए। अगर आपकी कोई packaging की ज़रूरत हो, तो हमारी team WhatsApp पर details भेज सकती है। क्या आपको वो चाहिए?",
+     "prompt_tokens": 5458,
+     "cached_tokens": 5376,
+     "output_tokens": 39,
+     "line": 7,
+     "repeat": 1
+    }
+   ]
+  },
+  "gpt-4.1-mini": {
+   "effort": null,
+   "error": "",
+   "runs": [
+    {
+     "first_ms": 573,
+     "sentence_ms": 646,
+     "total_ms": 916,
+     "text": "जी, मैं PouchWale की voice assistant हूँ। हम custom pouch बनाते हैं — जैसे namkeen, dry fruits, spices के packets होते हैं, वैसे आपके brand के लिए custom printed। आपका product क्या है?",
+     "prompt_tokens": 5339,
+     "cached_tokens": 5120,
+     "output_tokens": 45,
+     "line": 0,
+     "repeat": 0
+    },
+    {
+     "first_ms": 629,
+     "sentence_ms": 707,
+     "total_ms": 924,
+     "text": "अरे वाह, spices के लिए pouch चाहिए! क्या आप stand-up pouch, sachet या center seal pouch में से कोई पसंद करते हैं?",
+     "prompt_tokens": 5339,
+     "cached_tokens": 5120,
+     "output_tokens": 29,
+     "line": 1,
+     "repeat": 0
+    },
+    {
+     "first_ms": 673,
+     "sentence_ms": 846,
+     "total_ms": 1138,
+     "text": "जी Rahul जी, rate per piece ही होता है pouch का, per kg नहीं। मैं अभी exact price नहीं बता सकती, हमारी team आपको size, quantity और design जानकर exact quote भेज देगी। बताइए, आपका product क्या है?",
+     "prompt_tokens": 5342,
+     "cached_tokens": 5120,
+     "output_tokens": 50,
+     "line": 2,
+     "repeat": 0
+    },
+    {
+     "first_ms": 605,
+     "sentence_ms": 709,
+     "total_ms": 857,
+     "text": "जी, MOQ एक हज़ार pieces से start होता है। आपका product क्या है, बताइए?",
+     "prompt_tokens": 5336,
+     "cached_tokens": 5120,
+     "output_tokens": 22,
+     "line": 3,
+     "repeat": 0
+    },
+    {
+     "first_ms": 568,
+     "sentence_ms": 576,
+     "total_ms": 822,
+     "text": "जी, बिल्कुल! Sample kit free है, बस one ninety nine rupees shipping charges लगते हैं। आपकी packaging के लिए कौन सा product है?",
+     "prompt_tokens": 5336,
+     "cached_tokens": 5120,
+     "output_tokens": 30,
+     "line": 4,
+     "repeat": 0
+    },
+    {
+     "first_ms": 665,
+     "sentence_ms": 701,
+     "total_ms": 834,
+     "text": "जी, समझ गई। आपको कब कॉल करूँ, कोई convenient time बताइए?",
+     "prompt_tokens": 5373,
+     "cached_tokens": 5120,
+     "output_tokens": 18,
+     "line": 5,
+     "repeat": 0
+    },
+    {
+     "first_ms": 795,
+     "sentence_ms": 873,
+     "total_ms": 1034,
+     "text": "जी, समझ गई। आपका supplier कैसा काम करता है, कोई खास चीज़ जो आप बेहतर चाहते हैं? थोड़ा बताइए।",
+     "prompt_tokens": 5337,
+     "cached_tokens": 4992,
+     "output_tokens": 28,
+     "line": 6,
+     "repeat": 0
+    },
+    {
+     "first_ms": 640,
+     "sentence_ms": 714,
+     "total_ms": 1100,
+     "text": "माफ़ कीजिए, disturb करने के लिए। अगर कभी packaging की ज़रूरत हो, तो हमारी team WhatsApp पर details भेज सकती है। धन्यवाद, PouchWale को ज़रूर याद कीजिए। [END_CALL]",
+     "prompt_tokens": 5458,
+     "cached_tokens": 5120,
+     "output_tokens": 51,
+     "line": 7,
+     "repeat": 0
+    },
+    {
+     "first_ms": 619,
+     "sentence_ms": 728,
+     "total_ms": 1137,
+     "text": "जी, मैं PouchWale की voice assistant हूँ। मैं इसलिए कॉल कर रही हूँ क्योंकि हम custom pouch बनाते हैं — जैसे namkeen, dry fruits, spices के packets होते हैं, वैसे आपके brand के लिए custom printed। आपका product क्या है?",
+     "prompt_tokens": 5339,
+     "cached_tokens": 4992,
+     "output_tokens": 52,
+     "line": 0,
+     "repeat": 1
+    },
+    {
+     "first_ms": 840,
+     "sentence_ms": 912,
+     "total_ms": 1028,
+     "text": "अरे वाह, spices के लिए pouch चाहिए आपको! तो spices के लिए हम standup pouch, sachets या center seal pouch बनाते हैं। आपकी company का नाम क्या है?",
+     "prompt_tokens": 5339,
+     "cached_tokens": 5120,
+     "output_tokens": 37,
+     "line": 1,
+     "repeat": 1
+    },
+    {
+     "first_ms": 651,
+     "sentence_ms": 751,
+     "total_ms": 1028,
+     "text": "जी Rahul जी, price per piece होता है, per kg नहीं। मैं अभी exact rate नहीं बता सकती, हमारी team आपके size, quantity और design जानकर exact quote भेज देगी। बताइए, आपका product क्या है?",
+     "prompt_tokens": 5342,
+     "cached_tokens": 5120,
+     "output_tokens": 47,
+     "line": 2,
+     "repeat": 1
+    },
+    {
+     "first_ms": 573,
+     "sentence_ms": 691,
+     "total_ms": 788,
+     "text": "जी, MOQ एक हज़ार pieces से start होता है। आप किस product के लिए packaging ढूँढ रहे हैं?",
+     "prompt_tokens": 5336,
+     "cached_tokens": 5120,
+     "output_tokens": 25,
+     "line": 3,
+     "repeat": 1
+    },
+    {
+     "first_ms": 654,
+     "sentence_ms": 912,
+     "total_ms": 1011,
+     "text": "जी, sample kit free है, बस one ninety nine rupees shipping charges लगते हैं। आपकी company का नाम क्या है?",
+     "prompt_tokens": 5336,
+     "cached_tokens": 5120,
+     "output_tokens": 26,
+     "line": 4,
+     "repeat": 1
+    },
+    {
+     "first_ms": 637,
+     "sentence_ms": 651,
+     "total_ms": 825,
+     "text": "जी, बिल्कुल! आप बताइए कब कॉल करूँ, मैं वहीं टाइम पर call कर लूँगी।",
+     "prompt_tokens": 5373,
+     "cached_tokens": 5248,
+     "output_tokens": 23,
+     "line": 5,
+     "repeat": 1
+    },
+    {
+     "first_ms": 752,
+     "sentence_ms": 762,
+     "total_ms": 998,
+     "text": "जी, समझ गई। आपकी current supplier में क्या चीज़ आप improve करना चाहेंगे? थोड़ा बताइए।",
+     "prompt_tokens": 5337,
+     "cached_tokens": 5120,
+     "output_tokens": 23,
+     "line": 6,
+     "repeat": 1
+    },
+    {
+     "first_ms": 729,
+     "sentence_ms": 873,
+     "total_ms": 1269,
+     "text": "जी, मेरी तरफ़ से disturb करने के लिए माफ़ कीजिए। अगर आप चाहें तो हमारी team इस number पर WhatsApp पर details भेज सकती है। नहीं तो, आपका दिन अच्छा रहे, PouchWale को ज़रूर याद कीजिए। [END_CALL]",
+     "prompt_tokens": 5458,
+     "cached_tokens": 5248,
+     "output_tokens": 60,
+     "line": 7,
+     "repeat": 1
+    }
+   ]
+  },
+  "gpt-5.4-mini": {
+   "effort": "none",
+   "error": "",
+   "runs": [
+    {
+     "first_ms": 643,
+     "sentence_ms": 791,
+     "total_ms": 854,
+     "text": "जी, हम custom printed pouches बनाते हैं — जैसे namkeen, dry fruits, spices के packets होते हैं, वैसे आपके brand के लिए custom printed। आपका product क्या है?",
+     "prompt_tokens": 5340,
+     "cached_tokens": 5120,
+     "output_tokens": 40,
+     "line": 0,
+     "repeat": 0
+    },
+    {
+     "first_ms": 751,
+     "sentence_ms": 885,
+     "total_ms": 983,
+     "text": "जी, spices के लिए हम standup pouch, sachet, या center seal pouch देते हैं। आपकी quantity कितनी चाहिए?",
+     "prompt_tokens": 5340,
+     "cached_tokens": 5120,
+     "output_tokens": 29,
+     "line": 1,
+     "repeat": 0
+    },
+    {
+     "first_ms": 846,
+     "sentence_ms": 1022,
+     "total_ms": 1118,
+     "text": "जी, rate pouch के size, quantity और print पर depend करता है, exact per piece quote हमारी team बताएगी। आपका product क्या है?",
+     "prompt_tokens": 5343,
+     "cached_tokens": 5120,
+     "output_tokens": 32,
+     "line": 2,
+     "repeat": 0
+    },
+    {
+     "first_ms": 687,
+     "sentence_ms": 744,
+     "total_ms": 842,
+     "text": "MOQ एक हज़ार pieces से start होता है। आपका product क्या है?",
+     "prompt_tokens": 5337,
+     "cached_tokens": 5120,
+     "output_tokens": 19,
+     "line": 3,
+     "repeat": 0
+    },
+    {
+     "first_ms": 727,
+     "sentence_ms": 811,
+     "total_ms": 952,
+     "text": "जी, sample kit मिल सकती है, बस one ninety nine rupees shipping charges लगते हैं। आप किस product के लिए packaging देख रहे हैं?",
+     "prompt_tokens": 5337,
+     "cached_tokens": 5120,
+     "output_tokens": 33,
+     "line": 4,
+     "repeat": 0
+    },
+    {
+     "first_ms": 944,
+     "sentence_ms": 972,
+     "total_ms": 1117,
+     "text": "जी, बिल्कुल। आपको किस time पर call करूँ, आज या कल?",
+     "prompt_tokens": 5374,
+     "cached_tokens": 5120,
+     "output_tokens": 19,
+     "line": 5,
+     "repeat": 0
+    },
+    {
+     "first_ms": 900,
+     "sentence_ms": 974,
+     "total_ms": 1196,
+     "text": "सही है, अभी supplier है। अगर compare करना चाहें, तो हम sample kit भेजवा सकती हूँ। आपको किस product की packaging चाहिए?",
+     "prompt_tokens": 5338,
+     "cached_tokens": 5120,
+     "output_tokens": 33,
+     "line": 6,
+     "repeat": 0
+    },
+    {
+     "first_ms": 735,
+     "sentence_ms": 781,
+     "total_ms": 987,
+     "text": "जी, sorry for the disturbance। मैं दोबारा call नहीं करूँगी, कभी packaging की ज़रूरत हो तो PouchWale को याद कीजिए। [END_CALL]",
+     "prompt_tokens": 5459,
+     "cached_tokens": 5120,
+     "output_tokens": 42,
+     "line": 7,
+     "repeat": 0
+    },
+    {
+     "first_ms": 654,
+     "sentence_ms": 741,
+     "total_ms": 820,
+     "text": "जी, हम custom printed pouches बनाते हैं, जैसे namkeen, dry fruits, spices के packets होते हैं। आपका product क्या है?",
+     "prompt_tokens": 5340,
+     "cached_tokens": 5120,
+     "output_tokens": 32,
+     "line": 0,
+     "repeat": 1
+    },
+    {
+     "first_ms": 942,
+     "sentence_ms": 976,
+     "total_ms": 1179,
+     "text": "जी, बढ़िया। Spices के लिए हम standup pouch, center seal pouch या sachets suggest करते हैं, आपको कौन सा pouch चाहिए?",
+     "prompt_tokens": 5340,
+     "cached_tokens": 5120,
+     "output_tokens": 33,
+     "line": 1,
+     "repeat": 1
+    },
+    {
+     "first_ms": 1013,
+     "sentence_ms": 1086,
+     "total_ms": 1197,
+     "text": "जी, हम rate per piece देते हैं, per kg नहीं। आपका product क्या है?",
+     "prompt_tokens": 5343,
+     "cached_tokens": 5120,
+     "output_tokens": 21,
+     "line": 2,
+     "repeat": 1
+    },
+    {
+     "first_ms": 1008,
+     "sentence_ms": 1058,
+     "total_ms": 1148,
+     "text": "MOQ एक हज़ार pieces से start होता है। आप किस product के लिए packaging ढूँढ रहे हैं?",
+     "prompt_tokens": 5337,
+     "cached_tokens": 5120,
+     "output_tokens": 26,
+     "line": 3,
+     "repeat": 1
+    },
+    {
+     "first_ms": 683,
+     "sentence_ms": 838,
+     "total_ms": 897,
+     "text": "जी, sample kit free है, बस one ninety nine rupees shipping charges लगते हैं। आपका product क्या है?",
+     "prompt_tokens": 5337,
+     "cached_tokens": 5120,
+     "output_tokens": 27,
+     "line": 4,
+     "repeat": 1
+    },
+    {
+     "first_ms": 790,
+     "sentence_ms": 828,
+     "total_ms": 925,
+     "text": "जी, बिल्कुल। आपको किस time call back करूँ?",
+     "prompt_tokens": 5374,
+     "cached_tokens": 5248,
+     "output_tokens": 15,
+     "line": 5,
+     "repeat": 1
+    },
+    {
+     "first_ms": 1410,
+     "sentence_ms": 1429,
+     "total_ms": 1673,
+     "text": "जी, समझ गई। आप उसमें क्या improve देखना चाहेंगे, या comparison के लिए free sample kit मंगवाना चाहेंगे?",
+     "prompt_tokens": 5338,
+     "cached_tokens": 5120,
+     "output_tokens": 31,
+     "line": 6,
+     "repeat": 1
+    },
+    {
+     "first_ms": 671,
+     "sentence_ms": 748,
+     "total_ms": 896,
+     "text": "माफ़ कीजिए, disturb करने के लिए sorry। मैं दोबारा call नहीं करूँगी, धन्यवाद! [END_CALL]",
+     "prompt_tokens": 5459,
+     "cached_tokens": 5248,
+     "output_tokens": 32,
+     "line": 7,
+     "repeat": 1
+    }
+   ]
+  },
+  "gpt-5.4-nano": {
+   "effort": "none",
+   "error": "",
+   "runs": [
+    {
+     "first_ms": 1171,
+     "sentence_ms": 1291,
+     "total_ms": 1581,
+     "text": "अच्छा जी, मैं PouchWale की voice assistant बोल रही हूँ। हम custom printed pouch बनाते हैं—जैसे namkeen, dry fruits, spices के packets होते हैं—वैसे आपके brand के लिए। आप किस product के लिए packaging ढूंढ रहे हैं? [END_CALL]",
+     "prompt_tokens": 5340,
+     "cached_tokens": 4864,
+     "output_tokens": 66,
+     "line": 0,
+     "repeat": 0
+    },
+    {
+     "first_ms": 798,
+     "sentence_ms": 960,
+     "total_ms": 1056,
+     "text": "अच्छा जी, spices के लिए हम stand-up pouch या center seal pouch custom printed बना देते हैं। आप किस तरह का pouch चाहते हैं—stand-up या center seal? [END_CALL]",
+     "prompt_tokens": 5340,
+     "cached_tokens": 4864,
+     "output_tokens": 43,
+     "line": 1,
+     "repeat": 0
+    },
+    {
+     "first_ms": 986,
+     "sentence_ms": 1259,
+     "total_ms": 1403,
+     "text": "अच्छा Rahul जी, rate मैं अभी exact confirm नहीं कर पाऊँगी—क्योंकि ये size, print और quantity पर depend करता है, और quote per piece (pcs) में आता है। आप किस product के लिए pouch चाहिए? [END_CALL]",
+     "prompt_tokens": 5343,
+     "cached_tokens": 4864,
+     "output_tokens": 58,
+     "line": 2,
+     "repeat": 0
+    },
+    {
+     "first_ms": 738,
+     "sentence_ms": 801,
+     "total_ms": 1056,
+     "text": "अच्छा सवाल है Rahul जी! हमारा MOQ एक हज़ार pieces से start होता है। आप किस product के लिए pouch बनवाना चाहते हैं? [END_CALL]",
+     "prompt_tokens": 5337,
+     "cached_tokens": 4864,
+     "output_tokens": 39,
+     "line": 3,
+     "repeat": 0
+    },
+    {
+     "first_ms": 615,
+     "sentence_ms": 735,
+     "total_ms": 847,
+     "text": "अच्छा जी, sample kit free है, बस one ninety nine rupees shipping charges लगते हैं। आप किस product की packaging के लिए देख रहे हैं? [END_CALL]",
+     "prompt_tokens": 5337,
+     "cached_tokens": 4864,
+     "output_tokens": 40,
+     "line": 4,
+     "repeat": 0
+    },
+    {
+     "first_ms": 781,
+     "sentence_ms": 914,
+     "total_ms": 984,
+     "text": "ठीक है Rahul जी, मैं थोड़ी देर बाद call कर देती हूँ—आपको किस time convenient रहेगा, अभी या शाम में? [END_CALL]",
+     "prompt_tokens": 5374,
+     "cached_tokens": 4864,
+     "output_tokens": 35,
+     "line": 5,
+     "repeat": 0
+    },
+    {
+     "first_ms": 697,
+     "sentence_ms": 778,
+     "total_ms": 1010,
+     "text": "समझ गई Rahul जी, आप already supplier use कर रहे हैं। फिर भी हम custom printed pouch से design/print और options बेहतर करवा देते हैं—आप किस product के लिए pouch ले रहे हैं?",
+     "prompt_tokens": 5338,
+     "cached_tokens": 4864,
+     "output_tokens": 45,
+     "line": 6,
+     "repeat": 0
+    },
+    {
+     "first_ms": 621,
+     "sentence_ms": 867,
+     "total_ms": 937,
+     "text": "जी, sorry जी कि आपको disturb हुआ; हम दोबारा call नहीं करेंगे, अगर आप चाहें तो हमारी team WhatsApp पर details भेज देगी—क्या WhatsApp number वही है जिस पर अभी बात हो रही थी? [END_CALL]",
+     "prompt_tokens": 5459,
+     "cached_tokens": 4864,
+     "output_tokens": 53,
+     "line": 7,
+     "repeat": 0
+    },
+    {
+     "first_ms": 627,
+     "sentence_ms": 650,
+     "total_ms": 1349,
+     "text": "अरे वाह, धन्यवाद! मैं PouchWale की voice assistant हूँ। हम custom printed pouch बनाते हैं—जैसे namkeen, dry fruits, spices के packets होते हैं—वैसे आपके brand के लिए भी। आप किस product के लिए packaging ढूँढ रहे हैं? [END_CALL]",
+     "prompt_tokens": 5340,
+     "cached_tokens": 4864,
+     "output_tokens": 66,
+     "line": 0,
+     "repeat": 1
+    },
+    {
+     "first_ms": 567,
+     "sentence_ms": 721,
+     "total_ms": 934,
+     "text": "अच्छा जी, spices के लिए हम stand-up pouch या center seal pouch जैसे options में custom printed बनाते हैं। आप किस pouch type की जरूरत समझ रहे हैं—stand-up या center seal?",
+     "prompt_tokens": 5340,
+     "cached_tokens": 4864,
+     "output_tokens": 44,
+     "line": 1,
+     "repeat": 1
+    },
+    {
+     "first_ms": 640,
+     "sentence_ms": 793,
+     "total_ms": 995,
+     "text": "Rahul जी, रेट मैं अभी confirm नहीं कर पाऊँगी क्योंकि ये size, print और quantity पर depend करता है। आप किस product के लिए pouch चाहिए—जैसे namkeen, dry fruits या मसाले? [END_CALL]",
+     "prompt_tokens": 5343,
+     "cached_tokens": 4864,
+     "output_tokens": 54,
+     "line": 2,
+     "repeat": 1
+    },
+    {
+     "first_ms": 604,
+     "sentence_ms": 635,
+     "total_ms": 820,
+     "text": "अरे वाह, अच्छा सवाल! हमारा MOQ एक हज़ार pieces से start होता है। आप किस product के लिए pouch चाहिए, Rahul जी? [END_CALL]",
+     "prompt_tokens": 5337,
+     "cached_tokens": 4864,
+     "output_tokens": 37,
+     "line": 3,
+     "repeat": 1
+    },
+    {
+     "first_ms": 721,
+     "sentence_ms": 899,
+     "total_ms": 1084,
+     "text": "हाँ जी, sample kit मिल जाएगी—free है, बस one ninety nine rupees shipping charges लगते हैं। आप किस product के लिए pouch चाहिए? [END_CALL]",
+     "prompt_tokens": 5337,
+     "cached_tokens": 4864,
+     "output_tokens": 38,
+     "line": 4,
+     "repeat": 1
+    },
+    {
+     "first_ms": 617,
+     "sentence_ms": 735,
+     "total_ms": 802,
+     "text": "कोई बात नहीं Rahul जी, मैं disturb नहीं करूँगी—आपको किस समय कॉल करूँ, दोपहर या शाम? [END_CALL]",
+     "prompt_tokens": 5374,
+     "cached_tokens": 4864,
+     "output_tokens": 35,
+     "line": 5,
+     "repeat": 1
+    },
+    {
+     "first_ms": 834,
+     "sentence_ms": 870,
+     "total_ms": 1083,
+     "text": "अच्छा, समझ गई Rahul जी। फिर भी हम आपके लिए custom printed pouch options ट्राय करवा सकते हैं—आप अभी क्या improve करना चाह रहे हैं, price, design या quality?",
+     "prompt_tokens": 5338,
+     "cached_tokens": 4864,
+     "output_tokens": 43,
+     "line": 6,
+     "repeat": 1
+    },
+    {
+     "first_ms": 577,
+     "sentence_ms": 776,
+     "total_ms": 835,
+     "text": "जी, sorry जी कि परेशान किया—मैं दुबारा call नहीं करूँगी; अगर WhatsApp पर details चाहिए तो बताइए, वरना धन्यवाद। [END_CALL]",
+     "prompt_tokens": 5459,
+     "cached_tokens": 4864,
+     "output_tokens": 40,
+     "line": 7,
+     "repeat": 1
+    }
+   ]
+  }
+ }
+}

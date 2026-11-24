@@ -206,10 +206,12 @@ DEFAULT_AGENT_SETTINGS: dict = {
     "fillers_enabled": True,
     # None of these claims to have understood: a filler plays BEFORE the reply exists, so "जी, समझ गई" would
     # be said even to words the agent didn't catch.
-    "filler_words": ["हम्म", "जी", "अच्छा", "हाँ जी", "अच्छा जी", "हम्म, एक second"],
+    # no "हम्म, एक second": a long, drawn-out filler the user disliked (2026-11-24)
+    "filler_words": ["हम्म", "जी", "अच्छा", "हाँ जी", "अच्छा जी"],
     "filler_delay_ms": 800,
     "barge_in_enabled": True,
     # Human touches (each can be switched off on its own):
+    "caller_memory": True,       # off = every call is treated as a first call (for testing); nothing is deleted
     "fast_replies": True,        # start writing the reply the moment the customer stops talking (~0.4 s sooner)
     "listening_sounds": True,    # a soft "हम्म" / "जी" in the pauses of a long customer sentence
     "natural_variation": True,   # slightly different pace per reply + short natural pauses between sentences
@@ -299,7 +301,7 @@ SETTING_LABELS: dict[str, str] = {
     "silence_timeout_sec": "Silence timeout", "silence_prompt_text": "\"Are you there?\" line",
     "silence_final_wait_sec": "Wait after \"are you there?\"", "silence_goodbye_text": "Silence goodbye line",
     "fillers_enabled": "Fillers", "filler_words": "Filler words", "filler_delay_ms": "Filler delay",
-    "barge_in_enabled": "Barge-in", "fast_replies": "Fast replies", "listening_sounds": "Listening sounds",
+    "barge_in_enabled": "Barge-in", "caller_memory": "Remember earlier calls", "fast_replies": "Fast replies", "listening_sounds": "Listening sounds",
     "natural_variation": "Natural voice variation", "mood_matching": "Mood matching",
     "max_call_sec": "Max outbound call length", "call_window_start": "Campaign window start",
     "call_window_end": "Campaign window end", "outbound_enabled": "Outbound calling",

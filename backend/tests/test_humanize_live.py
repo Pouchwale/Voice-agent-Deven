@@ -447,8 +447,8 @@ def test_reply_is_taken_back_when_the_customer_goes_on_after_a_pause(monkeypatch
 
     s, t, llm = asyncio.run(scenario())
     assert not any("talk over" in x for x in _agent_lines(t))
-    assert llm.calls[-1][-1] == {"role": "user",
-                                 "content": "हम मसाले बनाते हैं हल्दी और मिर्ची तो आप कौन से pouch बनाते हो?"}
+    assert [m for m in llm.calls[-1] if m["role"] == "user"][-1] == {
+        "role": "user", "content": "हम मसाले बनाते हैं हल्दी और मिर्ची तो आप कौन से pouch बनाते हो?"}
     users = [m["content"] for m in s.history if m["role"] == "user"]
     assert users.count("हम मसाले बनाते हैं हल्दी और मिर्ची") == 0  # not left behind as a separate question
 

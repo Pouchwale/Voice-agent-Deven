@@ -19,6 +19,7 @@ from app.schemas import lead_out
 from app.services import analysis as analysis_mod
 from app.services import session as session_mod
 from app.services.analysis import analyze_call
+from app.services.call_manager import inbound_greeting
 from app.services.memory import MAX_CHARS, caller_memory
 from app.services.prompts import (CALL_REASONS, LANGUAGE_STYLES, NOTES_LABEL, TONES, build_analysis_prompt, day_label,
                                   fill_template, greeting_for, lead_context, lead_name_ji, now_line, relative_age,
@@ -732,3 +733,30 @@ def test_analysis_prompt_is_direction_aware():
     assert '"call_reason": null (outbound call)' in outbound[0]["content"]
     assert 'Use "unknown" only if the customer never actually spoke.' in outbound[0]["content"]
     assert "This was an INBOUND call" not in outbound[0]["content"]
+
+
+# ---------------------------------------------------------------- Settings: "Remember earlier calls"
+def test_memory_switch_off_starts_every_call_as_a_first_call():
+    """For testing a fresh call: the agent gets the name and number only. Company, city and notes are hidden too,
+    because call analysis saves what it learned on earlier calls into those same lead fields."""
+    lead = {"name": "Rahul Sharma", "phone": "+919400000901", "company": "Omikshi", "city": "Mehsana",
+            "notes": "wants zipper pouches"}
+    brief = "# What we already know about this customer\nLast call: asked for 5000 pouches."
+
+    def prompt(**over) -> str:
+        return CallSession(call_id=1, call_uuid="switch", lead=lead, cfg=_cfg(**over), transport=FakeTransport(),
+                           memory=brief).lead_prompt
+
+    on = prompt()
+    assert all(w in on for w in ("Rahul Sharma", "Omikshi", "Mehsana", "zipper", "5000 pouches"))
+    off = prompt(caller_memory=False)
+    assert "Rahul Sharma" in off and "Indian mobile" in off
+    assert not any(w in off for w in ("Omikshi", "Mehsana", "zipper", "5000 pouches", "already know"))
+    assert lead["company"] == "Omikshi" and lead["notes"]  # the lead itself is not changed
+
+
+def test_memory_switch_off_gives_a_returning_caller_the_first_call_greeting():
+    lead = {"name": "Rahul Sharma"}
+    assert inbound_greeting(_cfg(), lead, "returning") == fill_template(CFG["inbound_greeting_known"], CFG, lead).strip()
+    assert inbound_greeting(_cfg(caller_memory=False), lead, "returning") == \
+        fill_template(CFG["inbound_greeting"], CFG, lead).strip()

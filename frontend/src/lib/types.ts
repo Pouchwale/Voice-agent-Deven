@@ -254,6 +254,7 @@ export interface AgentSettings {
   filler_delay_ms: number;
   barge_in_enabled: boolean;
   /** Human touches (all on by default). */
+  caller_memory?: boolean; // off = every call is treated as a first call (for testing); nothing is deleted
   fast_replies?: boolean; // start writing the reply the moment the customer stops talking
   listening_sounds?: boolean; // soft "हम्म" / "जी" in the pauses of a long customer sentence
   natural_variation?: boolean; // slightly different pace per reply, short breaths between sentences

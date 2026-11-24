@@ -1,0 +1,634 @@
+{
+ "voices": {
+  "sarika_hi_conversation": {
+   "lines": [
+    {
+     "text_now": "एम ओ क्यू एक हज़ार pieces से start होता है, ताकि print और packaging की quality अच्छी बनी रहे।",
+     "text_deva": "एम ओ क्यू एक हज़ार पीसेस से स्टार्ट होता है, ताकि प्रिंट और पैकेजिंग की क्वालिटी अच्छी बनी रहे।",
+     "now": {
+      "file": "sarika_hi_conversation_1_now.wav",
+      "sec": 4.97,
+      "f0_hz": 190.0,
+      "f0_spread_st": 8.84,
+      "level": 3687.0
+     },
+     "deva": {
+      "file": "sarika_hi_conversation_1_deva.wav",
+      "sec": 4.75,
+      "f0_hz": 222.0,
+      "f0_spread_st": 4.98,
+      "level": 4417.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 2.01,
+      "p90_st": 4.03,
+      "share_over_2st": 0.511
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 0.92,
+      "p90_st": 2.84,
+      "share_over_2st": 0.171
+     },
+     "prep": {
+      "file": "sarika_hi_conversation_1_prep.wav",
+      "sec": 6.22,
+      "f0_hz": 222.0,
+      "f0_spread_st": 6.35,
+      "level": 3928.0
+     },
+     "shift_prep_vs_deva": {
+      "median_st": 0.62,
+      "p90_st": 2.0,
+      "share_over_2st": 0.102
+     }
+    },
+    {
+     "text_now": "dry fruits के लिए स्टैंड अप pouch best रहेगा, क्योंकि ये moisture और aroma दोनों को अच्छे से रोकता है।",
+     "text_deva": "ड्राई फ्रूट्स के लिए स्टैंड अप पाउच बेस्ट रहेगा, क्योंकि ये मॉइस्चर और अरोमा दोनों को अच्छे से रोकता है।",
+     "now": {
+      "file": "sarika_hi_conversation_2_now.wav",
+      "sec": 7.6,
+      "f0_hz": 216.0,
+      "f0_spread_st": 5.9,
+      "level": 5641.0
+     },
+     "deva": {
+      "file": "sarika_hi_conversation_2_deva.wav",
+      "sec": 6.79,
+      "f0_hz": 190.0,
+      "f0_spread_st": 7.02,
+      "level": 5415.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 1.02,
+      "p90_st": 5.12,
+      "share_over_2st": 0.251
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 1.75,
+      "p90_st": 5.96,
+      "share_over_2st": 0.489
+     },
+     "prep": {
+      "file": "sarika_hi_conversation_2_prep.wav",
+      "sec": 6.01,
+      "f0_hz": 195.0,
+      "f0_spread_st": 4.73,
+      "level": 4749.0
+     },
+     "shift_prep_vs_deva": {
+      "median_st": 1.84,
+      "p90_st": 4.02,
+      "share_over_2st": 0.443
+     }
+    },
+    {
+     "text_now": "हमारी team इसी number पर WhatsApp पर quotation और sample kit details भेज देगी।",
+     "text_deva": "हमारी टीम इसी नंबर पर व्हाट्सऐप पर कोटेशन और सैंपल किट डिटेल्स भेज देगी।",
+     "now": {
+      "file": "sarika_hi_conversation_3_now.wav",
+      "sec": 6.14,
+      "f0_hz": 208.0,
+      "f0_spread_st": 5.97,
+      "level": 4852.0
+     },
+     "deva": {
+      "file": "sarika_hi_conversation_3_deva.wav",
+      "sec": 4.08,
+      "f0_hz": 211.0,
+      "f0_spread_st": 6.28,
+      "level": 5032.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 0.8,
+      "p90_st": 3.02,
+      "share_over_2st": 0.204
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 1.02,
+      "p90_st": 3.79,
+      "share_over_2st": 0.294
+     },
+     "prep": {
+      "file": "sarika_hi_conversation_3_prep.wav",
+      "sec": 4.07,
+      "f0_hz": 250.0,
+      "f0_spread_st": 8.56,
+      "level": 4365.0
+     },
+     "shift_prep_vs_deva": {
+      "median_st": 1.62,
+      "p90_st": 3.16,
+      "share_over_2st": 0.44
+     }
+    }
+   ]
+  },
+  "aparna_hi_customer": {
+   "lines": [
+    {
+     "text_now": "एम ओ क्यू एक हज़ार pieces से start होता है, ताकि print और packaging की quality अच्छी बनी रहे।",
+     "text_deva": "एम ओ क्यू एक हज़ार पीसेस से स्टार्ट होता है, ताकि प्रिंट और पैकेजिंग की क्वालिटी अच्छी बनी रहे।",
+     "now": {
+      "file": "aparna_hi_customer_1_now.wav",
+      "sec": 5.95,
+      "f0_hz": 222.0,
+      "f0_spread_st": 9.22,
+      "level": 3985.0
+     },
+     "deva": {
+      "file": "aparna_hi_customer_1_deva.wav",
+      "sec": 5.76,
+      "f0_hz": 216.0,
+      "f0_spread_st": 11.35,
+      "level": 4097.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 2.22,
+      "p90_st": 4.22,
+      "share_over_2st": 0.531
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 1.33,
+      "p90_st": 2.74,
+      "share_over_2st": 0.273
+     }
+    },
+    {
+     "text_now": "dry fruits के लिए स्टैंड अप pouch best रहेगा, क्योंकि ये moisture और aroma दोनों को अच्छे से रोकता है।",
+     "text_deva": "ड्राई फ्रूट्स के लिए स्टैंड अप पाउच बेस्ट रहेगा, क्योंकि ये मॉइस्चर और अरोमा दोनों को अच्छे से रोकता है।",
+     "now": {
+      "file": "aparna_hi_customer_2_now.wav",
+      "sec": 6.62,
+      "f0_hz": 229.0,
+      "f0_spread_st": 6.57,
+      "level": 4764.0
+     },
+     "deva": {
+      "file": "aparna_hi_customer_2_deva.wav",
+      "sec": 7.5,
+      "f0_hz": 211.0,
+      "f0_spread_st": 7.02,
+      "level": 4743.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 1.14,
+      "p90_st": 2.46,
+      "share_over_2st": 0.178
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 0.84,
+      "p90_st": 2.57,
+      "share_over_2st": 0.152
+     }
+    },
+    {
+     "text_now": "हमारी team इसी number पर WhatsApp पर quotation और sample kit details भेज देगी।",
+     "text_deva": "हमारी टीम इसी नंबर पर व्हाट्सऐप पर कोटेशन और सैंपल किट डिटेल्स भेज देगी।",
+     "now": {
+      "file": "aparna_hi_customer_3_now.wav",
+      "sec": 4.56,
+      "f0_hz": 258.0,
+      "f0_spread_st": 13.25,
+      "level": 4043.0
+     },
+     "deva": {
+      "file": "aparna_hi_customer_3_deva.wav",
+      "sec": 4.96,
+      "f0_hz": 242.0,
+      "f0_spread_st": 9.27,
+      "level": 4470.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 1.19,
+      "p90_st": 4.48,
+      "share_over_2st": 0.378
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 1.85,
+      "p90_st": 5.97,
+      "share_over_2st": 0.435
+     }
+    }
+   ]
+  },
+  "ishita_enhi_customer": {
+   "lines": [
+    {
+     "text_now": "एम ओ क्यू एक हज़ार pieces से start होता है, ताकि print और packaging की quality अच्छी बनी रहे।",
+     "text_deva": "एम ओ क्यू एक हज़ार पीसेस से स्टार्ट होता है, ताकि प्रिंट और पैकेजिंग की क्वालिटी अच्छी बनी रहे।",
+     "now": {
+      "file": "ishita_enhi_customer_1_now.wav",
+      "sec": 6.54,
+      "f0_hz": 242.0,
+      "f0_spread_st": 12.34,
+      "level": 5298.0
+     },
+     "deva": {
+      "file": "ishita_enhi_customer_1_deva.wav",
+      "sec": 6.31,
+      "f0_hz": 242.0,
+      "f0_spread_st": 14.12,
+      "level": 5275.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 1.17,
+      "p90_st": 4.31,
+      "share_over_2st": 0.276
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 0.93,
+      "p90_st": 2.69,
+      "share_over_2st": 0.174
+     },
+     "prep": {
+      "file": "ishita_enhi_customer_1_prep.wav",
+      "sec": 6.8,
+      "f0_hz": 235.0,
+      "f0_spread_st": 13.39,
+      "level": 5501.0
+     },
+     "shift_prep_vs_deva": {
+      "median_st": 1.74,
+      "p90_st": 6.67,
+      "share_over_2st": 0.437
+     }
+    },
+    {
+     "text_now": "dry fruits के लिए स्टैंड अप pouch best रहेगा, क्योंकि ये moisture और aroma दोनों को अच्छे से रोकता है।",
+     "text_deva": "ड्राई फ्रूट्स के लिए स्टैंड अप पाउच बेस्ट रहेगा, क्योंकि ये मॉइस्चर और अरोमा दोनों को अच्छे से रोकता है।",
+     "now": {
+      "file": "ishita_enhi_customer_2_now.wav",
+      "sec": 7.79,
+      "f0_hz": 258.0,
+      "f0_spread_st": 11.64,
+      "level": 5703.0
+     },
+     "deva": {
+      "file": "ishita_enhi_customer_2_deva.wav",
+      "sec": 9.45,
+      "f0_hz": 276.0,
+      "f0_spread_st": 11.23,
+      "level": 5442.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 0.74,
+      "p90_st": 2.86,
+      "share_over_2st": 0.253
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 0.92,
+      "p90_st": 2.75,
+      "share_over_2st": 0.207
+     },
+     "prep": {
+      "file": "ishita_enhi_customer_2_prep.wav",
+      "sec": 7.39,
+      "f0_hz": 276.0,
+      "f0_spread_st": 9.91,
+      "level": 5992.0
+     },
+     "shift_prep_vs_deva": {
+      "median_st": 1.26,
+      "p90_st": 3.86,
+      "share_over_2st": 0.336
+     }
+    },
+    {
+     "text_now": "हमारी team इसी number पर WhatsApp पर quotation और sample kit details भेज देगी।",
+     "text_deva": "हमारी टीम इसी नंबर पर व्हाट्सऐप पर कोटेशन और सैंपल किट डिटेल्स भेज देगी।",
+     "now": {
+      "file": "ishita_enhi_customer_3_now.wav",
+      "sec": 6.12,
+      "f0_hz": 276.0,
+      "f0_spread_st": 8.45,
+      "level": 6392.0
+     },
+     "deva": {
+      "file": "ishita_enhi_customer_3_deva.wav",
+      "sec": 5.42,
+      "f0_hz": 258.0,
+      "f0_spread_st": 8.84,
+      "level": 5505.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 1.15,
+      "p90_st": 3.52,
+      "share_over_2st": 0.286
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 1.23,
+      "p90_st": 3.81,
+      "share_over_2st": 0.307
+     },
+     "prep": {
+      "file": "ishita_enhi_customer_3_prep.wav",
+      "sec": 6.31,
+      "f0_hz": 276.0,
+      "f0_spread_st": 9.81,
+      "level": 5787.0
+     },
+     "shift_prep_vs_deva": {
+      "median_st": 0.73,
+      "p90_st": 2.5,
+      "share_over_2st": 0.174
+     }
+    }
+   ]
+  },
+  "simran_enhi_customer": {
+   "lines": [
+    {
+     "text_now": "एम ओ क्यू एक हज़ार pieces से start होता है, ताकि print और packaging की quality अच्छी बनी रहे।",
+     "text_deva": "एम ओ क्यू एक हज़ार पीसेस से स्टार्ट होता है, ताकि प्रिंट और पैकेजिंग की क्वालिटी अच्छी बनी रहे।",
+     "now": {
+      "file": "simran_enhi_customer_1_now.wav",
+      "sec": 5.95,
+      "f0_hz": 258.0,
+      "f0_spread_st": 11.64,
+      "level": 3795.0
+     },
+     "deva": {
+      "file": "simran_enhi_customer_1_deva.wav",
+      "sec": 5.85,
+      "f0_hz": 229.0,
+      "f0_spread_st": 11.29,
+      "level": 4306.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 0.91,
+      "p90_st": 3.25,
+      "share_over_2st": 0.237
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 0.73,
+      "p90_st": 1.74,
+      "share_over_2st": 0.055
+     }
+    },
+    {
+     "text_now": "dry fruits के लिए स्टैंड अप pouch best रहेगा, क्योंकि ये moisture और aroma दोनों को अच्छे से रोकता है।",
+     "text_deva": "ड्राई फ्रूट्स के लिए स्टैंड अप पाउच बेस्ट रहेगा, क्योंकि ये मॉइस्चर और अरोमा दोनों को अच्छे से रोकता है।",
+     "now": {
+      "file": "simran_enhi_customer_2_now.wav",
+      "sec": 6.54,
+      "f0_hz": 211.0,
+      "f0_spread_st": 8.14,
+      "level": 4906.0
+     },
+     "deva": {
+      "file": "simran_enhi_customer_2_deva.wav",
+      "sec": 6.45,
+      "f0_hz": 200.0,
+      "f0_spread_st": 9.47,
+      "level": 4619.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 1.24,
+      "p90_st": 2.98,
+      "share_over_2st": 0.248
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 1.61,
+      "p90_st": 4.04,
+      "share_over_2st": 0.402
+     }
+    },
+    {
+     "text_now": "हमारी team इसी number पर WhatsApp पर quotation और sample kit details भेज देगी।",
+     "text_deva": "हमारी टीम इसी नंबर पर व्हाट्सऐप पर कोटेशन और सैंपल किट डिटेल्स भेज देगी।",
+     "now": {
+      "file": "simran_enhi_customer_3_now.wav",
+      "sec": 5.24,
+      "f0_hz": 216.0,
+      "f0_spread_st": 7.77,
+      "level": 4506.0
+     },
+     "deva": {
+      "file": "simran_enhi_customer_3_deva.wav",
+      "sec": 4.55,
+      "f0_hz": 250.0,
+      "f0_spread_st": 12.0,
+      "level": 4228.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 1.65,
+      "p90_st": 3.17,
+      "share_over_2st": 0.316
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 1.08,
+      "p90_st": 3.02,
+      "share_over_2st": 0.26
+     }
+    }
+   ]
+  },
+  "shalini_enhi_customer": {
+   "lines": [
+    {
+     "text_now": "एम ओ क्यू एक हज़ार pieces से start होता है, ताकि print और packaging की quality अच्छी बनी रहे।",
+     "text_deva": "एम ओ क्यू एक हज़ार पीसेस से स्टार्ट होता है, ताकि प्रिंट और पैकेजिंग की क्वालिटी अच्छी बनी रहे।",
+     "now": {
+      "file": "shalini_enhi_customer_1_now.wav",
+      "sec": 6.63,
+      "f0_hz": 250.0,
+      "f0_spread_st": 11.26,
+      "level": 4642.0
+     },
+     "deva": {
+      "file": "shalini_enhi_customer_1_deva.wav",
+      "sec": 6.45,
+      "f0_hz": 229.0,
+      "f0_spread_st": 9.6,
+      "level": 4112.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 1.05,
+      "p90_st": 2.55,
+      "share_over_2st": 0.191
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 1.4,
+      "p90_st": 3.27,
+      "share_over_2st": 0.315
+     }
+    },
+    {
+     "text_now": "dry fruits के लिए स्टैंड अप pouch best रहेगा, क्योंकि ये moisture और aroma दोनों को अच्छे से रोकता है।",
+     "text_deva": "ड्राई फ्रूट्स के लिए स्टैंड अप पाउच बेस्ट रहेगा, क्योंकि ये मॉइस्चर और अरोमा दोनों को अच्छे से रोकता है।",
+     "now": {
+      "file": "shalini_enhi_customer_2_now.wav",
+      "sec": 7.68,
+      "f0_hz": 211.0,
+      "f0_spread_st": 8.46,
+      "level": 4771.0
+     },
+     "deva": {
+      "file": "shalini_enhi_customer_2_deva.wav",
+      "sec": 7.1,
+      "f0_hz": 235.0,
+      "f0_spread_st": 12.37,
+      "level": 5146.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 1.26,
+      "p90_st": 4.54,
+      "share_over_2st": 0.356
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 0.94,
+      "p90_st": 2.49,
+      "share_over_2st": 0.175
+     }
+    },
+    {
+     "text_now": "हमारी team इसी number पर WhatsApp पर quotation और sample kit details भेज देगी।",
+     "text_deva": "हमारी टीम इसी नंबर पर व्हाट्सऐप पर कोटेशन और सैंपल किट डिटेल्स भेज देगी।",
+     "now": {
+      "file": "shalini_enhi_customer_3_now.wav",
+      "sec": 6.42,
+      "f0_hz": 229.0,
+      "f0_spread_st": 9.39,
+      "level": 4862.0
+     },
+     "deva": {
+      "file": "shalini_enhi_customer_3_deva.wav",
+      "sec": 4.87,
+      "f0_hz": 250.0,
+      "f0_spread_st": 9.5,
+      "level": 4562.0
+     },
+     "shift_now_vs_deva": {
+      "median_st": 1.39,
+      "p90_st": 4.54,
+      "share_over_2st": 0.409
+     },
+     "baseline_deva_vs_deva2": {
+      "median_st": 1.3,
+      "p90_st": 3.74,
+      "share_over_2st": 0.3
+     }
+    }
+   ]
+  }
+ },
+ "fillers": {
+  "हम्म": {
+   "today (REST, ...)": {
+    "file": "filler_0_today.wav",
+    "sec": 0.42,
+    "f0_hz": 250.0,
+    "f0_spread_st": 4.49,
+    "level": 11535.0
+   },
+   "no ellipsis (REST)": {
+    "file": "filler_0_plain.wav",
+    "sec": 0.6,
+    "f0_hz": 208.0,
+    "f0_spread_st": 4.58,
+    "level": 8370.0
+   },
+   "live voice path": {
+    "file": "filler_0_live.wav",
+    "sec": 0.46,
+    "f0_hz": 208.0,
+    "f0_spread_st": 4.46,
+    "level": 3095.0
+   }
+  },
+  "जी": {
+   "today (REST, ...)": {
+    "file": "filler_1_today.wav",
+    "sec": 0.42,
+    "f0_hz": 193.0,
+    "f0_spread_st": 3.86,
+    "level": 7295.0
+   },
+   "no ellipsis (REST)": {
+    "file": "filler_1_plain.wav",
+    "sec": 0.43,
+    "f0_hz": 198.0,
+    "f0_spread_st": 4.85,
+    "level": 5396.0
+   },
+   "live voice path": {
+    "file": "filler_1_live.wav",
+    "sec": 0.44,
+    "f0_hz": 229.0,
+    "f0_spread_st": 4.1,
+    "level": 3901.0
+   }
+  },
+  "अच्छा": {
+   "today (REST, ...)": {
+    "file": "filler_2_today.wav",
+    "sec": 0.6,
+    "f0_hz": 320.0,
+    "f0_spread_st": 4.9,
+    "level": 6021.0
+   },
+   "no ellipsis (REST)": {
+    "file": "filler_2_plain.wav",
+    "sec": 0.42,
+    "f0_hz": 203.0,
+    "f0_spread_st": 1.32,
+    "level": 5179.0
+   },
+   "live voice path": {
+    "file": "filler_2_live.wav",
+    "sec": 0.54,
+    "f0_hz": 190.0,
+    "f0_spread_st": 2.27,
+    "level": 1292.0
+   }
+  },
+  "अच्छा जी": {
+   "today (REST, ...)": {
+    "file": "filler_3_today.wav",
+    "sec": 0.77,
+    "f0_hz": 222.0,
+    "f0_spread_st": 1.91,
+    "level": 7110.0
+   },
+   "no ellipsis (REST)": {
+    "file": "filler_3_plain.wav",
+    "sec": 0.67,
+    "f0_hz": 222.0,
+    "f0_spread_st": 12.84,
+    "level": 6669.0
+   },
+   "live voice path": {
+    "file": "filler_3_live.wav",
+    "sec": 0.72,
+    "f0_hz": 167.0,
+    "f0_spread_st": 6.7,
+    "level": 2227.0
+   }
+  },
+  "हम्म, एक second": {
+   "today (REST, ...)": {
+    "file": "filler_4_today.wav",
+    "sec": 1.54,
+    "f0_hz": 216.0,
+    "f0_spread_st": 5.24,
+    "level": 7827.0
+   },
+   "no ellipsis (REST)": {
+    "file": "filler_4_plain.wav",
+    "sec": 31.37,
+    "f0_hz": 211.0,
+    "f0_spread_st": 2.53,
+    "level": 7075.0
+   },
+   "live voice path": {
+    "file": "filler_4_live.wav",
+    "sec": 29.39,
+    "f0_hz": 200.0,
+    "f0_spread_st": 5.41,
+    "level": 4598.0
+   }
+  }
+ },
+ "sarvam_characters": 2570
+}

@@ -397,3 +397,60 @@ def test_plivo_stream_has_noise_cancellation(monkeypatch):
     monkeypatch.setattr(settings, "plivo_noise_cancellation", False)
     assert "noiseCancellation" not in plivo.answer_xml("u" * 32, 300)
     assert "noiseCancellation" not in vobiz.answer_xml("u" * 32, 300)  # Vobiz: not a documented option
+
+
+# ---------------------------------------------------------------- lost hangup webhooks
+def test_ended_call_reads_plivo_call_record(plivo_mode, monkeypatch):
+    """GET /Call/{id}/: a record exists only once the call is over (404 while it is ringing or live)."""
+    FakePlivo({
+        ("GET", "/Call/pl-ring/"): {"call_uuid": "pl-ring", "end_time": "2026-11-20 03:32:54+00:00", "answer_time": None,
+                                     "hangup_cause_code": 6010, "hangup_cause_name": "Ring Timeout Reached",
+                                     "hangup_source": "Plivo"},
+        ("GET", "/Call/pl-err/"): {"call_uuid": "pl-err", "end_time": "2026-11-20 03:32:43+00:00",
+                                    "answer_time": "2026-11-20 03:32:42+00:00", "hangup_cause_code": 7011,
+                                    "hangup_cause_name": "Error Reaching Answer URL", "hangup_source": "Error"},
+        ("GET", "/Call/pl-open/"): {"call_uuid": "pl-open", "end_time": None},
+    }).install(monkeypatch)
+    assert _run(plivo.ended_call("pl-ring")) == {"HangupCauseCode": "6010", "HangupCause": "Ring Timeout Reached",
+                                                  "CallStatus": "completed", "Answered": False}
+    err = _run(plivo.ended_call("pl-err"))
+    assert err["CallStatus"] == "failed" and err["Answered"] and err["HangupCauseCode"] == "7011"
+    assert _run(plivo.ended_call("pl-live")) is None    # 404: still ringing / live
+    assert _run(plivo.ended_call("pl-open")) is None    # no end time yet
+    assert _run(plivo.ended_call("")) is None
+
+
+def test_watchdog_settles_calls_whose_hangup_webhook_never_came(client, monkeypatch):
+    """2026-11-20: the tunnel passed none of Plivo's callbacks for ~90 s. Three campaign calls Plivo had already
+    ended (ring timeout, an answer it could not connect) stayed 'ringing' and held the campaign's slots until
+    someone hung them up by hand. After 20 s without a session or webhook the watchdog asks Plivo."""
+    calls = {name: _phone_call(client, phone) for name, phone in
+             (("timeout", "9460000201"), ("broken", "9460000202"), ("ringing", "9460000203"), ("fresh", "9460000204"))}
+    records = {
+        "timeout": {"HangupCauseCode": "6010", "HangupCause": "Ring Timeout Reached", "CallStatus": "completed",
+                    "Answered": False},
+        "broken": {"HangupCauseCode": "7011", "HangupCause": "Error Reaching Answer URL", "CallStatus": "failed",
+                   "Answered": True},
+        "fresh": {"HangupCauseCode": "6010", "HangupCause": "Ring Timeout Reached", "CallStatus": "completed",
+                  "Answered": False},
+    }
+    with SessionLocal() as db:
+        ids = {name: db.scalar(select(Call.provider_call_id).where(Call.uuid == c["uuid"])) for name, c in calls.items()}
+        old = [calls[n]["uuid"] for n in ("timeout", "broken", "ringing")]  # "fresh" was dialled just now
+        db.execute(update(Call).where(Call.uuid.in_(old)).values(started_at=utcnow() - cm_mod.timedelta(seconds=30)))
+        db.commit()
+    asked: list[str] = []
+
+    async def fake_ended(pid):
+        asked.append(pid)
+        name = next(n for n, i in ids.items() if i == pid)
+        return records.get(name)  # "ringing": Plivo has no record yet
+
+    monkeypatch.setattr(plivo, "ended_call", fake_ended)
+    client.portal.call(manager._sweep)
+    state = {n: client.get(f"/api/calls/{c['uuid']}").json() for n, c in calls.items()}
+    assert (state["timeout"]["status"], state["timeout"]["end_reason"]) == ("no_answer", "no_answer")
+    assert state["broken"]["status"] == "failed" and "Error Reaching Answer URL".upper() in state["broken"]["error"]
+    assert state["ringing"]["status"] in ACTIVE_CALL_STATUSES      # still ringing at Plivo: left alone
+    assert state["fresh"]["status"] in ACTIVE_CALL_STATUSES        # under 20 s: not asked yet
+    assert ids["fresh"] not in asked and ids["ringing"] in asked

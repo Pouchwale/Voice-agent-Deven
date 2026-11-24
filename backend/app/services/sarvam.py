@@ -30,7 +30,9 @@ from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed
 
 from ..config import get_settings
-from .audio import match_loudness, parse_wav_header_any, resample_once
+from .audio import (STREAM_VOICE_LEVEL, V4_VOICE_LEVEL, SilenceLimiter, match_loudness, parse_wav_header_any,
+                    resample_once, trim_clip)
+from .hindi_words import english_in_devanagari
 from .numbers import LONG_DIGITS, speak_numbers_hindi
 
 log = logging.getLogger("sarvam")
@@ -61,6 +63,8 @@ BULBUL_V4_VOICES: list[dict] = [
         ("ritu_hi_sales", "Ritu (v4) · sales"),
         ("simran_hi_sales", "Simran (v4) · sales"),
         ("ishita_enhi_customer", "Ishita (v4) · Hinglish"),
+        ("shalini_enhi_customer", "Shalini (v4) · Hinglish"),
+        ("simran_enhi_customer", "Simran (v4) · Hinglish"),
         ("sarika_hi_conversation", "Sarika (v4) · conversational"),
         ("suhani_hi_social", "Suhani (v4) · lively"),
     )
@@ -129,6 +133,12 @@ def _pronunciation_rules(lines: tuple[str, ...]) -> list[tuple[re.Pattern, str]]
     return rules
 
 
+def _hindi_voice(cfg: dict) -> bool:
+    """A Hindi persona ("sarika_hi_conversation") in a Hindi call. Hinglish personas ("ishita_enhi_customer") are made
+    for English words in English letters, and English calls read them as written."""
+    return _tts_lang(cfg).startswith("hi") and "_hi_" in voice_for(cfg)
+
+
 def speakable(text: str, cfg: dict) -> str:
     """Text as it should be spoken: pronunciation fixes ("GST = जी एस टी") applied, the company name always as
     "पाउच वाले" (_say_brand), numbers as a person says them ("10,000" -> "दस हज़ार" in Hindi calls), phone numbers
@@ -139,6 +149,8 @@ def speakable(text: str, cfg: dict) -> str:
         out = pattern.sub(spoken, out)
     out = _say_brand(out, _tts_lang(cfg))
     out = speak_numbers_hindi(out) if _tts_lang(cfg).startswith("hi") else LONG_DIGITS.sub("", out)
+    if _hindi_voice(cfg):
+        out = english_in_devanagari(out)  # "pieces" -> "पीसेस": a Hindi voice changes tone on English letters
     out = _MARKUP.sub(" ", out)
     return re.sub(r"[ \t]{2,}", " ", out).strip()
 
@@ -178,6 +190,16 @@ class _LRU(OrderedDict):
 _clip_cache = _LRU(400)
 
 
+def _clip_key(text: str, cfg: dict, sample_rate: int) -> tuple:
+    return (text, voice_for(cfg), round(float(cfg.get("tts_pace") or 1.0), 2),
+            round(float(cfg.get("tts_temperature") or 0.6), 2), sample_rate, _tts_lang(cfg))
+
+
+def forget_clip(text: str, cfg: dict, sample_rate: int) -> None:
+    """Drop a kept take, so the next request for this line gets a fresh one."""
+    _clip_cache.pop(_clip_key(speakable(text.strip(), cfg), cfg, sample_rate), None)
+
+
 async def tts_rest(text: str, cfg: dict, sample_rate: int) -> bytes:
     """Synthesize `text` -> mono PCM16 at `sample_rate`. Cached by (text, voice, pace, temp, rate)."""
     text = speakable(text.strip(), cfg)
@@ -186,7 +208,7 @@ async def tts_rest(text: str, cfg: dict, sample_rate: int) -> bytes:
     voice = voice_for(cfg)
     pace = float(cfg.get("tts_pace") or 1.0)
     temp = float(cfg.get("tts_temperature") or 0.6)
-    key = (text, voice, round(pace, 2), round(temp, 2), sample_rate, _tts_lang(cfg))
+    key = _clip_key(text, cfg, sample_rate)
     cached = _clip_cache.get_item(key)
     if cached is not None:
         return cached
@@ -218,8 +240,11 @@ async def tts_rest(text: str, cfg: dict, sample_rate: int) -> bytes:
             chunk = raw
         pcm.extend(chunk)
     # same loudness as the streamed voice: the REST voice is 1.5-2x louder (see audio.match_loudness)
-    out = match_loudness(resample_once(bytes(pcm), rate, sample_rate), sample_rate)
-    _clip_cache.put(key, out)
+    # (a take that is nothing but silence is not kept: the next request for this line gets a fresh one)
+    out = match_loudness(trim_clip(resample_once(bytes(pcm), rate, sample_rate), sample_rate), sample_rate,
+                         V4_VOICE_LEVEL if model == V4_MODEL else STREAM_VOICE_LEVEL)
+    if out:
+        _clip_cache.put(key, out)
     return out
 
 
@@ -251,6 +276,7 @@ class TTSStream:
         self._chars = 0
         self._wav_header_pending = True
         self._carry = b""
+        self._limiter = SilenceLimiter(sample_rate)  # a long silent stretch never reaches the call
         self.audio_bytes = 0
         self.sent: list[str] = []
         # called with the number of sentences finished so far, after each sentence's audio (natural pauses)
@@ -347,28 +373,32 @@ class TTSStream:
             self._carry = b""
         return data
 
+    async def _received(self, pcm: bytes) -> None:
+        if not pcm:
+            return
+        self._last_audio = time.monotonic()
+        self.audio_bytes += len(pcm)
+        pcm = self._limiter.feed(pcm)
+        if pcm:
+            await self.on_audio(pcm)
+
     async def _read_loop(self) -> None:
         assert self.ws is not None
         try:
             async for msg in self.ws:
                 if isinstance(msg, bytes):
-                    pcm = self._decode(msg, "")
-                    if pcm:
-                        self._last_audio = time.monotonic()
-                        self.audio_bytes += len(pcm)
-                        await self.on_audio(pcm)
+                    await self._received(self._decode(msg, ""))
                     continue
                 data = json.loads(msg)
                 mtype = data.get("type")
                 if mtype == "audio":
                     d = data.get("data") or {}
-                    pcm = self._decode(base64.b64decode(d.get("audio") or ""), d.get("content_type", ""))
-                    if pcm:
-                        self._last_audio = time.monotonic()
-                        self.audio_bytes += len(pcm)
-                        await self.on_audio(pcm)
+                    await self._received(self._decode(base64.b64decode(d.get("audio") or ""), d.get("content_type", "")))
                 elif mtype == "event":
                     if (data.get("data") or {}).get("event_type") == "final":
+                        rest = self._limiter.flush()
+                        if rest:
+                            await self.on_audio(rest)
                         self._finals += 1
                         if self.on_sentence_end is not None:
                             with contextlib.suppress(Exception):

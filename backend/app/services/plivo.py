@@ -224,6 +224,27 @@ async def hangup_call(provider_call_id: str) -> bool:
     return True  # 404 on both: the call is already gone
 
 
+async def ended_call(provider_call_id: str) -> dict | None:
+    """Plivo's record of a call that is over, shaped like the hangup webhook's form; None while the call is still
+    being dialled, ringing or live (Plivo has no record until it ends) or when Plivo can't be asked.
+
+    The watchdog's fallback for a hangup webhook that never arrives: on 2026-11-20 the tunnel passed none of
+    Plivo's callbacks for ~90 s, and three campaign calls Plivo had already ended (ring timeout, an answer it
+    could not connect) kept their campaign's slots busy until someone hung them up by hand."""
+    if not (settings.plivo_ready and provider_call_id):
+        return None
+    pid = urllib.parse.quote(provider_call_id, safe="")
+    try:
+        d = await api("GET", f"/Call/{pid}/", timeout=10)
+    except PlivoError:
+        return None
+    if not d.get("end_time"):
+        return None
+    error = str(d.get("hangup_source") or "").lower() == "error"
+    return {"HangupCauseCode": str(d.get("hangup_cause_code") or ""), "HangupCause": str(d.get("hangup_cause_name") or ""),
+            "CallStatus": "failed" if error else "completed", "Answered": bool(d.get("answer_time"))}
+
+
 MAX_REDIRECTS = 4
 
 

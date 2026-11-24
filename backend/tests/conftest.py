@@ -23,6 +23,8 @@ os.environ["BACKGROUND_VOICE_FILTER"] = "false"
 os.environ["PLIVO_AUTH_ID"] = "MAPLIVOTEST"
 os.environ["PLIVO_AUTH_TOKEN"] = "plivo-test-token"
 os.environ["PLIVO_FROM_NUMBER"] = "+918000000001"
+# Settings also read backend/.env: pin the model so the tests don't change when the live calls' model does.
+os.environ["OPENAI_MODEL"] = "gpt-4o-mini"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 

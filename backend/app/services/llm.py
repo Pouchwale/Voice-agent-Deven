@@ -1,6 +1,7 @@
 """LLM brain: GPT-4o-mini, streamed and cut into speakable sentences."""
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import re
@@ -252,12 +253,16 @@ async def stream_reply(messages: list[dict], cache_key: str | None = None) -> As
         stream=True,
         **extra,
     )
-    async for chunk in stream:
-        if not chunk.choices:
-            continue
-        delta = chunk.choices[0].delta
-        if delta and delta.content:
-            yield delta.content
+    try:
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                yield delta.content
+    finally:
+        with contextlib.suppress(Exception):
+            await stream.close()  # stopped early (a reply cut off, or a request that lost the race): end the HTTP stream
 
 
 async def complete_json(messages: list[dict], max_tokens: int | None = None) -> dict:

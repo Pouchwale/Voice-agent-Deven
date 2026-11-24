@@ -49,6 +49,7 @@ RINGING_STATUSES = ("queued", "initiated", "ringing")  # an outbound call nobody
 INBOUND_RATE_LIMIT = 5                       # more inbound calls than this from one number ...
 INBOUND_RATE_WINDOW = timedelta(minutes=10)  # ... within this window are rejected as busy (robocalls, spam)
 EARLY_HANGUP_TTL = 120.0                     # s a hangup that arrived before its answer request is remembered
+ASK_PROVIDER_AFTER_SEC = 20                  # s without a session or hangup webhook: ask the provider if it ended
 INBOUND_GREETING_WAIT = 1.0                  # s the personalised greeting may still take once the stream is up
 OUTBOUND_GREETING_WAIT = 4.0                 # outbound greetings were synthesised while the phone rang
 MEMORY_WAIT = 1.5
@@ -173,7 +174,8 @@ def resolve_inbound_lead(db, caller: dict, when) -> tuple[Lead | None, str]:
 def inbound_greeting(cfg: dict, lead: dict | None, caller_type: str | None) -> str:
     """'Nice to talk again' only for callers who really spoke with us before; everyone else gets the
     first-caller greeting (with their name when the number is a lead with a usable name)."""
-    key = "inbound_greeting_known" if caller_type == "returning" else "inbound_greeting"
+    returning = caller_type == "returning" and cfg.get("caller_memory", True)  # Settings: remember earlier calls
+    key = "inbound_greeting_known" if returning else "inbound_greeting"
     return fill_template(cfg.get(key) or DEFAULT_AGENT_SETTINGS[key], cfg, lead).strip()
 
 
@@ -341,7 +343,7 @@ class CallManager:
                                                        Call.status.in_(ACTIVE_CALL_STATUSES)).limit(1))
                 if busy:
                     raise CallError("This lead already has a call in progress", 409, reason="lead_busy")
-                callback = callback_due(db, lead)
+                callback = bool(cfg.get("caller_memory", True)) and callback_due(db, lead)
                 call = Call(uuid=call_uuid, lead_id=lead.id, campaign_id=campaign_id, channel="phone",
                             direction="outbound", status="queued", from_number=caller_e164(settings.caller_number) or settings.caller_number,
                             to_number=lead.phone, started_at=utcnow())
@@ -469,7 +471,8 @@ class CallManager:
                     lead = db.scalar(select(Lead).where(Lead.phone == call.from_number))
                 return {"direction": call.direction or "outbound", "caller_type": call.caller_type,
                         "from_number": call.from_number, "lead": lead_out(lead) if lead else None,
-                        "callback": bool(call.direction != "inbound" and lead is not None and callback_due(db, lead))}
+                        "callback": bool(cfg.get("caller_memory", True) and call.direction != "inbound"
+                                         and lead is not None and callback_due(db, lead))}
 
         info = await run_db(load)
         if info is None:
@@ -1024,6 +1027,42 @@ class CallManager:
             db.commit()
             return len(stale), to_analyze
 
+    async def provider_hangup(self, call_uuid: str, data: dict) -> None:
+        """The provider says the line is down (its hangup webhook, or its call record when that webhook never
+        came): end the conversation, or settle a call that never got one as no answer / busy / failed."""
+        self.mark_hangup_received(call_uuid)  # the line is down: no REST hang-up needed later
+        session = self.sessions.get(call_uuid)
+        if session is not None:
+            if not session.ending:
+                await session.end("user_hangup")
+            return
+
+        def row() -> dict | None:
+            with SessionLocal() as db:
+                c = db.scalar(select(Call).where(Call.uuid == call_uuid))
+                return None if c is None else {"status": c.status, "answered": c.answered_at is not None}
+
+        r = await run_db(row)
+        if not r or r["status"] not in ACTIVE_CALL_STATUSES:
+            return
+        code = str(data.get("HangupCauseCode") or "")
+        cause = str(data.get("HangupCause") or data.get("HangupCauseName") or "").upper()
+        call_status = str(data.get("CallStatus") or "").lower()
+        if r["answered"] or (data.get("Answered") and call_status == "failed"):
+            # picked up, but our audio never reached them (e.g. the provider could not reach our server)
+            await self.finish_unanswered(call_uuid, "failed", "error",
+                                         error=f"Answered but no media stream ({cause or code}).")
+            return
+        status, reason = telephony.HANGUP_CODE_MAP.get(code, (None, None))
+        if status is None:
+            if "BUSY" in cause or call_status == "busy" or "REJECT" in cause:
+                status, reason = "busy", "busy"
+            elif call_status in ("failed",) or "INVALID" in cause:
+                status, reason = "failed", "error"
+            else:
+                status, reason = "no_answer", "no_answer"
+        await self.finish_unanswered(call_uuid, status, reason, error=(cause or None) if status == "failed" else None)
+
     def mark_hangup_received(self, call_uuid: str) -> None:
         """The provider told us the line is down (no REST hang-up needed afterwards)."""
         self.hangup_received.add(call_uuid)
@@ -1042,7 +1081,7 @@ class CallManager:
         now = utcnow()
         self._prune_early_hangups()
 
-        def stale() -> list[tuple[str, str]]:
+        def stale() -> list[tuple[str, str, str]]:
             out = []
             with SessionLocal() as db:
                 for c in db.scalars(select(Call).where(Call.status.in_(ACTIVE_CALL_STATUSES),
@@ -1051,12 +1090,24 @@ class CallManager:
                         continue
                     started = c.started_at or c.created_at
                     if c.status in ("queued", "initiated", "ringing") and now - started > timedelta(seconds=150):
-                        out.append((c.uuid, "no_answer"))
+                        out.append((c.uuid, "no_answer", ""))
                     elif c.status == "in_progress" and now - (c.answered_at or started) > timedelta(seconds=45):
-                        out.append((c.uuid, "stream_failed"))
+                        out.append((c.uuid, "stream_failed", ""))
+                    elif c.provider_call_id and now - started > timedelta(seconds=ASK_PROVIDER_AFTER_SEC):
+                        out.append((c.uuid, "ask_provider", c.provider_call_id))
             return out
 
-        for call_uuid, kind in await run_db(stale):
+        ended_call = getattr(telephony.active(), "ended_call", None)
+        for call_uuid, kind, provider_call_id in await run_db(stale):
+            if kind == "ask_provider":
+                # no session and no hangup webhook yet: has the provider ended it already? (a lost webhook kept
+                # campaign calls 'ringing' for minutes after Plivo had ended them, holding the campaign's slots)
+                data = await ended_call(provider_call_id) if ended_call else None
+                if data:
+                    log.info("call %s: ended at the provider (%s) but its hangup webhook never came",
+                             call_uuid, data.get("HangupCause") or data.get("HangupCauseCode"))
+                    await self.provider_hangup(call_uuid, data)
+                continue
             if kind == "no_answer":
                 await self.finish_unanswered(call_uuid, "no_answer", "no_answer")
             else:

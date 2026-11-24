@@ -22,7 +22,7 @@ Lead list ──► Campaign dialer ──► Plivo (or Vobiz) ──► custome
 | Telephony | Plivo (active) or Vobiz, switched with `TELEPHONY_PROVIDER`: outbound and inbound calls, bidirectional media stream, call recording |
 | Speech-to-text | Sarvam **Saaras v3** realtime streaming (`saaras:v3-realtime`, `codemix` = Hindi in Devanagari + English words in English) |
 | Text-to-speech | Sarvam **Bulbul** streaming. The voice chosen in **Settings → Voice** decides the model: the "(v4)" voices (e.g. Sarika · conversational) use **Bulbul v4** (`bulbul:v4-flash`), the older voices use **Bulbul v3** (`SARVAM_TTS_MODEL`, default voice `suhani`) |
-| Brain | OpenAI **gpt-4o-mini**, max 120 tokens, temperature 0.6 |
+| Brain | OpenAI **gpt-4.1-mini** (`OPENAI_MODEL`), max 120 tokens, temperature 0.6. Chosen on 2026-11-20 over gpt-4o-mini: same reply quality, first sentence ~0.2 s sooner (`backend/tools/llm_compare.py` compares models on the real prompt) |
 
 ---
 
@@ -49,7 +49,7 @@ cd ..\frontend; npm install; npm run dev                 # :3100
 ### Keys (`backend/.env`, never in `.env.example`)
 | Variable | What |
 |---|---|
-| `OPENAI_API_KEY` | OpenAI key (gpt-4o-mini) |
+| `OPENAI_API_KEY` | OpenAI key (live calls use `OPENAI_MODEL`, gpt-4.1-mini) |
 | `SARVAM_API_KEY` | Sarvam AI subscription key (STT + TTS) |
 | `TELEPHONY_PROVIDER` | `plivo` (default) or `vobiz`: which phone provider places and receives calls |
 | `PLIVO_AUTH_ID`, `PLIVO_AUTH_TOKEN` | Plivo console → Overview → Auth ID / Auth Token |
@@ -121,7 +121,11 @@ Two lines are always kept free for inbound callers while campaigns run. Both **I
 | Busy / call later | Asks a convenient time, confirms it, ends politely (callback time saved) |
 | Customer talks | Live transcription; **350 ms** of silence = "done talking" |
 | Customer pauses mid-sentence | "हमें pouch चाहिए, और…": the agent waits a moment instead of jumping in |
-| Slow reply | Natural Hindi filler so the line never goes dead: "हम्म, एक second…" after a question, "जी, समझ गई…" after a statement. Never the same one twice in a row, not before every reply |
+| Slow reply | A short, plainly spoken Hindi filler so the line never goes dead: "हम्म" after a question, "जी" / "अच्छा" after a statement. Never the same one twice in a row, not before every reply, never before a goodbye, and skipped once the answer is already with the voice engine (it would only make the answer wait) |
+| AI slow to start | No first word from the AI after 1.2 s (normally 0.6-0.9 s; a rare stall lasts 5+ s): a second, identical request races the first and whichever answers first is used. Every answered turn writes a `timing on <call>, turn N` line to the backend log (speech end, final transcript, first word, first audio, filler) |
+| Customer asks something | She answers **as a packaging expert** (pouch types, materials, finishes, design ideas, which pouch suits what and why) and **waits**: no next question in the same breath. Only an exact price, exact size or specs, a date, payment, complex custom work or a company fact she was not given goes to our expert, with no number or promise from her. When they react ("हाँ", "ठीक है") she goes on with her next question. If they stay quiet for 6 s she gently asks once "और कुछ जानना है आपको?"; after that the normal silence steps apply |
+| Voice returns silence | Bulbul sometimes adds many seconds of pure silence to a line (a 1 s filler came back as 30 s). Any silent stretch is cut to 0.7 s before it reaches the call |
+| Remember earlier calls | Settings switch (`caller_memory`, on by default). Off, for testing: every call starts as a first call (name and number only, new-caller greeting, no call-back apology). All calls, transcripts, recordings and lead details stay saved. Turn it back on before calling real customers |
 | Customer interrupts | Stops instantly (barge-in). "haan" / "ji" / "ok" do **not** interrupt |
 | Both start talking at once (false start) | A short sound from the customer in the first 1.5 s of the agent's reply can cut the agent off, and speech recognition then labels the fragment "ठीक है?" / "हाँ" / "Okay". That is not counted as the customer's words: the agent answers what they really said again, once (the call's `false_starts` metric counts it). Real words ("रुकिए…") and an acknowledgement later in the sentence are handled as before |
 | Asked "which types / products do you have?" | Names two or three in one sentence, never a list. If the AI writes a bullet or numbered list anyway, it is spoken (and saved in the transcript) as one sentence with at most three items plus "वगैरह": a five-line list took 16 s on a live call, now about 9 s |

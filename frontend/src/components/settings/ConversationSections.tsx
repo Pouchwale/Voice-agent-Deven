@@ -123,6 +123,12 @@ export function ConversationSection({ form, set, errors }: SectionProps) {
       </div>
       <div className="space-y-4 border-t border-line pt-5">
         <Switch
+          label="Remember earlier calls"
+          description="On: she remembers past calls with this customer. Off: every call is treated as a first call, for testing. Nothing is deleted. Turn it back on before calling real customers."
+          checked={form.caller_memory ?? true}
+          onChange={(v) => set("caller_memory", v)}
+        />
+        <Switch
           label="Fast replies"
           description="Start writing the reply the moment the customer stops talking, before the transcript is final. Hindi calls only."
           checked={form.fast_replies ?? true}

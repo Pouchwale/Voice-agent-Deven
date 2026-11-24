@@ -1,0 +1,382 @@
+{
+  "made": "2026-11-19 22:04",
+  "lines": {
+    "greeting": "नमस्ते Rahul जी! मैं PouchWale से बोल रही हूँ। क्या मैं आपसे 2 मिनट बात कर सकती हूँ? क्या अभी आप free हैं?\"",
+    "reply": "जी बिल्कुल, हम custom printed pouch बनाते हैं। आप किस product के लिए packaging ढूँढ रहे हैं?",
+    "closing": "अच्छा जी, मैं आपका ज़्यादा time नहीं लूँगी, आपसे बात करके अच्छा लगा! Packaging की कोई भी ज़रूरत हो, तो PouchWale को ज़रूर याद कीजिए।"
+  },
+  "takes": 3,
+  "setups": [
+    {
+      "key": "sarika_now",
+      "voice": "sarika_hi_conversation",
+      "pace": 1.0,
+      "label": "Sarika (v4) · pace 1.00",
+      "note": "today's setting",
+      "model": "bulbul:v4-flash",
+      "clips": [
+        {
+          "line": "greeting",
+          "take": 1,
+          "stem": "greeting",
+          "seconds": 5.8,
+          "speed": 15.1,
+          "liveliness": 77,
+          "pauses": 3,
+          "pitch": 240
+        },
+        {
+          "line": "reply",
+          "take": 1,
+          "stem": "reply_take1",
+          "seconds": 4.8,
+          "speed": 16.1,
+          "liveliness": 73,
+          "pauses": 1,
+          "pitch": 226
+        },
+        {
+          "line": "reply",
+          "take": 2,
+          "stem": "reply_take2",
+          "seconds": 4.5,
+          "speed": 17.4,
+          "liveliness": 59,
+          "pauses": 1,
+          "pitch": 178
+        },
+        {
+          "line": "reply",
+          "take": 3,
+          "stem": "reply_take3",
+          "seconds": 5.2,
+          "speed": 14.8,
+          "liveliness": 85,
+          "pauses": 2,
+          "pitch": 197
+        },
+        {
+          "line": "closing",
+          "take": 1,
+          "stem": "closing",
+          "seconds": 7.4,
+          "speed": 14.6,
+          "liveliness": 102,
+          "pauses": 3,
+          "pitch": 222
+        }
+      ]
+    },
+    {
+      "key": "sarika_092",
+      "voice": "sarika_hi_conversation",
+      "pace": 0.92,
+      "label": "Sarika (v4) · pace 0.92",
+      "note": "slower: the speed of the take you liked",
+      "model": "bulbul:v4-flash",
+      "clips": [
+        {
+          "line": "greeting",
+          "take": 1,
+          "stem": "greeting",
+          "seconds": 6.1,
+          "speed": 14.2,
+          "liveliness": 72,
+          "pauses": 3,
+          "pitch": 245
+        },
+        {
+          "line": "reply",
+          "take": 1,
+          "stem": "reply_take1",
+          "seconds": 5.0,
+          "speed": 15.3,
+          "liveliness": 113,
+          "pauses": 2,
+          "pitch": 203
+        },
+        {
+          "line": "reply",
+          "take": 2,
+          "stem": "reply_take2",
+          "seconds": 5.1,
+          "speed": 15.0,
+          "liveliness": 71,
+          "pauses": 1,
+          "pitch": 205
+        },
+        {
+          "line": "reply",
+          "take": 3,
+          "stem": "reply_take3",
+          "seconds": 5.7,
+          "speed": 13.4,
+          "liveliness": 48,
+          "pauses": 2,
+          "pitch": 182
+        },
+        {
+          "line": "closing",
+          "take": 1,
+          "stem": "closing",
+          "seconds": 8.0,
+          "speed": 13.8,
+          "liveliness": 104,
+          "pauses": 4,
+          "pitch": 212
+        }
+      ]
+    },
+    {
+      "key": "sarika_092_steady",
+      "voice": "sarika_hi_conversation",
+      "pace": 0.92,
+      "temperature": 0.3,
+      "force": true,
+      "label": "Sarika (v4) · pace 0.92 · expressiveness 0.3",
+      "note": "test: is v4 steadier when told to be? (live calls don't send this to v4)",
+      "model": "bulbul:v4-flash",
+      "clips": [
+        {
+          "line": "greeting",
+          "take": 1,
+          "stem": "greeting",
+          "seconds": 6.4,
+          "speed": 13.5,
+          "liveliness": 66,
+          "pauses": 3,
+          "pitch": 226
+        },
+        {
+          "line": "reply",
+          "take": 1,
+          "stem": "reply_take1",
+          "seconds": 4.4,
+          "speed": 17.5,
+          "liveliness": 93,
+          "pauses": 1,
+          "pitch": 200
+        },
+        {
+          "line": "reply",
+          "take": 2,
+          "stem": "reply_take2",
+          "seconds": 4.8,
+          "speed": 16.2,
+          "liveliness": 63,
+          "pauses": 1,
+          "pitch": 178
+        },
+        {
+          "line": "reply",
+          "take": 3,
+          "stem": "reply_take3",
+          "seconds": 6.0,
+          "speed": 12.8,
+          "liveliness": 93,
+          "pauses": 1,
+          "pitch": 222
+        },
+        {
+          "line": "closing",
+          "take": 1,
+          "stem": "closing",
+          "seconds": 7.3,
+          "speed": 15.1,
+          "liveliness": 66,
+          "pauses": 2,
+          "pitch": 235
+        }
+      ]
+    },
+    {
+      "key": "aparna",
+      "voice": "aparna_hi_customer",
+      "pace": 1.0,
+      "label": "Aparna (v4) · customer care · pace 1.00",
+      "note": "Sarvam's first pick for Hindi sales calls",
+      "model": "bulbul:v4-flash",
+      "clips": [
+        {
+          "line": "greeting",
+          "take": 1,
+          "stem": "greeting",
+          "seconds": 5.8,
+          "speed": 14.8,
+          "liveliness": 78,
+          "pauses": 3,
+          "pitch": 188
+        },
+        {
+          "line": "reply",
+          "take": 1,
+          "stem": "reply_take1",
+          "seconds": 4.9,
+          "speed": 15.8,
+          "liveliness": 163,
+          "pauses": 1,
+          "pitch": 219
+        },
+        {
+          "line": "reply",
+          "take": 2,
+          "stem": "reply_take2",
+          "seconds": 4.9,
+          "speed": 16.0,
+          "liveliness": 75,
+          "pauses": 1,
+          "pitch": 182
+        },
+        {
+          "line": "reply",
+          "take": 3,
+          "stem": "reply_take3",
+          "seconds": 5.1,
+          "speed": 15.1,
+          "liveliness": 64,
+          "pauses": 0,
+          "pitch": 205
+        },
+        {
+          "line": "closing",
+          "take": 1,
+          "stem": "closing",
+          "seconds": 6.5,
+          "speed": 16.9,
+          "liveliness": 111,
+          "pauses": 1,
+          "pitch": 218
+        }
+      ]
+    },
+    {
+      "key": "aarti",
+      "voice": "aarti_hi_customer",
+      "pace": 1.0,
+      "label": "Aarti (v4) · customer care · pace 1.00",
+      "note": "Sarvam's second pick for Hindi customer care",
+      "model": "bulbul:v4-flash",
+      "clips": [
+        {
+          "line": "greeting",
+          "take": 1,
+          "stem": "greeting",
+          "seconds": 6.8,
+          "speed": 12.6,
+          "liveliness": 109,
+          "pauses": 3,
+          "pitch": 242
+        },
+        {
+          "line": "reply",
+          "take": 1,
+          "stem": "reply_take1",
+          "seconds": 5.6,
+          "speed": 13.8,
+          "liveliness": 137,
+          "pauses": 1,
+          "pitch": 253
+        },
+        {
+          "line": "reply",
+          "take": 2,
+          "stem": "reply_take2",
+          "seconds": 5.5,
+          "speed": 14.0,
+          "liveliness": 178,
+          "pauses": 1,
+          "pitch": 267
+        },
+        {
+          "line": "reply",
+          "take": 3,
+          "stem": "reply_take3",
+          "seconds": 5.8,
+          "speed": 13.4,
+          "liveliness": 143,
+          "pauses": 0,
+          "pitch": 258
+        },
+        {
+          "line": "closing",
+          "take": 1,
+          "stem": "closing",
+          "seconds": 9.2,
+          "speed": 11.9,
+          "liveliness": 134,
+          "pauses": 3,
+          "pitch": 247
+        }
+      ]
+    },
+    {
+      "key": "suhani_v3",
+      "voice": "suhani",
+      "pace": 1.0,
+      "temperature": 0.4,
+      "label": "Suhani (v3) · expressiveness 0.4",
+      "note": "older model, the only one with a documented steadiness control",
+      "model": "bulbul:v3",
+      "clips": [
+        {
+          "line": "greeting",
+          "take": 1,
+          "stem": "greeting",
+          "seconds": 6.4,
+          "speed": 13.7,
+          "liveliness": 115,
+          "pauses": 3,
+          "pitch": 279
+        },
+        {
+          "line": "reply",
+          "take": 1,
+          "stem": "reply_take1",
+          "seconds": 5.8,
+          "speed": 13.4,
+          "liveliness": 138,
+          "pauses": 2,
+          "pitch": 258
+        },
+        {
+          "line": "reply",
+          "take": 2,
+          "stem": "reply_take2",
+          "seconds": 6.4,
+          "speed": 12.1,
+          "liveliness": 182,
+          "pauses": 2,
+          "pitch": 264
+        },
+        {
+          "line": "reply",
+          "take": 3,
+          "stem": "reply_take3",
+          "seconds": 5.9,
+          "speed": 13.2,
+          "liveliness": 189,
+          "pauses": 2,
+          "pitch": 289
+        },
+        {
+          "line": "closing",
+          "take": 1,
+          "stem": "closing",
+          "seconds": 9.9,
+          "speed": 11.1,
+          "liveliness": 151,
+          "pauses": 4,
+          "pitch": 258
+        }
+      ]
+    }
+  ],
+  "reference": {
+    "seconds": 5.2,
+    "speed": 14.9,
+    "liveliness": 61,
+    "pauses": 0,
+    "pitch": 224
+  },
+  "sarvam_characters": 3084
+}

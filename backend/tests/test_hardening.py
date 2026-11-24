@@ -199,7 +199,7 @@ def test_stranded_input_is_answered(monkeypatch):
         await _wait(lambda: len(llm.calls) == 1, timeout=4)
         await s.end("manual_hangup")
         await asyncio.wait_for(run, 5)
-        return llm.calls[0][-1]["content"]
+        return [m for m in llm.calls[0] if m["role"] == "user"][-1]["content"]
 
     assert asyncio.run(scenario()) == "price कितना है?"
 

@@ -47,6 +47,10 @@ def pcm_rms(pcm: bytes) -> int:
 # sentences: 2970-3780). Its REST endpoint returns the same voice 1.5-2x louder, sometimes clipped, so a
 # pre-made clip (greeting, filler, "are you there?") jumped out next to streamed replies.
 STREAM_VOICE_LEVEL = 3300
+# The same for Sarvam's v4 voices, measured on 2026-11-24 with this statistic: Sarika 4740, Shalini 4714, Simran 4465,
+# Aparna 4196, Ishita 5458. With the v3 figure the ready-made clips (fillers, greeting, "are you there?") were about 3 dB
+# quieter than her replies on calls with a v4 voice.
+V4_VOICE_LEVEL = 4700
 
 
 def match_loudness(pcm: bytes, rate: int, target: int = STREAM_VOICE_LEVEL) -> bytes:
@@ -65,6 +69,57 @@ def match_loudness(pcm: bytes, rate: int, target: int = STREAM_VOICE_LEVEL) -> b
     if abs(gain - 1.0) < 0.05:
         return pcm
     return audioop.mul(pcm, SAMPLE_WIDTH, gain)
+
+
+# Bulbul v4 sometimes returns a short line with many seconds of pure silence inside or after it: the filler
+# "हम्म, एक second..." came back as 30.2 s with 0.7 s of voice (2026-11-21). The agent then "speaks" silence, her real
+# answer queues behind it, and the customer says "Hello? आवाज़ नहीं आ रही" (call 64: 77 s of it in a 7 minute call).
+SILENCE_PEAK = 64    # a 10 ms frame whose loudest sample is below this is silence on a phone line
+MAX_PAUSE_MS = 700   # longest pause kept (the natural ones in her speech: 99% under 0.75 s)
+CLIP_EDGE_MS = 120   # silence kept before and after a ready-made clip
+
+
+class SilenceLimiter:
+    """Passes PCM16 through chunk by chunk, dropping whatever is beyond MAX_PAUSE_MS of continuous silence."""
+
+    def __init__(self, rate: int, max_pause_ms: int = MAX_PAUSE_MS):
+        self.frame = max(1, rate // 100) * SAMPLE_WIDTH  # 10 ms
+        self.limit = max_pause_ms // 10
+        self._quiet = 0
+        self._rest = b""
+
+    def feed(self, pcm: bytes) -> bytes:
+        data = self._rest + pcm
+        whole = len(data) - len(data) % self.frame
+        self._rest = data[whole:]
+        out = bytearray()
+        for i in range(0, whole, self.frame):
+            frame = data[i:i + self.frame]
+            if audioop.max(frame, SAMPLE_WIDTH) < SILENCE_PEAK:
+                self._quiet += 1
+                if self._quiet > self.limit:
+                    continue
+            else:
+                self._quiet = 0
+            out += frame
+        return bytes(out)
+
+    def flush(self) -> bytes:
+        out, self._rest = self._rest, b""
+        return out
+
+
+def trim_clip(pcm: bytes, rate: int) -> bytes:
+    """A ready-made line: no long pause inside it and almost none before or after it. Nothing but silence: b""."""
+    limiter = SilenceLimiter(rate)
+    out = limiter.feed(pcm) + limiter.flush()
+    frame = limiter.frame
+    voiced = [i for i in range(0, len(out) - frame + 1, frame)
+              if audioop.max(out[i:i + frame], SAMPLE_WIDTH) >= SILENCE_PEAK]
+    if not voiced:
+        return b""
+    edge = frame * (CLIP_EDGE_MS // 10)
+    return out[max(0, voiced[0] - edge):min(len(out), voiced[-1] + frame + edge)]
 
 
 def scale_volume(pcm: bytes, factor: float) -> bytes:

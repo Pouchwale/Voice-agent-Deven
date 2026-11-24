@@ -242,6 +242,41 @@ def test_filler_plays_when_reply_is_slow(monkeypatch):
     assert not FakeTTSStream.sentences[0].startswith("हम्म")
 
 
+def test_filler_delay_counts_from_when_the_line_went_quiet(monkeypatch):
+    """The caller hears the whole silence, so the filler delay starts when their voice stopped, not when the final
+    transcript arrived (~0.7 s later on Sarvam). Call 54 (2026-11-19) had 2.1 s of silence before every answer."""
+    async def scenario(phone: str, voice_stopped_ago: float | None) -> float:
+        llm = ScriptedLLM(["हम custom design भी करते हैं और printing भी करते हैं।"], delay=0.25)  # a slow reply
+        s, t = await _new_session(_lead(phone), _cfg(filler_delay_ms=1000, silence_timeout_sec=30), llm, monkeypatch)
+        run = asyncio.create_task(s.run())
+        await _wait(lambda: s.greeted and s.state == "listening" and any(k.startswith("filler_") for k in s.clips))
+        s.play_until = time.monotonic() - 5  # the greeting ended long ago
+        s._last_voiced_at = time.monotonic() - voice_stopped_ago if voice_stopped_ago else 0.0
+        said = time.monotonic()
+        await FakeSTT.instances[-1].say("आप design भी करते हो?")
+        await _wait(lambda: s._filler_played, timeout=4)
+        after = time.monotonic() - said
+        await s.end("manual_hangup")
+        await asyncio.wait_for(run, timeout=5)
+        return after
+
+    # their voice stopped 0.8 s before the transcript came: the filler follows ~0.2 s later, not a whole second
+    assert asyncio.run(scenario("+919800000006", 0.8)) < 0.6
+    # our audio never heard the voice: counted from speech recognition's end of speech, the whole second
+    assert 0.8 < asyncio.run(scenario("+919800000007", None)) < 2.0
+    # the silence is long over already: still 0.2 s for a reply that is on its way to get the first word
+    assert 0.15 < asyncio.run(scenario("+919800000008", 3.0)) < 0.6
+
+
+def test_silence_starts_when_both_sides_are_quiet():
+    now = 1000.0
+    assert session_mod.silence_started(now, now - 0.7, now - 0.3, now - 9) == now - 0.7  # their voice, as we heard it
+    assert session_mod.silence_started(now, now - 0.7, now - 0.3, now - 0.2) == now - 0.2  # the agent talked longer
+    assert session_mod.silence_started(now, now - 0.7, now - 0.3, now + 2) == now  # the agent is still talking
+    assert session_mod.silence_started(now, 0.0, now - 0.3, now - 9) == now - 0.3  # our audio missed the voice
+    assert session_mod.silence_started(now, now - 30, now - 30, 0.0) == now  # nothing from this turn: from now
+
+
 def test_backchannel_rules():
     assert is_backchannel("हाँ")
     assert is_backchannel("हाँ जी")

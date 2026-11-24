@@ -31,6 +31,7 @@ import hashlib
 import logging
 import random
 import re
+import unicodedata
 import time
 from abc import ABC, abstractmethod
 from collections import deque
@@ -43,11 +44,11 @@ from .audio import CallRecorder, EnergyVAD, Resampler, pcm_rms, rms_level, scale
 from .events import bus, spawn
 from .llm import ListFlattener, SentenceChunker, stream_reply, strip_end_token, warmup
 from .numbers import LONG_DIGITS
-from .prompts import (ENGLISH_AUTO_NOTE, ENGLISH_FILLERS, ENGLISH_LINES, ENGLISH_PREFERRED_NOTE, ENGLISH_TURN_NOTE,
+from .prompts import (ANSWER_THEN_WAIT_NOTE, CHECK_IN_LINES, ENGLISH_AUTO_NOTE, CUT_OFF_NOTE, ENGLISH_FILLERS, HAND_OVER_NOTE, HANG_UP_NOTE, OWN_ANSWER_NOTE, OUR_NAME_NOTE, EXPERT_CALL_NOTE, TIME_AGREED_NOTE, WHAT_WE_MAKE_NOTE, ENGLISH_LINES, ENGLISH_PREFERRED_NOTE, ENGLISH_TURN_NOTE,
                       HEAR_YOU_REPLY, HELLO_REPLY, LISTENING_SOUNDS, MOOD_NOTES, MOOD_PACE, NO_CALLS_NOTE,
-                      asked_no_calls, detect_mood, fill_template, misheard_note, greeting_for, hello_check, language_request, lead_context, spoke_english,
+                      asked_no_calls, company_name_note, supplier_name_note, detect_mood, fill_template, first_call_lead, misheard_note, greeting_for, hello_check, language_request, lead_context, spoke_english,
                       spoke_hindi, static_system_prompt)
-from .sarvam import RealtimeSTT, TTSStream, tts_rest
+from .sarvam import RealtimeSTT, TTSStream, forget_clip, tts_rest
 from .shipping_price import fix_shipping_amount, kit_shipping_amount
 
 log = logging.getLogger("session")
@@ -82,6 +83,101 @@ _QUESTION_WORDS = {"क्या", "कितना", "कितने", "कि
 _QUESTION_STARTS = {"what", "how", "when", "where", "which", "who", "why", "can", "could", "do", "does", "is",
                     "are", "will", "would"}
 _THINKING_MARKERS = ("हम्म", "hmm", "second", "सेकंड", "मिनट", "minute", "देखती", "देखता", "let me")
+
+# "The customer asked us something" (asks_for_info): they get the answer and then time to react to it.
+_ASK_WORDS = {"क्या", "कितना", "कितनी", "कितने", "कौन", "कौनसा", "कौनसी", "कौनसे", "कैसे", "कैसा", "कैसी", "कब", "कहाँ",
+              "कहां", "क्यों", "किस", "किसका", "किसकी", "किसके", "kya", "kitna", "kitni", "kitne", "kaise", "kab", "kahan",
+              "kaun", "kyun", "what", "which", "where", "when", "why", "who", "how"}
+_ASK_STARTS = {"can", "could", "do", "does", "is", "are", "will", "would", "did"}
+_ASK_TOPICS = {"rate", "price", "cost", "moq", "रेट", "प्राइस"}  # "Rate?" is a question in one word
+_ASK_PHRASES = ("बताओ", "बताइए", "बताइये", "बता दो", "बता दीजिए", "बता दीजिये", "बता दें", "बता सकते", "बता सकती", "बताना",
+                "बताएंगे", "बताएँगे", "समझाओ", "समझाइए", "समझा दो", "suggest", "recommend", "explain", "tell me",
+                "like to understand", "like to know", "want to know", "दे दो", "दे दीजिए", "दे दीजिये", "जानना है", "जानना था", "जानना चाहता",
+                "जानना चाहती", "पूछना है", "पूछना था")
+_CAN_YOU = re.compile(r"(सकते|सकती) (हैं|हो)")
+_SAY_AGAIN = re.compile(r"(फिर से|दोबारा) (बोल|कह)|repeat|क्या (बोल|कह)|say (that|it) again")
+# on their own these only invite the agent to speak ("हाँ जी बताइए") or ask to hear it again ("क्या? फिर से")
+_GO_AHEAD_WORDS = {"हाँ", "हां", "हा", "जी", "ज़रूर", "जरूर", "बिल्कुल", "ठीक", "है", "तो", "अच्छा", "बोलिए", "बोलिये", "बोलो",
+                   "बताइए", "बताइये", "बताओ", "सर", "sir", "madam", "मैडम", "ok", "okay", "yes", "हम्म", "आप", "अब", "चलो",
+                   "please", "tell", "me"}
+_SAY_AGAIN_WORDS = {"क्या", "बोला", "बोले", "बोली", "कहा", "सुनाई", "नहीं", "दिया", "आया", "हेलो", "hello", "हैलो", "फिर", "से",
+                    "दोबारा", "आपने", "what", "sorry", "जी", "हाँ", "हां", "बोलिए", "है", "आवाज़", "आवाज", "आ", "रही"}
+# What only a person can commit to (needs_expert): she never says a number or a promise about these.
+_PRICE_WORDS = {"rate", "rates", "price", "prices", "pricing", "cost", "costing", "quote", "quotation", "discount", "budget",
+                "total", "रेट", "प्राइस", "कीमत", "दाम", "भाव", "डिस्काउंट", "छूट", "कोटेशन", "बजट", "टोटल"}
+_PRICE_PHRASES = ("कितने का", "कितने में", "का पड़ेगा", "में पड़ेगा", "how much is", "how much for", "how much does")
+_EXPERT_WORDS = {
+    # exact size and specs
+    "size", "sizes", "dimension", "dimensions", "micron", "microns", "thickness", "gsm", "inch", "inches", "cm", "mm",
+    "capacity", "length", "width", "height", "साइज़", "साइज", "डायमेंशन", "माइक्रोन", "मोटाई", "जीएसएम", "इंच", "सेंटीमीटर",
+    "कैपेसिटी", "लंबाई", "चौड़ाई", "ऊंचाई",
+    # firm promises
+    "delivery", "deliver", "dispatch", "turnaround", "tat", "payment", "payments", "advance", "credit", "cod", "cash", "emi", "upi",
+    "cheque", "neft", "डिलीवरी", "डिस्पैच", "पेमेंट", "एडवांस", "क्रेडिट", "कैश",
+    # company facts we were not given
+    "machine", "machines", "machinery", "मशीनरी", "policy", "policies", "पॉलिसी", "client", "clients", "export", "exports", "gst", "invoice", "bill", "turnover", "employees",
+    "location", "address", "visit", "मशीन", "मशीनें", "क्लाइंट", "क्लाइंट्स", "एक्सपोर्ट", "जीएसटी", "बिल", "लोकेशन", "एड्रेस",
+    "विजिट",
+    # things only the team can do after the call
+    "whatsapp", "catalogue", "catalog", "brochure", "व्हाट्सएप", "कैटलॉग", "ब्रोशर",
+    # complex or unusual work
+    "compostable", "biodegradable", "recyclable", "fda", "bis", "halal", "कम्पोस्टेबल", "बायोडिग्रेडेबल", "रिसाइकिल",
+}
+# "कब तक दे दोगे" is a delivery promise; "कब तक fresh रहेगा" is a packaging question she can answer
+_EXPERT_PHRASES = ("कब तक दे", "कब तक मिल", "कब तक भेज", "कब तक बन", "कब तक तैयार", "कब तक आ", "कितने दिन में", "कितने दिनों में",
+                   "कितना time लग", "कितना टाइम लग", "कितने साल", "कितनी पुरानी", "कितना पुराना", "कब से", "कितने gram",
+                   "कितना gram", "कितने colour", "कितने color", "कितने रंग", "कितने कलर", "भेज दो", "भेज दीजिए", "भेज देना", "भेज दें",
+                   "send me", "भेज सकते", "भेज सकती", "भिजवा", "ship to", "deliver to", "कितना बड़ा", "कितनी बड़ी", "कितने बड़े", "how big",
+                   "कितने लोग", "कितने employees", "बड़ी companies", "बड़े brands", "किन companies", "किन brands",
+                   "which companies", "which brands", "raw material", "रॉ मटेरियल", "per sku", "पर sku", "combine", "child-resistant", "child resistant", "eco-friendly", "how old", "how many years")
+# a few words that say nothing on their own and don't finish a sentence: "तो कौन", "आप क्या अपना" (real calls)
+_CUT_OFF_WORDS = {"आप", "तुम", "मैं", "हम", "क्या", "कौन", "कौनसा", "कैसे", "कैसा", "कब", "कहाँ", "कहां", "किस", "अपना", "अपनी",
+                  "अपने", "मेरा", "मेरी", "मेरे", "आपका", "आपकी", "आपके", "हमारा", "हमारी", "हमारे", "वो", "ये", "यह", "वह", "तो",
+                  "कि", "और", "का", "की", "के", "को", "में", "से", "पर", "भी", "ना"}
+_KIT_WORDS = {"sample", "samples", "kit", "shipping", "सैंपल", "किट", "शिपिंग"}  # the kit's charge is in the knowledge
+_TEAM_WORDS = {"team", "टीम", "expert", "experts", "एक्सपर्ट"}
+# "सब आपकी team करेगी तो आप क्या करेंगे": tired of being sent to the team, they want HER answer
+_PUSH_BACK = re.compile(r"(?:तो|फिर) (?:आप|तुम) क्या (?:कर|बता)|(?:आप|तुम) (?:ही|ख.?ुद) (?:बता|कुछ)"
+                        r"|सब (?:कुछ )?(?:आपकी |आपके |तुम्हारी |तुम्हारे )?(?:team|टीम|expert|एक्सपर्ट)"
+                        r"|(?:बार[- ]बार|हर बार|हर बात).*(?:team|टीम|expert|एक्सपर्ट)(?: की बात|.{0,12}(?:बोल|कह))"
+                        r"|(?:team|टीम) (?:team|टीम)|(?:team|टीम|expert|एक्सपर्ट) को छोड"
+                        r"|keep (?:saying|telling)|then what do you|what do you do then|you tell me", re.IGNORECASE)
+# Asking for a person or a booked time: she can't connect the call, our expert calls them (call 68)
+_WANTS_EXPERT = re.compile(
+    r"(?:expert|एक्सपर्ट|team|टीम|sales|senior|manager|मैनेजर|किसी).{0,30}connect|connect.{0,20}(?:expert|एक्सपर्ट|team|टीम|sales)"
+    r"|(?:call|कॉल).{0,12}(?:transfer|ट्रांसफर)|(?:meeting|मीटिंग) *(?:schedule|शेड्यूल|fix|फिक्स|set|सेट|रख|करवा|करा)"
+    r"|schedule|शेड्यूल|sales *person"
+    r"|(?:expert|एक्सपर्ट|senior|manager|मैनेजर|इंसान|human) *(?:से|के साथ) *बात"
+    r"|(?:आपकी|आपके|तुम्हारी|तुम्हारे|your) +(?:[^ ]+ +)?(?:team|टीम) *(?:से|के साथ) *बात"
+    r"|(?:talk|speak) +(?:to|with) +(?:your|an? +(?:expert|person|human)|someone|the +team|the +expert)", re.IGNORECASE)
+_SAYS_A_TIME = re.compile(unicodedata.normalize("NFC",
+    r"[0-9]{1,2}(?::[0-9]{2})? *(?:बजे|baje|(?:am|pm|a[.]m|p[.]m|o'?clock)(?![a-z]))"
+    r"|(?:एक|दो|तीन|चार|पाँच|पांच|छह|छः|सात|आठ|नौ|दस|ग्यारह|बारह|डेढ़|ढाई) *बजे"
+    r"|(?<![a-z])at +[0-9]{1,2}(?![0-9])"), re.IGNORECASE)
+_CALL_ME = re.compile(unicodedata.normalize("NFC", r"(?:call|कॉल|phone|फ़ोन|फोन) *(?:कर|लगा|me(?![a-z]))"), re.IGNORECASE)
+# What we make is said once in a call (calls 68-70: it was added to nearly every answer)
+_PITCH_STARTS = ("हम ", "और हम ", "साथ ही हम ", "हमारी company ", "हमारी कंपनी ", "we ", "and we ", "our company ",
+                 "pouchwale ", "pouch wale ", "पाउचवाले ", "पाउच वाले ")
+_PITCH_WHAT = ("pouch", "पाउच", "packet", "पैकेट", "packaging", "पैकेजिंग")
+_PITCH_MADE = ("बनाते", "बनाती", "make", "manufacture", "produce")
+_ASKS_WHAT_WE_MAKE = re.compile(
+    r"(?:क्या|कौन|किस).{0,40}(?:बनाते|बनाती|बनता|बनती|pack करते)|(?:बनाते|बनाती)[^?]{0,12}[?]"
+    r"|क्या +(?:काम +)?(?:करते|करती)|service|सर्विस"
+    r"|(?:what|which)(?: all| kind| type)?.{0,30}(?:make|sell|offer|produce|do you do)", re.IGNORECASE)
+_ASKS_OUR_NAME = re.compile(r"(?:आपके|आपकी|आपका|तुम्हारे|तुम्हारी|तुम्हारा|your) +(?:[^ ]+ +)?(?:company|कंपनी|कम्पनी|brand|ब्रांड|ब्रैंड)"
+                            r"(?:'s)?(?: +का| +की| +के)? +(?:नाम|name)", re.IGNORECASE)
+_ENDS_CALL = re.compile(r"(phone|फ़ोन|फोन|call|कॉल)\s*(को\s*)?(रख|काट|बंद|cut|disconnect)|hang up|end the call", re.IGNORECASE)
+FILLER_MAX_SEC = 2.5  # a filler longer than this would hold up the real answer queued behind it
+# The AI model's first word comes 0.6-0.9 s after the request (measured 2026-11-24 on the live prompt: median 0.84 s,
+# slowest 1.7 s); a rare stall lasts 5+ s. A reply with no word HEDGE_SEC after its request started gets a second,
+# identical request racing it, and whichever answers first is used. With still no word at FIRST_TOKEN_SEC[0] a filler
+# keeps the line alive, and FIRST_TOKEN_SEC[1] after that the reply gives up (the apology path).
+HEDGE_SEC = 1.2
+FIRST_TOKEN_SEC = (2.5, 6.0)
+
+# After an answer that asked nothing, the customer gets this long to react before a gentle "anything else?".
+# Measured on 10 real calls: 99% of the customers who answered had started speaking within 5.4 s, none after 8 s.
+ANSWER_WAIT_SEC = 6.0
 
 VOICED_RMS = 400  # a 20 ms phone frame louder than this has voice in it (line hiss sits far below)
 
@@ -125,7 +221,10 @@ def out_of_credit(err: BaseException | str) -> bool:
 class _Prefetch:
     """A reply the LLM started writing the moment the customer stopped talking (STT's end of speech, ~0.4 s
     before the final transcript). It is only used if the final transcript says the same words and nothing
-    else changed; otherwise it is cancelled. Its tokens are buffered, never spoken on their own."""
+    else changed; otherwise it is cancelled. Its tokens are buffered, never spoken on their own.
+
+    The same buffer runs each request of a reply that races for the first word (see _reply_tokens): the HTTP
+    stream stays in the task that opened it."""
 
     def __init__(self, key: str, history_len: int, notes: tuple[str, ...]):
         self.key = key
@@ -210,6 +309,146 @@ def is_backchannel(text: str, *, greeting: bool = False) -> bool:
     return len(words) <= 2 and all(w in allowed for w in words)
 
 
+def asks_for_info(text: str) -> bool:
+    """The customer is asking us for something: a fact, a suggestion, an explanation ("आपका MOQ कितना है", "location
+    बता दो", "आप suggest करो"). Not an acknowledgement, not "हाँ जी बताइए" (go ahead), not "क्या? फिर से बोलिए" or a
+    language request: after those the agent's own question still stands."""
+    t = text.strip()
+    words = _norm_words(t)
+    if (not words or is_backchannel(t) or all(w in _GO_AHEAD_WORDS for w in words)
+            or all(w in _SAY_AGAIN_WORDS for w in words)):
+        return False
+    low = t.lower()
+    if pushes_back_on_team(t):
+        return True  # wants an answer, even with no question word
+    if language_request(t) or _SAY_AGAIN.search(low):
+        return False
+    if any(p in low for p in _ASK_PHRASES) or ("आप" in words and _CAN_YOU.search(low)):
+        return True
+    if "चाहिए" in words and _ASK_TOPICS.intersection(words):
+        return True  # "मुझे rate चाहिए"
+    # speech recognition also puts "?" on a short answer ("Omix Foods?"): alone it needs a real sentence
+    if t.endswith(("?", "？")) and (len(words) >= 3 or _ASK_TOPICS.intersection(words) or _ASK_WORDS.intersection(words)):
+        return True
+    if "पता नहीं" in t:
+        return False  # "पता नहीं कितना चाहिए होगा" answers our question
+    return bool(_ASK_WORDS.intersection(words)) or words[0] in _ASK_STARTS
+
+
+def needs_expert(text: str) -> bool:
+    """A question only a person can commit to: a price, an exact size or spec, a date, payment, complex custom work or a
+    fact about our company the knowledge doesn't have. Everything else about packaging she answers herself."""
+    words = set(_norm_words(text))
+    low = text.lower()
+    if words & _EXPERT_WORDS or any(p in low for p in _EXPERT_PHRASES):
+        return True
+    priced = bool(words & _PRICE_WORDS) or any(p in low for p in _PRICE_PHRASES)
+    return priced and not words & _KIT_WORDS
+
+
+def pushes_back_on_team(text: str) -> bool:
+    """"सब आपकी team करेगी तो आप क्या करेंगे": they are tired of being sent to our team and want her own answer.
+    Not an ordinary question about the team ("आपकी team कब call करेगी")."""
+    low = unicodedata.normalize("NFC", text.lower())  # speech recognition spells ड़ and ख़ two ways
+    return bool(_TEAM_WORDS.intersection(_norm_words(low))) and bool(_PUSH_BACK.search(low))
+
+
+def wants_our_expert(text: str) -> bool:
+    """They ask to talk to a person or to book a time ("expert से connect कर दो", "कल एक बजे meeting रख दो")."""
+    return bool(_WANTS_EXPERT.search(text))
+
+
+def says_a_time(text: str) -> bool:
+    """A clock time: "कल दोपहर 1 बजे", "3:00 बजे", "साढ़े तीन बजे", "tomorrow at 11". A day alone is not one."""
+    return bool(_SAYS_A_TIME.search(unicodedata.normalize("NFC", text.lower())))
+
+
+def asks_for_a_call(text: str) -> bool:
+    return bool(_CALL_ME.search(unicodedata.normalize("NFC", text.lower())))
+
+
+def asks_what_we_make(text: str) -> bool:
+    """"आप क्या बनाते हो", "what kind of pouches do you make": then telling them is the answer."""
+    return bool(_ASKS_WHAT_WE_MAKE.search(text))
+
+
+def asks_our_name(text: str) -> bool:
+    """"आपके brand का नाम क्या है": the answer is the name and nothing more (call 68 added what we make to it)."""
+    return bool(_ASKS_OUR_NAME.search(text))
+
+
+def is_our_pitch(sentence: str) -> bool:
+    """A whole sentence telling what we make ("हम namkeen, spices जैसे products के pouches बनाते हैं")."""
+    s = sentence.strip().lower()
+    return s.startswith(_PITCH_STARTS) and any(w in s for w in _PITCH_WHAT) and any(w in s for w in _PITCH_MADE)
+
+
+def is_cut_off(text: str) -> bool:
+    """A fragment that asks nothing yet: up to four little words, no verb, no question mark ("तो कौन", "आप क्या अपना")."""
+    t = text.strip()
+    words = _norm_words(t)
+    return (len(words) >= 2 and len(words) <= 4 and not t.endswith(("?", "？"))
+            and all(w in _CUT_OFF_WORDS for w in words))
+
+
+def wants_to_end_call(text: str) -> bool:
+    """"phone रखो", "call काट दो": they want to hang up ("phone मत रखना" is the opposite)."""
+    return bool(_ENDS_CALL.search(text)) and "मत" not in _norm_words(text)
+
+
+# Their words close the conversation, so her reply is a goodbye: a filler in front of it ("अच्छा जी ... आपका time देने के
+# लिए thank you!") is not what a person says at the end of a call (call 74).
+_THANKS_BYE = re.compile(r"thank|धन्यवाद|शुक्रिया|bye|बाय|अलविदा|good ?night|take care", re.IGNORECASE)
+_WRAP_UP_ASKED = re.compile(r"और कुछ|कुछ और|कोई और|anything else|something else", re.IGNORECASE)
+_NOTHING_MORE = {"नहीं", "नही", "no", "nope", "बस", "ठीक", "है", "हैं", "जी", "मैम", "मैडम", "madam", "maam", "ma'am", "sir",
+                 "सर", "ok", "okay", "ओके", "अभी", "के", "लिए", "इतना", "ही", "चलिए", "चलो", "that's", "all", "fine"}
+_NO_MORE_WORDS = {"नहीं", "नही", "no", "nope", "बस", "ठीक", "ok", "okay", "ओके", "fine"}
+
+
+def ends_the_conversation(text: str, last_agent_text: str = "") -> bool:
+    """"thank you", "bye", "phone रखो", or "नहीं नहीं ठीक है मैम" right after she asked whether there is anything else."""
+    if wants_to_end_call(text) or _THANKS_BYE.search(text):
+        return True
+    words = _norm_words(text)
+    return (bool(words) and bool(_WRAP_UP_ASKED.search(last_agent_text)) and all(w in _NOTHING_MORE for w in words)
+            and bool(_NO_MORE_WORDS.intersection(words)))
+
+
+_WOW = re.compile(r"(?:अरे[ ,]*)?वाह")
+
+
+def no_wow(sentence: str) -> str:
+    """"अरे वाह" sounded put on to the user (call 74; 20 of 492 replies had it): a sentence that opens with it opens with
+    "अच्छा" instead. "वाहन" is another word and stays."""
+    s = sentence.strip()
+    m = _WOW.match(s)
+    if not m:
+        return sentence
+    nxt = s[m.end():m.end() + 1]
+    if nxt and (nxt.isalpha() or unicodedata.category(nxt).startswith("M")):
+        return sentence
+    rest = s[m.end():].lstrip()
+    if rest.startswith("जी") and not (rest[2:3].isalpha() or unicodedata.category(rest[2:3] or " ").startswith("M")):
+        rest = rest[2:]
+    rest = rest.lstrip(" ,!।.")
+    if rest:
+        return f"अच्छा, {rest}"
+    return "अच्छा," if s.endswith(",") else "अच्छा।"  # "अरे वाह," is often the first piece of a longer sentence
+
+
+def silence_started(now: float, voice_end: float, speech_end: float, agent_end: float) -> float:
+    """When the caller started hearing silence before the agent's reply: the end of their own voice, or of the
+    agent's audio if that ended later (a pause is only heard once both have stopped).
+
+    voice_end is the last voiced frame of the caller's audio as we heard it: it comes ~0.4 s before speech
+    recognition reports the end of speech (speech_end), which stands in when our audio missed the voice. Times more
+    than 4 s old are not this turn's: then `now` (the reply's start, as fillers were timed before)."""
+    end = voice_end if 0 < now - voice_end < 4 else speech_end
+    if not 0 < now - end < 4:
+        end = now
+    return min(now, max(end, agent_end))
+
+
 # =====================================================================
 # Transports
 # =====================================================================
@@ -264,6 +503,9 @@ class CallSession:
         self.direction = direction  # "outbound" (we called) | "inbound" (the customer called us)
         # "outbound" (cold/qualification call) | "inbound" | "callback" (we return a missed inbound call)
         self.purpose = purpose or direction
+        # Settings -> "Remember earlier calls" off: this call starts as a first call (all data stays saved)
+        remember = bool(cfg.get("caller_memory", True))
+        memory = memory if remember else ""
         self.memory = memory        # what we already know about this customer (services/memory.py)
         if greeting_text is None:  # callers pass the greeting they prepared; this is the defensive default
             greeting_text = greeting_for(cfg, self.lead, direction=direction, purpose=self.purpose)
@@ -274,7 +516,8 @@ class CallSession:
         # Static prompt first (identical across calls with the same settings, direction and purpose -> OpenAI
         # prompt cache), per-call details second (time, customer, memory).
         self.system_prompt = static_system_prompt(cfg, direction, self.purpose)
-        self.lead_prompt = lead_context(self.lead, memory, direction=direction)
+        self.lead_prompt = lead_context(self.lead if remember else first_call_lead(self.lead), memory,
+                                        direction=direction)
         self.cache_key = "va-" + hashlib.sha1(self.system_prompt.encode("utf-8")).hexdigest()[:16]
         self._spare_tts: TTSStream | None = None
         self._spare_task: asyncio.Task | None = None
@@ -324,6 +567,13 @@ class CallSession:
         self._cut: dict[str, Any] | None = None
         self._last_reply: dict[str, Any] | None = None  # the reply spoken last: its turn, what it answered, its text
         self._turn_heard_from = 0.0        # when the current reply's own audio starts playing
+        # when the steps of the current reply happened (one timing line per turn in the log, see _log_turn_timing)
+        self._turn_voice_end = 0.0         # the customer's last voiced frame before it
+        self._turn_final_at = 0.0          # their final transcript
+        self._turn_started_at = 0.0
+        self._turn_first_word: tuple[float, str] = (0.0, "")  # the AI model's first word, and which request wrote it
+        self._turn_sent_at = 0.0           # its first words went to the voice engine (their sound follows in ~0.35 s)
+        self._turn_filler_at = 0.0         # a filler started playing
         self._retry_next = False           # the next reply is a second try after a false start...
         self._retry_turn = 0               # ...and this is its turn (a second try is never tried again)
         self._turn_counts: tuple[int, int, int] | None = None  # (turn, English streak, short answers) before it
@@ -360,6 +610,8 @@ class CallSession:
 
         # silence handling
         self.silence_stage = 0  # 0 normal, 1 asked "are you there?"
+        self._await_reaction = False  # the agent answered without asking anything: the customer's turn to react
+        self._check_ins = 0            # how many "anything else?" lines this call (each one is different)
         self._silence_prompt_end = 0.0
         self._local_speech_since: float | None = None
 
@@ -433,6 +685,8 @@ class CallSession:
             "hello_reply": HELLO_REPLY["hindi"],
             "hear_you": HEAR_YOU_REPLY["hindi"],
         }
+        for i, w in enumerate(CHECK_IN_LINES["hindi"]):
+            texts[f"check_in_hindi_{i}"] = w
         if self.cfg.get("listening_sounds", True):
             for i, w in enumerate(LISTENING_SOUNDS["hindi"]):
                 texts[f"listen_{i}"] = w
@@ -441,17 +695,33 @@ class CallSession:
                 word = w.strip().rstrip(".…")
                 # a filler plays before the reply exists: one that claims understanding ("समझ गई") is skipped
                 if word and "समझ" not in word:
-                    texts[f"filler_{i}"] = word + "..."  # trailing "..." = drawn-out, thinking tone
+                    # said plainly: with "..." the voice drew the word out and pitched it up to 7 semitones above her
+                    # own voice ("अच्छा..." at 320 Hz against her 200-220 Hz, 2026-11-24)
+                    texts[f"filler_{i}"] = word + "।"
                     self._filler_texts[f"filler_{i}"] = word
 
         await self._build_clips(texts, self.cfg)
 
     async def _build_clips(self, texts: dict[str, str], cfg: dict) -> None:
+        def too_long(key: str, pcm: bytes) -> bool:
+            """A filler plays before the real answer: a long one would hold it up."""
+            return key.startswith(("filler_", "en_filler_")) and len(pcm) / 2 / self.t.out_rate > FILLER_MAX_SEC
+
         async def one(key: str, text: str) -> None:
             if not text.strip() or key in self.clips:
                 return
             try:
                 pcm = await tts_rest(text, cfg, self.t.out_rate)
+                if too_long(key, pcm):  # one fresh take: most are under 2 s
+                    forget_clip(text, cfg, self.t.out_rate)
+                    pcm = await tts_rest(text, cfg, self.t.out_rate)
+                if not pcm:
+                    log.warning("clip %s came back silent: not used", key)
+                    return
+                if too_long(key, pcm):
+                    forget_clip(text, cfg, self.t.out_rate)  # so the next call tries again
+                    log.warning("filler %s came back %.1f s long: not used", key, len(pcm) / 2 / self.t.out_rate)
+                    return
                 # listening sounds are said softly, under the customer's voice
                 self.clips[key] = scale_volume(pcm, LISTENING_VOLUME) if "listen_" in key else pcm
             except Exception as e:  # noqa: BLE001
@@ -462,9 +732,10 @@ class CallSession:
     async def _prepare_english_clips(self) -> None:
         """The English call's fixed lines, fillers and listening sounds, built when the call switches."""
         texts = {f"en_{k}": fill_template(v, self.cfg, self.lead) for k, v in ENGLISH_LINES.items()}
+        texts.update({f"check_in_english_{i}": w for i, w in enumerate(CHECK_IN_LINES["english"])})
         if self.cfg.get("fillers_enabled", True):
             for i, w in enumerate(ENGLISH_FILLERS):
-                texts[f"en_filler_{i}"] = w + "..."
+                texts[f"en_filler_{i}"] = w + "."
                 self._filler_texts[f"en_filler_{i}"] = w
         if self.cfg.get("listening_sounds", True):
             for i, w in enumerate(LISTENING_SOUNDS["english"]):
@@ -570,10 +841,48 @@ class CallSession:
 
     def _messages(self, history: list[dict], notes: list[str]) -> list[dict]:
         """What the LLM sees: the cached static prompt, the call's details, the conversation, then this
-        turn's notes (mood first, language last: the last word is the strongest)."""
+        turn's notes (mood first, language and answer-then-wait last: the last word is the strongest)."""
         return [{"role": "system", "content": self.system_prompt},
                 {"role": "system", "content": self.lead_prompt}, *history[-24:],
                 *({"role": "system", "content": n} for n in notes)]
+
+    def _turn_notes(self, text: str, mood: str | None, no_calls: str | None, language: str | None,
+                    upto: int | None = None) -> list[str]:
+        """This turn's notes. A customer who asked for something gets the answer-then-wait note (or, for what only a
+        person can commit to, the hand-over note), last. What they
+        ask about is not their company name, even when it says "आपके brand का नाम क्या है". Words that were probably
+        misheard are asked about first."""
+        misheard = misheard_note(text)
+        asked = asks_for_info(text)
+        last = self._last_agent_text(upto)
+        company = None if asked else (company_name_note(text, last) or supplier_name_note(text, last))
+        can_call = not misheard and not no_calls and not asked_no_calls(text)
+        # a time stands when it answers "when should we call" or comes with asking for a call
+        time_agreed = can_call and says_a_time(text) and (
+            wants_our_expert(text) or asks_for_a_call(text)
+            or ("?" in last and any(w in last.lower() for w in ("time", "टाइम", "समय", "कब"))))
+        wait = None
+        if wants_to_end_call(text):
+            wait = HANG_UP_NOTE
+        elif is_cut_off(text):
+            wait = CUT_OFF_NOTE
+        elif time_agreed:
+            wait = TIME_AGREED_NOTE
+        elif can_call and wants_our_expert(text):
+            wait = EXPERT_CALL_NOTE
+        elif asked and not misheard:
+            wait = (HAND_OVER_NOTE if needs_expert(text)
+                    else OWN_ANSWER_NOTE if pushes_back_on_team(text)
+                    else OUR_NAME_NOTE if asks_our_name(text)
+                    else WHAT_WE_MAKE_NOTE if asks_what_we_make(text) else ANSWER_THEN_WAIT_NOTE)
+        return [n for n in (mood, no_calls, misheard, company, language, wait) if n]
+
+    def _last_agent_text(self, upto: int | None = None) -> str:
+        """What the agent said last, before history[upto] (default: the whole history)."""
+        for m in reversed(self.history[:upto]):
+            if m.get("role") == "assistant":
+                return str(m.get("content") or "")
+        return ""
 
     # ------------------------------------------------------------------ fast replies (prefetch)
     def _maybe_prefetch(self) -> None:
@@ -601,7 +910,7 @@ class CallSession:
             return
         mood, _ = self._next_mood(text)
         no_calls = NO_CALLS_NOTE if self.no_calls or asked_no_calls(text) else None
-        notes = [n for n in ((MOOD_NOTES.get(mood) if mood else None), no_calls, misheard_note(text), lang_note) if n]
+        notes = self._turn_notes(text, MOOD_NOTES.get(mood) if mood else None, no_calls, lang_note)
         self._drop_prefetch("replaced")
         pf = _Prefetch(_turn_key(text), len(self.history), tuple(notes))
         messages = self._messages([*self.history, {"role": "user", "content": text}], notes)
@@ -1003,6 +1312,8 @@ class CallSession:
         now = time.monotonic()
         # measure from when the customer actually stopped talking (server VAD), not from now
         self._turn_user_end = self._last_speech_end if 0 < now - self._last_speech_end < 4 else now
+        self._turn_voice_end = self._last_voiced_at if 0 < now - self._last_voiced_at < 4 else 0.0
+        self._turn_final_at = self._last_final_at if 0 < now - self._last_final_at < 4 else 0.0
         self._respond_task = asyncio.get_running_loop().create_task(self._respond(text))
 
     # ------------------------------------------------------------------ respond
@@ -1026,6 +1337,12 @@ class CallSession:
         self._agent_turn_db_id = None
         self._turn_first_audio = 0.0
         self._filler_played = False
+        self._turn_started_at = time.monotonic()
+        self._turn_first_word = (0.0, "")
+        self._turn_sent_at = 0.0
+        self._turn_filler_at = 0.0
+        heard_after = (self._turn_voice_end, self._turn_user_end, self._turn_final_at)  # for the timing line
+        self._await_reaction = False
         history_len = len(self.history)
         self.history.append({"role": "user", "content": user_text})
         self._reply_user_text = user_text
@@ -1057,7 +1374,7 @@ class CallSession:
             self.no_calls = True
             log.info("session %s: customer asked not to be called", self.uuid)
         no_calls_note = NO_CALLS_NOTE if self.no_calls else None
-        notes = [n for n in (mood_note, no_calls_note, misheard_note(user_text), language_note) if n]
+        notes = self._turn_notes(user_text, mood_note, no_calls_note, language_note, history_len)
         prefetch = self._claim_prefetch(user_text, history_len, notes)  # started when they stopped talking
         tts, connect_task = self._take_tts(on_audio)
         tts.on_sentence_end = on_sentence_end
@@ -1065,6 +1382,7 @@ class CallSession:
         # English ones ("Hmm", "Right") once the call is in English
         filler_task = (asyncio.create_task(self._maybe_filler(turn, user_text))
                        if self.cfg.get("fillers_enabled", True) and (language_note is None or self.english)
+                       and not ends_the_conversation(user_text, self._last_agent_text(history_len))
                        else None)
         end_call = False
         voice_down = False
@@ -1089,6 +1407,8 @@ class CallSession:
                     end_call |= ended
                     sentence = self._no_long_numbers(sentence)
                     sentence = self._real_kit_price(sentence, user_text, spoken)
+                    sentence = self._no_repeat_pitch(sentence, user_text, spoken, history_len)
+                    sentence = no_wow(sentence)
                     if first and self._filler_played:
                         sentence = self._strip_leading_filler(sentence)
                     first = False if sentence else first
@@ -1099,6 +1419,8 @@ class CallSession:
             end_call |= ended or strip_end_token(raw)[1]
             tail = self._no_long_numbers(tail)
             tail = self._real_kit_price(tail, user_text, spoken)
+            tail = self._no_repeat_pitch(tail, user_text, spoken, history_len)
+            tail = no_wow(tail)
             if tail:
                 if first and self._filler_played:
                     tail = self._strip_leading_filler(tail)
@@ -1152,6 +1474,7 @@ class CallSession:
                 latency = int((self._turn_first_audio - self._turn_user_end) * 1000) if self._turn_first_audio else None
                 if latency is not None and not cut:
                     self.latencies.append(latency)
+                    self._log_turn_timing(turn, *heard_after)
                 db_id = await repo.run_db(
                     lambda: repo.add_turn(self.call_id, "agent", text, self.offset_ms(), interrupted=cut,
                                           latency_ms=latency)
@@ -1168,51 +1491,100 @@ class CallSession:
             return
         await self._wait_playback(turn)
         if turn == self._active_turn and not self.ending:
+            said = self._agent_turn_text
+            self._await_reaction = bool(said) and not end_call and "?" not in said and "？" not in said
             await self._after_agent_turn(end_call=end_call)
 
     async def _reply_tokens(self, messages: list[dict], turn: int,
                             prefetch: _Prefetch | None = None) -> AsyncIterator[str]:
-        """LLM tokens with a first-token deadline: a slow OpenAI must not leave the line dead.
+        """LLM tokens with a first-word deadline: a slow OpenAI must not leave the line dead.
 
-        A reply started early (prefetch) is used first, if its first token comes in time; otherwise it is
-        dropped and a fresh request runs. Attempt 1 waits 4 s for the first token; then a filler keeps the
-        line alive and one retry gets 6 s. After that the caller's error path apologises.
+        The reply started early (prefetch), if any, is the first candidate, else a fresh request. A candidate with
+        no word HEDGE_SEC after it started gets a second, identical request racing it, and whichever writes first is
+        used; the other is stopped. One that fails or ends empty is dropped (with none left, a fresh request starts;
+        at most two fresh requests per reply). With still no word at FIRST_TOKEN_SEC[0] a filler keeps the line
+        alive, and FIRST_TOKEN_SEC[1] after that the caller's error path apologises.
         """
+        loop = asyncio.get_running_loop()
+        start = time.monotonic()
+        filler_at, give_up_at = start + FIRST_TOKEN_SEC[0], start + FIRST_TOKEN_SEC[0] + FIRST_TOKEN_SEC[1]
+        hedge_sec = min(HEDGE_SEC, FIRST_TOKEN_SEC[0])
+        racing: list[tuple[_Prefetch, str]] = []
+        requests = 0
+        error: BaseException | None = None
+        winner: tuple[_Prefetch, str] | None = None
+
+        def ask() -> None:
+            nonlocal requests
+            requests += 1
+            req = _Prefetch("", len(self.history), ())
+            req.task = loop.create_task(req.run(messages, self.cache_key))
+            racing.append((req, f"request {requests}"))
+
         if prefetch is not None:
-            early = prefetch.stream()
-            try:
-                first = await asyncio.wait_for(anext(early), max(0.5, 4.0 - (time.monotonic() - prefetch.started)))
-            except (StopAsyncIteration, asyncio.TimeoutError, Exception) as e:  # noqa: BLE001
-                prefetch.cancel()
-                log.info("early reply unusable on %s (%s): asking again", self.uuid, type(e).__name__)
-            else:
-                yield first
-                async for tok in early:
-                    yield tok
-                return
-        for attempt, deadline in enumerate((4.0, 6.0)):
-            agen = stream_reply(messages, self.cache_key)
-            try:
-                first = await asyncio.wait_for(anext(agen), deadline)
-            except StopAsyncIteration:
-                return
-            except asyncio.TimeoutError:
-                with contextlib.suppress(Exception):
-                    await agen.aclose()
-                log.warning("LLM first token > %.0f s on %s (attempt %d)", deadline, self.uuid, attempt + 1)
-                if attempt == 0:
-                    if not self._filler_played and not self._turn_first_audio and turn == self._active_turn:
-                        user_text = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
-                        clip = self._pick_filler(user_text)
-                        if clip:
-                            self._filler_played = True
-                            await self._agent_audio(clip, turn, count_first=False)
+            racing.append((prefetch, "early reply"))
+        else:
+            ask()
+        try:
+            while winner is None:
+                for cand, label in list(racing):
+                    if cand.tokens:
+                        winner = (cand, label)
+                        break
+                    if cand.finished:  # failed, or wrote nothing
+                        racing.remove((cand, label))
+                        error = cand.error or error
+                        if cand.error is None and label != "early reply":
+                            winner = (cand, label)  # the model wrote nothing: an empty reply, as before
+                            break
+                        log.info("%s unusable on %s (%s)", label, self.uuid,
+                                 type(cand.error).__name__ if cand.error else "empty")
+                if winner is not None:
+                    break
+                now = time.monotonic()
+                if now >= give_up_at:
+                    log.warning("LLM gave no first word in %.1f s on %s", now - start, self.uuid)
+                    raise error or asyncio.TimeoutError("the AI model gave no first word")
+                if not racing:
+                    if requests >= 2:
+                        raise error or RuntimeError("the AI model gave no reply")
+                    ask()
                     continue
-                raise
-            yield first
-            async for tok in agen:
+                oldest = min(cand.started for cand, _ in racing)
+                if len(racing) == 1 and requests < 2 and now - oldest >= hedge_sec:
+                    log.warning("LLM first word > %.1f s on %s: a second request races the first", hedge_sec, self.uuid)
+                    ask()
+                    continue
+                wake = [give_up_at]
+                if len(racing) == 1 and requests < 2:
+                    wake.append(oldest + hedge_sec)
+                if not self._filler_played and now < filler_at:
+                    wake.append(filler_at)
+                waiters = [loop.create_task(cand._changed.wait()) for cand, _ in racing]
+                try:
+                    await asyncio.wait(waiters, timeout=max(0.0, min(wake) - now), return_when=asyncio.FIRST_COMPLETED)
+                finally:
+                    for w in waiters:
+                        w.cancel()
+                if (not self._filler_played and time.monotonic() >= filler_at and not self._turn_first_audio
+                        and turn == self._active_turn and not any(cand.tokens for cand, _ in racing)):
+                    user_text = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+                    clip = self._pick_filler(user_text)
+                    if clip:
+                        self._filler_played = True
+                        self._turn_filler_at = max(time.monotonic(), self.play_until)
+                        await self._agent_audio(clip, turn, count_first=False)
+        finally:
+            for cand, _ in racing:
+                if winner is None or cand is not winner[0]:
+                    cand.cancel()  # lost the race (or the reply was cut off): nobody pays for words never said
+        cand, label = winner
+        self._turn_first_word = (time.monotonic(), label)
+        try:
+            async for tok in cand.stream():
                 yield tok
-            return
+        finally:
+            cand.cancel()  # cut off mid-reply: stop paying for tokens nobody hears
 
     # ------------------------------------------------------------------ TTS socket pool
     def _prepare_spare_tts(self) -> None:
@@ -1271,6 +1643,8 @@ class CallSession:
             try:
                 await connect_task
                 await tts.send_sentence(sentence)
+                if turn == self._active_turn and not self._turn_sent_at:
+                    self._turn_sent_at = time.monotonic()
                 return False
             except asyncio.CancelledError:
                 raise
@@ -1293,20 +1667,33 @@ class CallSession:
         context = f"{user_text} {spoken[-1] if spoken else ''}"
         return fix_shipping_amount(sentence, kit_shipping_amount(self.cfg.get("knowledge_base")), context)
 
+    def _no_repeat_pitch(self, sentence: str, user_text: str, spoken: list[str], upto: int) -> str:
+        """Safety net behind the prompt: once she has told them what we make, a later answer doesn't end with it again
+        (calls 68-70). Only a whole extra sentence after something else was said, so a reply is never emptied."""
+        if not spoken or not is_our_pitch(sentence) or asks_what_we_make(user_text):
+            return sentence
+        for m in self.history[:upto]:
+            said = str(m.get("content") or "").lower()
+            if m.get("role") == "assistant" and any(w in said for w in _PITCH_WHAT) and any(w in said for w in _PITCH_MADE):
+                return ""
+        return sentence
+
     def _strip_leading_filler(self, sentence: str) -> str:
         fillers = ENGLISH_FILLERS if self.english else self.cfg.get("filler_words") or []
         words = [w.strip().lower() for w in fillers]
         s = sentence.strip()
         for w in sorted(words, key=len, reverse=True):
             if w and s.lower().startswith(w):
+                if s[len(w):len(w) + 1] not in ("", ",", ".", "।", "!", "…", "-", "?"):
+                    continue  # "अच्छा सवाल है!" is a sentence, not a filler (it lost "अच्छा" on call 74)
                 rest = s[len(w):].lstrip(" ,.।!…-")
                 return rest if rest else s
         return s
 
     def _pick_filler(self, user_text: str) -> bytes | None:
-        """A filler that fits the moment: "thinking" (हम्म, एक second) after a question, an
-        acknowledgement (जी, अच्छा) otherwise; never the one used just before. English calls use the
-        English set ("Hmm", "Right", "Sure")."""
+        """A filler that fits the moment: "thinking" (हम्म) after a question, an acknowledgement (जी, अच्छा)
+        otherwise; never the one used just before (with a single thinking sound, the next question gets an
+        acknowledgement rather than "हम्म" again). English calls use the English set ("Hmm", "Right", "Sure")."""
         prefix = "en_filler_" if self.english else "filler_"
         keys = [k for k in self.clips if k.startswith(prefix)]
         if not keys:
@@ -1315,7 +1702,7 @@ class CallSession:
         acks = [k for k in keys if k not in thinking]
         pool = (thinking if is_question(user_text) else acks) or keys
         last = self._recent_fillers[-1] if self._recent_fillers else None
-        key = random.choice([k for k in pool if k != last] or pool)
+        key = random.choice([k for k in pool if k != last] or [k for k in keys if k != last] or pool)
         self._recent_fillers.append(key)
         return self.clips[key]
 
@@ -1324,8 +1711,17 @@ class CallSession:
             delay = max(0.2, float(self.cfg.get("filler_delay_ms", 800)) / 1000)
             if self._last_reply_had_filler:
                 delay += 0.6  # a filler before every reply is a tic: only for a clearly slow one
-            await asyncio.sleep(delay)
+            # Counted from when the line went quiet, not from now: the final transcript (which starts this reply)
+            # comes ~0.7 s after the caller stops, so a filler timed from here came 1.5-2 s into the silence, when
+            # the reply was nearly ready anyway (call 54, 2026-11-19: 2.1 s of silence before every answer).
+            # Never sooner than 0.2 s into the reply: one that is already on its way keeps the first word.
+            quiet = silence_started(time.monotonic(), self._last_voiced_at, self._turn_user_end, self.play_until)
+            await asyncio.sleep(max(0.2, delay - (time.monotonic() - quiet)))
             if turn != self._active_turn or self._turn_first_audio or self.ending:
+                return
+            if self._turn_sent_at:
+                # the answer's first words are already with the voice engine (sound in ~0.35 s): a filler now would
+                # only push them back by its own length (calls 74-76: answers waited behind a late filler)
                 return
             if time.monotonic() - self._last_listening_at < 1.5:
                 return  # a listening sound just played: a filler on top would be a stutter
@@ -1333,6 +1729,7 @@ class CallSession:
             if not clip:
                 return
             self._filler_played = True
+            self._turn_filler_at = max(time.monotonic(), self.play_until)
             # one atomic send: a chunked filler could interleave with the reply's first audio
             await self._agent_audio(clip, turn, count_first=False)
         except asyncio.CancelledError:
@@ -1370,6 +1767,22 @@ class CallSession:
     async def _play_rest(self, text: str, turn: int) -> None:
         pcm = await tts_rest(text, self.tts_cfg, self.t.out_rate)
         await self._play_pcm(pcm, turn)
+
+    def _log_turn_timing(self, turn: int, voice_end: float, speech_end: float, final_at: float) -> None:
+        """One line per answered turn in the local log: where the silence before the reply went, in ms after the
+        customer's voice ended (or after speech recognition's end of speech when our audio missed the voice)."""
+        base = voice_end or speech_end
+        if not base or not self._turn_first_audio:
+            return
+
+        def ms(t: float) -> str:
+            return str(int((t - base) * 1000)) if t else "-"
+        word_at, source = self._turn_first_word
+        log.info("timing on %s, turn %d (ms after %s): speech end %s, final %s, reply start %s, first word %s (%s), "
+                 "words to voice %s, first audio %s, heard from %s, filler %s", self.uuid, turn,
+                 "their voice ended" if voice_end else "speech end", ms(speech_end), ms(final_at),
+                 ms(self._turn_started_at), ms(word_at), source or "-", ms(self._turn_sent_at),
+                 ms(self._turn_first_audio), ms(self._turn_heard_from), ms(self._turn_filler_at))
 
     async def _wait_playback(self, turn: int) -> None:
         while turn == self._active_turn and not self.ending:
@@ -1494,6 +1907,10 @@ class CallSession:
                 if busy or self.pending_user:
                     continue
                 quiet_since = max(self.last_user_activity, self.play_until)
+                if self._await_reaction and self.silence_stage == 0 and now - quiet_since >= ANSWER_WAIT_SEC:
+                    self._await_reaction = False  # once: a longer silence is the normal line check below
+                    await self._speak_system(*self._check_in_line())
+                    continue
                 if self.silence_stage == 0 and now - quiet_since >= timeout:
                     self.silence_stage = 1
                     await self._speak_system(*self._system_line("silence_prompt"))
@@ -1503,6 +1920,15 @@ class CallSession:
                     return
         except asyncio.CancelledError:
             pass
+
+    def _check_in_line(self) -> tuple[str, str]:
+        """(clip key, text) of the gentle "anything else?" after a quiet pause, a different one each time. Made at
+        the start of the call: synthesised on the spot, it could start just as the customer begins to speak."""
+        lang = "english" if self.english else "hindi"
+        lines = CHECK_IN_LINES[lang]
+        i = self._check_ins % len(lines)
+        self._check_ins += 1
+        return f"check_in_{lang}_{i}", lines[i]
 
     async def _speak_system(self, clip_key: str, text: str, *, end_after: bool = False) -> None:
         """Play a canned line (silence prompt etc.) and log it to the transcript."""

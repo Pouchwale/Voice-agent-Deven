@@ -180,7 +180,8 @@ def test_filler_fits_the_moment_and_never_repeats(monkeypatch):
         for _ in range(12):
             s._pick_filler("price कितना है?")
             picks.append(s._recent_fillers[-1])
-        assert set(picks) <= thinking                       # questions get a thinking sound
+        assert picks[0] in thinking                         # questions get a thinking sound when one is free
+        assert sum(p in thinking for p in picks) >= len(picks) // 2
         assert all(a != b for a, b in zip(picks, picks[1:]))  # never twice in a row
         s._pick_filler("हमें rice के लिए pouch चाहिए")
         assert s._recent_fillers[-1] not in thinking        # statements get an acknowledgement
