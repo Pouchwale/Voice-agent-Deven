@@ -219,7 +219,12 @@ def test_barge_in_stops_agent_but_backchannel_does_not(monkeypatch):
     turns = _turns(s.uuid)
     interrupted = [txt for role, txt, intr in turns if role == "agent" and intr]
     assert interrupted and "stand-up pouch" in interrupted[0]
-    assert llm.calls[1][-1] == {"role": "user", "content": "रुकिए रुकिए एक minute"}
+    asked = llm.calls[1]
+    assert [m for m in asked if m["role"] == "user"][-1] == {"role": "user", "content": "रुकिए रुकिए एक minute"}
+    # they asked for something, so she answers that (the cut answer is finished only after a mere reaction)
+    assert not any("Your last answer was cut off" in m["content"] for m in asked)
+    # cut as it began: what they never heard is not in her memory as said (call 77: a cut answer counted as given)
+    assert not any("Zipper pouch" in m["content"] for m in asked if m["role"] == "assistant")
     assert _call(s.uuid).end_reason == "manual_hangup"
 
 

@@ -61,8 +61,8 @@ def test_turn_taking_helpers():
 
 def test_speakable_applies_pronunciations_only_to_audio():
     cfg = dict(DEFAULT_AGENT_SETTINGS)
-    assert speakable("मैं PouchWale से बोल रही हूँ।", cfg) == "मैं पाउचवाले से बोल रही हूँ।"
-    assert speakable("pouchwale का MOQ", cfg) == "पाउचवाले का एम ओ क्यू"
+    assert speakable("मैं PouchWale से बोल रही हूँ।", cfg) == "मैं पाउच वाले से बोल रही हूँ।"
+    assert speakable("pouchwale का MOQ", cfg) == "पाउच वाले का एम ओ क्यू"
     assert speakable("PouchWales", cfg) == "PouchWales"            # whole words only
     assert "*" not in speakable("**जी**, बिल्कुल", cfg)
     assert speakable("PouchWale", {**cfg, "pronunciations": ["PouchWale -> पाउच वाले", "junk line"]}) == "पाउच वाले"

@@ -34,6 +34,11 @@ def fakes(monkeypatch):
     yield
 
 
+def _last_user(messages: list[dict]) -> dict:
+    """The customer's line in an LLM request (this turn's notes come after it)."""
+    return [m for m in messages if m["role"] == "user"][-1]
+
+
 def _flat(text: str, pieces: list[str] | None = None) -> str:
     f = ListFlattener()
     return "".join(f.feed(p) for p in (pieces or [text])) + f.flush()
@@ -50,7 +55,8 @@ async def _agent_speaking(s, llm, calls: int = 1) -> FakeSTT:
 
 
 async def _fragment(stt, heard: str, label: str) -> None:
-    """A short sound on the line: recognition first hears `heard`, then settles on `label`."""
+    """A short sound on the line: recognition first hears `heard`, then settles on `label`. (A partial that could still
+    be part of a reaction, like the live call's "है", no longer cuts her at all: these use "मैं", a real word.)"""
     await stt.on_event("speech_start", {})
     await stt.on_event("partial", {"text": heard})
     await stt.on_event("speech_end", {})
@@ -64,7 +70,7 @@ def test_a_fragment_as_the_agent_starts_is_not_an_answer_and_the_reply_starts_ag
         s, t = await _new_session(_lead("+919811220001"), _cfg(silence_timeout_sec=30), llm, monkeypatch)
         run = asyncio.create_task(s.run())
         stt = await _agent_speaking(s, llm)
-        await _fragment(stt, "है", "ठीक है?")  # the live call: cut after a word or two, labelled "ठीक है?"
+        await _fragment(stt, "मैं", "ठीक है?")  # the live call: cut after a word or two, labelled "ठीक है?"
         assert t.clears == 1  # the agent was cut off...
         await _wait(lambda: s.false_starts == 1 and len(llm.calls) == 2 and s.agent_audible(), timeout=4)  # ...and starts again
         await _wait(lambda: s.state == "listening" and not s.agent_audible(), timeout=8)
@@ -105,7 +111,7 @@ def test_an_acknowledgement_later_in_the_sentence_is_still_the_customers_answer(
         run = asyncio.create_task(s.run())
         stt = await _agent_speaking(s, llm)
         await asyncio.sleep(0.5)  # they have been listening for a while: a "ठीक है" now answers what was said
-        await _fragment(stt, "है", "ठीक है")
+        await _fragment(stt, "मैं", "ठीक है")
         await _wait(lambda: len(llm.calls) == 2, timeout=4)
         await s.end("manual_hangup")
         await asyncio.wait_for(run, timeout=5)
@@ -113,7 +119,8 @@ def test_an_acknowledgement_later_in_the_sentence_is_still_the_customers_answer(
 
     s, llm = asyncio.run(scenario())
     assert s.false_starts == 0
-    assert llm.calls[1][-1] == {"role": "user", "content": "ठीक है"}
+    assert _last_user(llm.calls[1]) == {"role": "user", "content": "ठीक है"}
+    assert "Your last answer was cut off" in llm.calls[1][-1]["content"]  # she finishes it first (call 77)
     assert "ठीक है" in [text for role, text, _ in _turns(s.uuid) if role == "user"]
 
 
@@ -130,7 +137,7 @@ def test_a_real_interruption_as_the_agent_starts_is_answered(monkeypatch):
         return s, llm
 
     s, llm = asyncio.run(scenario())
-    assert s.false_starts == 0 and llm.calls[1][-1] == {"role": "user", "content": "रुकिए एक minute"}
+    assert s.false_starts == 0 and _last_user(llm.calls[1]) == {"role": "user", "content": "रुकिए एक minute"}
 
 
 def test_the_reply_starts_again_only_once(monkeypatch):
@@ -139,17 +146,17 @@ def test_the_reply_starts_again_only_once(monkeypatch):
         s, t = await _new_session(_lead("+919811220004"), _cfg(silence_timeout_sec=30), llm, monkeypatch)
         run = asyncio.create_task(s.run())
         stt = await _agent_speaking(s, llm)
-        await _fragment(stt, "है", "हाँ")
+        await _fragment(stt, "मैं", "हाँ")
         await _wait(lambda: s.false_starts == 1 and len(llm.calls) == 2 and s.agent_audible()
                     and s._turn_first_audio > 0, timeout=4)
-        await _fragment(stt, "है", "हाँ")  # the same thing as the second try begins: now it is their word
+        await _fragment(stt, "मैं", "हाँ")  # the same thing as the second try begins: now it is their word
         await _wait(lambda: len(llm.calls) == 3, timeout=4)
         await s.end("manual_hangup")
         await asyncio.wait_for(run, timeout=5)
         return s, llm
 
     s, llm = asyncio.run(scenario())
-    assert s.false_starts == 1 and llm.calls[2][-1] == {"role": "user", "content": "हाँ"}
+    assert s.false_starts == 1 and _last_user(llm.calls[2]) == {"role": "user", "content": "हाँ"}
 
 
 def test_a_goodbye_cut_by_a_false_start_still_ends_the_call(monkeypatch):
@@ -160,7 +167,7 @@ def test_a_goodbye_cut_by_a_false_start_still_ends_the_call(monkeypatch):
         s, t = await _new_session(_lead("+919811220005"), _cfg(silence_timeout_sec=30), llm, monkeypatch)
         run = asyncio.create_task(s.run())
         stt = await _agent_speaking(s, llm)
-        await _fragment(stt, "है", "Okay")
+        await _fragment(stt, "मैं", "Okay")
         await asyncio.wait_for(run, timeout=10)  # the goodbye is said again in full, then the call ends
         return s, llm
 
@@ -177,7 +184,7 @@ def test_a_cut_during_a_system_line_is_never_a_false_start(monkeypatch):
         await _wait(lambda: s.greeted and s.state == "listening")
         stt = FakeSTT.instances[-1]
         await _wait(lambda: s.silence_stage >= 1 and s.agent_audible(), timeout=6)  # the silence prompt is playing
-        await _fragment(stt, "है", "हाँ")
+        await _fragment(stt, "मैं", "हाँ")
         await asyncio.sleep(0.3)
         await s.end("manual_hangup")
         await asyncio.wait_for(run, timeout=5)
@@ -199,7 +206,7 @@ def test_a_false_start_does_not_count_the_customers_turn_twice(monkeypatch):
         await _wait(lambda: len(llm.calls) == 1 and s.state == "speaking" and s.agent_audible()
                     and s._turn_first_audio > 0, timeout=4)
         assert s._english_streak == 1
-        await _fragment(stt, "है", "Okay")
+        await _fragment(stt, "मैं", "Okay")
         await _wait(lambda: s.false_starts == 1 and len(llm.calls) == 2 and s.agent_audible(), timeout=4)
         streak, english, turns = s._english_streak, s.english, s.turns
         await s.end("manual_hangup")

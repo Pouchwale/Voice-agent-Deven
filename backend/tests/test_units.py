@@ -59,7 +59,7 @@ def test_prompt_templates():
     cfg = dict(DEFAULT_AGENT_SETTINGS)
     lead = {"name": "Rahul Sharma", "company": "Sharma Snacks"}
     line = fill_template(cfg["opening_line"], cfg, lead)
-    assert line.startswith("नमस्ते Rahul जी!") and "PouchWale" in line and "{" not in line
+    assert line.startswith("नमस्ते Rahul जी!") and "Pouch Wale" in line and "{" not in line
     assert "Pooja" not in line  # no personal name by default
     assert fill_template("{lead_name_ji}", cfg, {"name": ""}) == "जी"
     sp = build_system_prompt(cfg, lead)

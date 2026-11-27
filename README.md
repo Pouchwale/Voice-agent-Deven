@@ -20,7 +20,7 @@ Lead list ──► Campaign dialer ──► Plivo (or Vobiz) ──► custome
 | Backend | Python 3.13, FastAPI, SQLAlchemy 2 + SQLite (WAL), Prisma-compatible schema |
 | Frontend | Next.js 15 (React 19), Tailwind, anime.js, three.js, SWR. Fonts Inter + Hanken Grotesk, blue/white theme from the PouchWale logo; optional **PouchWale design** (switch in the top bar, Mada + Mulish) |
 | Telephony | Plivo (active) or Vobiz, switched with `TELEPHONY_PROVIDER`: outbound and inbound calls, bidirectional media stream, call recording |
-| Speech-to-text | Sarvam **Saaras v3** realtime streaming (`saaras:v3-realtime`, `codemix` = Hindi in Devanagari + English words in English) |
+| Speech-to-text | Sarvam **Saaras v4** realtime streaming (`saaras:v4` with our key terms in `SARVAM_STT_KEYTERMS`, `codemix` = Hindi in Devanagari + English words in English). Chosen on 2026-11-25 over `saaras:v3-realtime`: word errors 12.8% -> 9.5%, key terms 91% -> 96% (`stt-benchmark/2026-11-25`, measured with `backend/tools/stt_benchmark.py`). A transcript with no human voice behind it (traffic, rumble) is not answered |
 | Text-to-speech | Sarvam **Bulbul** streaming. The voice chosen in **Settings → Voice** decides the model: the "(v4)" voices (e.g. Sarika · conversational) use **Bulbul v4** (`bulbul:v4-flash`), the older voices use **Bulbul v3** (`SARVAM_TTS_MODEL`, default voice `suhani`) |
 | Brain | OpenAI **gpt-4.1-mini** (`OPENAI_MODEL`), max 120 tokens, temperature 0.6. Chosen on 2026-11-20 over gpt-4o-mini: same reply quality, first sentence ~0.2 s sooner (`backend/tools/llm_compare.py` compares models on the real prompt) |
 

@@ -574,6 +574,11 @@ TIME_AGREED_NOTE = ('They told you when our expert should call, so the time is a
                     'or number), no goodbye and no end-call marker. Your reply must NOT contain a question mark: they can '
                     'still ask something. Only if that time is outside the calling hours in your instructions, ask for a '
                     'time within them instead.')
+COMPANY_INTRO_NOTE = ("They are asking about OUR company (not theirs). Answer with the Company intro of the business "
+                      "knowledge, as written there, in the language of their last message; nothing else about us.")
+DESIGN_NOTE = ("They are asking whether we make their design. Answer with the Design line of the business knowledge, in one "
+               "or two short sentences in the language of their last message: we don't make designs, and after they "
+               "confirm the order they get access to our design library. Do NOT describe what we make.")
 WHAT_WE_MAKE_NOTE = ('They are asking what we make. Answer in ONE short sentence, in the language of their last message: we '
                      'make custom printed pouches for brands, and name only THREE examples with "जैसे" that fit what they '
                      'asked: products, or pouch types if they asked about types (e.g. "हम brands के लिए custom printed '
@@ -582,6 +587,16 @@ WHAT_WE_MAKE_NOTE = ('They are asking what we make. Answer in ONE short sentence
 OUR_NAME_NOTE = ('They asked our company or brand name. Reply with ONLY the name in a few words, in the language of their '
                  'last message (e.g. "जी, हमारा brand [our name] है।", in English "We are [our name]."). Nothing about what we '
                  'make or about our team, and your reply must NOT contain a question mark.')
+def cut_answer_note(heard: str, rest: str) -> str:
+    """For the reply after the customer talked over the agent's answer (call 77: a cut MOQ answer was never finished)."""
+    rest = rest if len(rest) <= 220 else rest[:220].rsplit(" ", 1)[0] + " …"
+    said = (f'the customer heard only "{heard} …", so they missed "{rest}"' if heard
+            else f'the customer heard none of it ("{rest}")')
+    return (f"Your last answer was cut off: {said}. They only reacted or checked the line, so first say what they "
+            "missed, briefly and naturally (\"जी, तो …\"; in English \"So, …\"), starting from the beginning of the "
+            "sentence they were cut off in, then go on.")
+
+
 CUT_OFF_NOTE = ("Their last words were cut off, so you don't know what they want. Don't guess and don't answer: reply "
                 "ONLY, in the language of the call: \"माफ़ कीजिए, आवाज़ साफ़ नहीं आई, एक बार फिर बोलेंगे?\" (English: "
                 "\"Sorry, I couldn't hear that clearly, could you say it again?\").")

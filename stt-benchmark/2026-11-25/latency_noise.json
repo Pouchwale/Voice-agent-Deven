@@ -1,0 +1,30 @@
+{
+ "current": {
+  "final_after_speech_s": {
+   "median": 0.79,
+   "max": 1.08,
+   "missing": 0
+  },
+  "noise_only_clips_with_words": 3,
+  "noise_only_clips": 6,
+  "invented": [
+   "4",
+   "4",
+   "वो"
+  ]
+ },
+ "v4+terms": {
+  "final_after_speech_s": {
+   "median": 0.74,
+   "max": 0.92,
+   "missing": 0
+  },
+  "noise_only_clips_with_words": 3,
+  "noise_only_clips": 6,
+  "invented": [
+   "हाँ।",
+   "हाँ।",
+   "हाँ।"
+  ]
+ }
+}

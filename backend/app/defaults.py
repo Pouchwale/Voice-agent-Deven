@@ -44,7 +44,7 @@ they said and did. Also note what worked well, with the same kind of proof.
 DEFAULT_AGENT_SETTINGS: dict = {
     # ---------------- identity ----------------
     "agent_name": "",  # optional personal name; empty = introduce only the company
-    "company_name": "PouchWale",
+    "company_name": "Pouch Wale",
     "agent_gender": "female",
     "voice": "suhani",  # Bulbul v3 female speaker chosen by the client (sweet, natural Hindi)
     "language_code": "hi-IN",
@@ -54,7 +54,7 @@ DEFAULT_AGENT_SETTINGS: dict = {
     # the audio only; transcripts keep the original spelling. Brand names in Devanagari sound native.
     # Hindi calls use the Devanagari spellings; English calls skip those and use the Latin ones below them.
     "pronunciations": [
-        "PouchWale = पाउचवाले",
+        "PouchWale = पाउच वाले",
         "GP3 = जी पी थ्री",
         "MOQ = एम ओ क्यू",
         "D2C = डी टू सी",
@@ -67,7 +67,7 @@ DEFAULT_AGENT_SETTINGS: dict = {
         "kg = किलो",
         "Mehsana = मेहसाणा",
         "EcoVadis = इको वैडिस",
-        "info@pouchwale.com = इन्फो at पाउचवाले dot com",
+        "info@pouchwale.com = इन्फो at पाउच वाले dot com",
         "₹199 = one ninety nine रुपये",
         "3-side seal = थ्री साइड सील",
         "3 side seal = थ्री साइड सील",
@@ -115,7 +115,17 @@ DEFAULT_AGENT_SETTINGS: dict = {
     # The company facts the agent may tell customers (from the PouchWale team). Anything not written here is
     # never invented: the agent says the team will cover it (see the deflection rule in the prompt).
     "knowledge_base": (
-        "Company: PouchWale (pouchwale.com), Gujarat, India. Contact: info@pouchwale.com.\n"
+        "Company: Pouch Wale (website pouchwale.com), a packaging company near Ahmedabad, Gujarat, India. Contact: "
+        "info@pouchwale.com.\n"
+        "Company intro (when they ask about the company, say this): \"हम Pouch Wale हैं, गुजरात में अहमदाबाद के पास "
+        "स्थित एक packaging company। हम brands के लिए custom printed pouches बनाते हैं, जिसमें आपको low MOQ, premium "
+        "quality और fast delivery मिलती है।\"\n"
+        "Printing technology: we use Hybrid LED technology. If they ask how we print or which technology, say only "
+        "that (\"हम Hybrid LED technology use करते हैं\"); don't explain it and don't name any other printing method.\n"
+        "Development cost: there is no development cost (\"कोई development cost नहीं लगती\").\n"
+        "Design: we don't make designs. After the customer confirms the order, they get access to the Pouch Wale "
+        "design library. If they ask whether we make the design: \"नहीं, design हम नहीं बनाते, लेकिन order confirm "
+        "होने के बाद आपको Pouch Wale design library का access मिल जाता है।\"\n"
         "What we do: custom printed pouches for brands. Say it like: \"हम custom pouch बनाते हैं — जैसे namkeen, "
         "dry fruits, spices के packets होते हैं, वैसे आपके brand के लिए custom printed.\"\n"
         "Why us: low MOQ and fast turnaround.\n"

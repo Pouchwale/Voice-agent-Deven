@@ -119,8 +119,9 @@ def caller_id_name(raw: Any, cfg: dict) -> str | None:
     name = " ".join(str(raw or "").split())
     if not _NAME.match(name) or name.lower() in _NOT_A_NAME:
         return None
-    ours = {str(cfg.get(k) or "").strip().lower() for k in ("company_name", "agent_name")} - {""}
-    return None if name.lower() in ours else name
+    # compared without spaces or hyphens: our name is "Pouch Wale", written "PouchWale" too (2026-11-25)
+    ours = {re.sub(r"[\s_-]+", "", str(cfg.get(k) or "").lower()) for k in ("company_name", "agent_name")} - {""}
+    return None if re.sub(r"[\s_-]+", "", name.lower()) in ours else name
 
 
 def inbound_caller(raw_from: Any, raw_to: Any, raw_name: Any, cfg: dict) -> dict:

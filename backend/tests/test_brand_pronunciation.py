@@ -1,9 +1,8 @@
 """The company name is always spoken "पाउच वाले", however it is written (services/sarvam.py: _say_brand).
 
 On 2026-11-19 a line written "Pouch Wale" (with a space) was heard as "पूच वाले": the pronunciation fix in
-Settings only knew the one-word spelling. Every spelling that sounds wrong now reaches the voice as a tested one:
-"पाउचवाले" for the Hindi voice, "Pouch Waale" for English calls (both heard as "पाउच वाले"). A right Devanagari
-spelling ("पाउच वाले" / "पाउचवाले") is left as written in Hindi calls.
+Settings only knew the one-word spelling. Every spelling now reaches the voice as one form: "पाउच वाले" (two words,
+the team's choice on 2026-11-25) for the Hindi voice, "Pouch Waale" for English calls.
 """
 from __future__ import annotations
 
@@ -33,10 +32,11 @@ WRITTEN = ["PouchWale", "Pouch Wale", "pouchwale", "POUCHWALE", "Pouch wale", "P
 
 
 @pytest.mark.parametrize("cfg", [HINDI, BARE_HINDI], ids=["hindi", "hindi-no-fixes"])
-def test_a_right_devanagari_spelling_is_kept_in_hindi_calls(cfg):
+def test_hindi_calls_always_say_the_two_word_name(cfg):
     assert speakable("पाउच वाले को call करें", cfg) == "पाउच वाले को call करें"
-    assert speakable("पाउचवाले को call करें", cfg) == "पाउचवाले को call करें"
-    assert speakable("PouchWale", {**cfg, "pronunciations": ["PouchWale -> पाउच वाले"]}) == "पाउच वाले"  # team's rule
+    assert speakable("पाउचवाले को call करें", cfg) == "पाउच वाले को call करें"  # one word: said as the team says it
+    assert speakable("PouchWale", {**cfg, "pronunciations": ["PouchWale -> पाउचवाले"]}) == "पाउच वाले"
+    assert HI == "पाउच वाले"
 
 
 @pytest.mark.parametrize("cfg", [ENGLISH, BARE_ENGLISH], ids=["english", "english-no-fixes"])

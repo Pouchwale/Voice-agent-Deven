@@ -408,7 +408,7 @@ def test_silence_lines_are_calm_and_pronunciations_cover_both_languages():
     assert "..." not in DEFAULT_AGENT_SETTINGS["silence_prompt_text"]
     assert ENGLISH_LINES["silence_prompt"] == "Hello, are you still on the line?"
     cfg = dict(DEFAULT_AGENT_SETTINGS)
-    assert speakable("PouchWale का MOQ, GST और 5 kg", cfg) == "पाउचवाले का एम ओ क्यू, जी एस टी और पाँच किलो"
+    assert speakable("PouchWale का MOQ, GST और 5 kg", cfg) == "पाउच वाले का एम ओ क्यू, जी एस टी और पाँच किलो"
     assert speakable("PouchWale MOQ, GST and 5 kg", english_voice_cfg(cfg)) == "Pouch Waale M O Q, G S T and 5 kilo"
 
 

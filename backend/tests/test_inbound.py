@@ -408,7 +408,7 @@ def test_inbound_off_plays_message_and_logs_missed(client):
     assert [el.tag for el in root] == ["Speak", "Hangup"]
     speak = root[0]
     assert speak.get("voice") == "WOMAN" and speak.get("language") == "hi-IN"
-    assert "पाउचवाले" in speak.text and "PouchWale" not in speak.text  # pronunciation fixes apply here too
+    assert "पाउच वाले" in speak.text and "PouchWale" not in speak.text  # pronunciation fixes apply here too
     row = _row("inb-off-1")
     assert (row.status, row.end_reason, row.analysis_status, row.answered_at) == ("no_answer", "inbound_off",
                                                                                   "skipped", None)

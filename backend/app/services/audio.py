@@ -8,6 +8,8 @@ from pathlib import Path
 
 import audioop  # provided by `audioop-lts` on Python 3.13+
 
+import numpy as np
+
 SAMPLE_WIDTH = 2  # PCM16
 
 
@@ -243,6 +245,42 @@ class EnergyVAD:
                 self.speaking = False
                 return "end"
         return None
+
+
+def voiced_share(pcm: bytes, rate: int, *, min_rms: int = 300, periodic: float = 0.6) -> tuple[float, int]:
+    """How much of a stretch of the caller's audio sounds like a human voice: the share of its active 40 ms frames
+    (louder than min_rms) that repeat at a voice pitch (80-400 Hz: normalised autocorrelation >= `periodic`), and how
+    many frames were active. Traffic rumble, engine noise and line hiss are not periodic like a voice.
+
+    Measured 2026-11-25 (stt-benchmark/2026-11-25, 100-1000 Hz band): loud traffic or deep rumble with no one speaking
+    0.04-0.11; benchmark speech clean 0.86+, in traffic at 5 dB 0.43+, among other voices at 5 dB 0.68+; real customer
+    utterances (calls 78 and 82) median 0.97, the only one at 0.2 or below a voiceless burst no recogniser heard words in."""
+    x = np.frombuffer(pcm[: len(pcm) - len(pcm) % 2], dtype=np.int16).astype(np.float64)
+    # the pitch is judged in the 100-1000 Hz band, where a voice's pitch and first formant are strongest: without the
+    # deep rumble below it (a truck's idle, wind: so smooth it looks "repeating" at a voice's period) and without most
+    # of the hiss above it (which, boosted, hid the pitch of speech in traffic)
+    spec = np.fft.rfft(x)
+    freqs = np.fft.rfftfreq(len(x), 1 / rate)
+    spec[(freqs < 100) | (freqs > 1000)] = 0
+    y = np.fft.irfft(spec, len(x))
+    frame, hop = int(rate * 0.04), int(rate * 0.02)
+    lo, hi = rate // 400, rate // 80
+    active = voiced = 0
+    for i in range(0, len(x) - frame - hi, hop):
+        a = x[i:i + frame]
+        if np.sqrt(np.mean(a * a)) < min_rms:  # loudness of what the caller hears, rumble included
+            continue
+        active += 1
+        a = y[i:i + frame]
+        seg = y[i:i + frame + hi]
+        a = a - a.mean()
+        seg = seg - seg.mean()
+        corr = np.correlate(seg, a, mode="valid")  # corr[k] = sum_n a[n] * seg[n + k], k = 0..hi
+        energy = np.convolve(seg * seg, np.ones(frame), mode="valid")  # sum of seg[k:k+frame]^2 for each k
+        den = np.sqrt(np.dot(a, a) * energy[lo:hi + 1])
+        r = np.divide(corr[lo:hi + 1], den, out=np.zeros_like(den), where=den > 0)
+        voiced += bool(r.max() >= periodic)
+    return (voiced / active if active else 0.0), active
 
 
 class CallRecorder:

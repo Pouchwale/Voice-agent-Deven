@@ -101,23 +101,22 @@ def _tts_lang(cfg: dict) -> str:
 _RULE_SPLIT = re.compile(r"\s*(?:=|->|→)\s*")
 _MARKUP = re.compile(r"[*#`~|<>\[\]{}_]+")  # never meant to be read aloud
 
-# The company name is always said "पाउच वाले", however it was written: "PouchWale", "Pouch Wale", "pouchwale",
-# "Pouch-Wale", "पौचवाले"... Built in (not a Settings rule), so it can't be deleted or mistyped, and applied after
-# the team's own pronunciation fixes (so a rule for the email address, or the team's own Devanagari spelling,
-# still wins). Measured on 2026-11-19 with the Sarika (v4) voice, each take sent back through speech recognition:
-# written in English letters with a space ("Pouch Wale") the Hindi voice said "पूच / टॉउच वाले"; written
-# "पाउचवाले" it was heard as "पाउच वाले" in 5 of 5 takes ("पाउच वाले" with a space: 4 of 5, so both Devanagari
-# spellings are kept as written), and an English call reading "Pouch Waale" in 2 of 2.
+# The company name, "Pouch Wale", is always said "पाउच वाले" (two words: the team's spelling, 2026-11-25), however it
+# was written: "PouchWale", "Pouch Wale", "pouchwale", "Pouch-Wale", "पाउचवाले", "पौचवाले"... Built in (not a Settings
+# rule), so it can't be deleted or mistyped, and applied after the team's own pronunciation fixes (a rule for the
+# email address still works: its "पाउचवाले" is said "पाउच वाले" too). Measured on 2026-11-19 with the Sarika (v4)
+# voice, each take sent back through speech recognition: written in English letters with a space ("Pouch Wale") the
+# Hindi voice said "पूच / टॉउच वाले", so English letters never reach a Hindi voice; "पाउचवाले" was heard as "पाउच
+# वाले" in 5 of 5 takes and "पाउच वाले" in 4 of 5. The team chose "पाउच वाले" on 2026-11-25 (voice now Aparna).
 _BRAND_LATIN = re.compile(r"(?<![A-Za-z0-9])pouch[\s_-]*waa?ley?(?![A-Za-z0-9])", re.IGNORECASE)
 _BRAND_DEVANAGARI = re.compile(r"(?:पाउच|पौच|पोच|पूच)\s*वाले")
-_BRAND_MISSPELT = re.compile(r"(?:पौच|पोच|पूच)\s*वाले")  # Devanagari spellings that sound wrong
-BRAND_SPOKEN_DEVANAGARI = "पाउचवाले"  # Hindi / Marathi voices
-BRAND_SPOKEN_LATIN = "Pouch Waale"    # English (and the other languages' voices)
+BRAND_SPOKEN_DEVANAGARI = "पाउच वाले"  # Hindi / Marathi voices
+BRAND_SPOKEN_LATIN = "Pouch Waale"     # English (and the other languages' voices)
 
 
 def _say_brand(text: str, lang: str) -> str:
     if lang.startswith(("hi", "mr")):
-        return _BRAND_MISSPELT.sub(BRAND_SPOKEN_DEVANAGARI, _BRAND_LATIN.sub(BRAND_SPOKEN_DEVANAGARI, text))
+        return _BRAND_DEVANAGARI.sub(BRAND_SPOKEN_DEVANAGARI, _BRAND_LATIN.sub(BRAND_SPOKEN_DEVANAGARI, text))
     return _BRAND_LATIN.sub(BRAND_SPOKEN_LATIN, _BRAND_DEVANAGARI.sub(BRAND_SPOKEN_LATIN, text))
 
 

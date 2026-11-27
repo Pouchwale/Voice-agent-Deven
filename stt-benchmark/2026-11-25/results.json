@@ -1,0 +1,1529 @@
+{
+ "current": {
+  "setup": {
+   "model": "saaras:v3-realtime",
+   "keyterms": ""
+  },
+  "rows": [
+   {
+    "i": 0,
+    "condition": "clean",
+    "heard": "हाँ जी बोलिए।"
+   },
+   {
+    "i": 0,
+    "condition": "traffic 10 dB",
+    "heard": "हां जी। बोलिए।"
+   },
+   {
+    "i": 0,
+    "condition": "traffic 5 dB",
+    "heard": "हां जी। बोलिए।"
+   },
+   {
+    "i": 0,
+    "condition": "voices 10 dB",
+    "heard": "हां जी बोलिए"
+   },
+   {
+    "i": 0,
+    "condition": "voices 5 dB",
+    "heard": "बोलिए"
+   },
+   {
+    "i": 1,
+    "condition": "clean",
+    "heard": "हाँ जी"
+   },
+   {
+    "i": 1,
+    "condition": "traffic 10 dB",
+    "heard": "हां जी"
+   },
+   {
+    "i": 1,
+    "condition": "traffic 5 dB",
+    "heard": "हां जी"
+   },
+   {
+    "i": 1,
+    "condition": "voices 10 dB",
+    "heard": "क्या अभी नहीं है"
+   },
+   {
+    "i": 1,
+    "condition": "voices 5 dB",
+    "heard": "नहीं है हां जी"
+   },
+   {
+    "i": 2,
+    "condition": "clean",
+    "heard": "आपका MOQ कितना है?"
+   },
+   {
+    "i": 2,
+    "condition": "traffic 10 dB",
+    "heard": "आपका MOQ कितना है?"
+   },
+   {
+    "i": 2,
+    "condition": "traffic 5 dB",
+    "heard": "आपका MOQ कितना है?"
+   },
+   {
+    "i": 2,
+    "condition": "voices 10 dB",
+    "heard": "आपका MOQ कितना है?"
+   },
+   {
+    "i": 2,
+    "condition": "voices 5 dB",
+    "heard": "आपका MQ कितना है"
+   },
+   {
+    "i": 3,
+    "condition": "clean",
+    "heard": "मुझे मखाना के लिए stand up pouch चाहिए"
+   },
+   {
+    "i": 3,
+    "condition": "traffic 10 dB",
+    "heard": "मुझे मखाना के लिए stand up pouch चाहिए।"
+   },
+   {
+    "i": 3,
+    "condition": "traffic 5 dB",
+    "heard": "मुझे मखाना के लिए stand up pouch चाहिए।"
+   },
+   {
+    "i": 3,
+    "condition": "voices 10 dB",
+    "heard": "मुझे मखाना के लिए stand up pouch चाहिए"
+   },
+   {
+    "i": 3,
+    "condition": "voices 5 dB",
+    "heard": "मुझे मखाना के लिए stand up pouch चाहिए"
+   },
+   {
+    "i": 4,
+    "condition": "clean",
+    "heard": "हमें हर महीने एक लाख pieces चाहिए।"
+   },
+   {
+    "i": 4,
+    "condition": "traffic 10 dB",
+    "heard": "हमें हर महीने 100000 पीसेस चाहिए।"
+   },
+   {
+    "i": 4,
+    "condition": "traffic 5 dB",
+    "heard": "हमें हर महीने 100000 पीसेस चाहिए।"
+   },
+   {
+    "i": 4,
+    "condition": "voices 10 dB",
+    "heard": "हमें हर महीने एक लाख pieces चाहिए"
+   },
+   {
+    "i": 4,
+    "condition": "voices 5 dB",
+    "heard": "हमें हर महीने 1,00,000 pieces चाहिए।"
+   },
+   {
+    "i": 5,
+    "condition": "clean",
+    "heard": "हमारी कंपनी का नाम The Holy Nutty है।"
+   },
+   {
+    "i": 5,
+    "condition": "traffic 10 dB",
+    "heard": "हमारी कंपनी का नाम The Holy Nutty है।"
+   },
+   {
+    "i": 5,
+    "condition": "traffic 5 dB",
+    "heard": "हमारी कंपनी का नाम The Holy Nutty है।"
+   },
+   {
+    "i": 5,
+    "condition": "voices 10 dB",
+    "heard": "हमारी company का नाम The Holy Nutty है"
+   },
+   {
+    "i": 5,
+    "condition": "voices 5 dB",
+    "heard": "हमारी company का नाम The Holy Nutty है"
+   },
+   {
+    "i": 6,
+    "condition": "clean",
+    "heard": "क्या आप zipper pouch भी बनाते हैं"
+   },
+   {
+    "i": 6,
+    "condition": "traffic 10 dB",
+    "heard": "क्या आप zipper pouch भी बनाते हैं?"
+   },
+   {
+    "i": 6,
+    "condition": "traffic 5 dB",
+    "heard": "क्या आप zipper pouch भी बनाते हैं?"
+   },
+   {
+    "i": 6,
+    "condition": "voices 10 dB",
+    "heard": "क्या आप zipper pouch भी बनाते हैं"
+   },
+   {
+    "i": 6,
+    "condition": "voices 5 dB",
+    "heard": "क्या आप zipper pouch भी बनाते हैं?"
+   },
+   {
+    "i": 7,
+    "condition": "clean",
+    "heard": "हमें 10,000 pouch चाहिए 2 हफ़्ते में"
+   },
+   {
+    "i": 7,
+    "condition": "traffic 10 dB",
+    "heard": "हमें 10000 पाउच चाहिए 2 हफ्ते में।"
+   },
+   {
+    "i": 7,
+    "condition": "traffic 5 dB",
+    "heard": "हमें 10000 पाउच चाहिए 2 हफ्ते में।"
+   },
+   {
+    "i": 7,
+    "condition": "voices 10 dB",
+    "heard": "हमें 10,000 pouch चाहिए 2 हफ्ते में"
+   },
+   {
+    "i": 7,
+    "condition": "voices 5 dB",
+    "heard": "नहीं अभी हमें ₹10000 पाउच चाहिए दो हफ्ते में"
+   },
+   {
+    "i": 8,
+    "condition": "clean",
+    "heard": "sample kit मंगवाना है WhatsApp पर भेज दीजिए।"
+   },
+   {
+    "i": 8,
+    "condition": "traffic 10 dB",
+    "heard": "सैंपल किट मंगवाना है। WhatsApp पर भेज दीजिए।"
+   },
+   {
+    "i": 8,
+    "condition": "traffic 5 dB",
+    "heard": "सैंपल किट मंगवाना है, WhatsApp पर भेज दीजिए।"
+   },
+   {
+    "i": 8,
+    "condition": "voices 10 dB",
+    "heard": "sample kit मंगवाना है WhatsApp पर भेज दीजिए"
+   },
+   {
+    "i": 8,
+    "condition": "voices 5 dB",
+    "heard": "शाम को temple kit मंगवाना है WhatsApp पर भेज दीजिए"
+   },
+   {
+    "i": 9,
+    "condition": "clean",
+    "heard": "matt finish अच्छा रहेगा या gloss"
+   },
+   {
+    "i": 9,
+    "condition": "traffic 10 dB",
+    "heard": "मैट finish अच्छा रहेगा या gloss"
+   },
+   {
+    "i": 9,
+    "condition": "traffic 5 dB",
+    "heard": "मैट finish अच्छा रहेगा या ग्लॉस"
+   },
+   {
+    "i": 9,
+    "condition": "voices 10 dB",
+    "heard": "मैट फिनिश अच्छा रहेगा या ग्लॉस"
+   },
+   {
+    "i": 9,
+    "condition": "voices 5 dB",
+    "heard": "अच्छा रहेगा या gloss"
+   },
+   {
+    "i": 10,
+    "condition": "clean",
+    "heard": "मेरा नमकीना business है center seal pouch चाहिए"
+   },
+   {
+    "i": 10,
+    "condition": "traffic 10 dB",
+    "heard": "मेरा नमकीन में business है। Center Seal Pouch चाहिए।"
+   },
+   {
+    "i": 10,
+    "condition": "traffic 5 dB",
+    "heard": "मेरा नमकीन का business है, center seal pouch चाहिए।"
+   },
+   {
+    "i": 10,
+    "condition": "voices 10 dB",
+    "heard": "हाँ जी मेरा नमकीना business है center seal pouch चाहिए"
+   },
+   {
+    "i": 10,
+    "condition": "voices 5 dB",
+    "heard": "हाँ मेरा नमकीना business है center seal pouch चाहिए हम"
+   },
+   {
+    "i": 11,
+    "condition": "clean",
+    "heard": "अभी हम spices के लिए किसी और company से packaging लेते हैं"
+   },
+   {
+    "i": 11,
+    "condition": "traffic 10 dB",
+    "heard": "अभी हम spices के लिए किसी और कंपनी से packaging लेते हैं।"
+   },
+   {
+    "i": 11,
+    "condition": "traffic 5 dB",
+    "heard": "अभी हम spices के लिए किसी और कंपनी से packaging लेते हैं।"
+   },
+   {
+    "i": 11,
+    "condition": "voices 10 dB",
+    "heard": "अभी हम spices के लिए किसी और company से packaging लेते हैं।"
+   },
+   {
+    "i": 11,
+    "condition": "voices 5 dB",
+    "heard": "आपका M के लिए किसी और company से packaging लेते हैं। आप लोग कहां से"
+   },
+   {
+    "i": 12,
+    "condition": "clean",
+    "heard": "नहीं अभी design ready नहीं है"
+   },
+   {
+    "i": 12,
+    "condition": "traffic 10 dB",
+    "heard": "नहीं अभी design ready नहीं है।"
+   },
+   {
+    "i": 12,
+    "condition": "traffic 5 dB",
+    "heard": "नहीं अभी design ready नहीं है।"
+   },
+   {
+    "i": 12,
+    "condition": "voices 10 dB",
+    "heard": "ठीक है। नहीं अभी design ready नहीं है।"
+   },
+   {
+    "i": 12,
+    "condition": "voices 5 dB",
+    "heard": "नहीं अभी design ready नहीं है"
+   },
+   {
+    "i": 13,
+    "condition": "clean",
+    "heard": "शाम को पाँच बजे call कीजिए"
+   },
+   {
+    "i": 13,
+    "condition": "traffic 10 dB",
+    "heard": "शाम को 5:00 बजे कॉल कीजिए।"
+   },
+   {
+    "i": 13,
+    "condition": "traffic 5 dB",
+    "heard": "शाम को 5:00 बजे कॉल कीजिए।"
+   },
+   {
+    "i": 13,
+    "condition": "voices 10 dB",
+    "heard": "शाम को 5 बजे call कीजिए।"
+   },
+   {
+    "i": 13,
+    "condition": "voices 5 dB",
+    "heard": "शाम को 5 बजे call कीजिए"
+   },
+   {
+    "i": 14,
+    "condition": "clean",
+    "heard": "price पर piece कितना पड़ेगा"
+   },
+   {
+    "i": 14,
+    "condition": "traffic 10 dB",
+    "heard": "Price per piece कितना पड़ेगा?"
+   },
+   {
+    "i": 14,
+    "condition": "traffic 5 dB",
+    "heard": "Price per piece कितना पड़ेगा?"
+   },
+   {
+    "i": 14,
+    "condition": "voices 10 dB",
+    "heard": "प्राइस पर पीस कितना पड़ेगा?"
+   },
+   {
+    "i": 14,
+    "condition": "voices 5 dB",
+    "heard": "प्राइस पर पीस कितना पड़ेगा"
+   },
+   {
+    "i": 15,
+    "condition": "clean",
+    "heard": "हम dry fruits और cashews pack करते हैं।"
+   },
+   {
+    "i": 15,
+    "condition": "traffic 10 dB",
+    "heard": "हम dry fruits और cashews pack करते हैं।"
+   },
+   {
+    "i": 15,
+    "condition": "traffic 5 dB",
+    "heard": "हम dry fruits और cashews पैक करते हैं।"
+   },
+   {
+    "i": 15,
+    "condition": "voices 10 dB",
+    "heard": "हम dry fruits और cashews pack करते हैं"
+   },
+   {
+    "i": 15,
+    "condition": "voices 5 dB",
+    "heard": "हम dry fruits और cashews pack करते हैं।"
+   },
+   {
+    "i": 16,
+    "condition": "clean",
+    "heard": "आप लोग कहाँ से हो अहमदाबाद के पास"
+   },
+   {
+    "i": 16,
+    "condition": "traffic 10 dB",
+    "heard": "आप लोग कहां से हो? अहमदाबाद के पास।"
+   },
+   {
+    "i": 16,
+    "condition": "traffic 5 dB",
+    "heard": "आप लोग कहां से हो? Ahmedabad से पास।"
+   },
+   {
+    "i": 16,
+    "condition": "voices 10 dB",
+    "heard": "आप लोग कहां से हो? Ahmedabad के पास।"
+   },
+   {
+    "i": 16,
+    "condition": "voices 5 dB",
+    "heard": "हमें 10,000 pouch चाहिए 2 हफ्ते में"
+   },
+   {
+    "i": 17,
+    "condition": "clean",
+    "heard": "ठीक है मैं सोचकर बताता हूँ"
+   },
+   {
+    "i": 17,
+    "condition": "traffic 10 dB",
+    "heard": "ठीक है, मैं सोच कर बताता हूं।"
+   },
+   {
+    "i": 17,
+    "condition": "traffic 5 dB",
+    "heard": "ठीक है, मैं सोच कर बताता हूं।"
+   },
+   {
+    "i": 17,
+    "condition": "voices 10 dB",
+    "heard": "मंगवाना आपका M और मैं सुपकट बताता हूँ"
+   },
+   {
+    "i": 17,
+    "condition": "voices 5 dB",
+    "heard": "मैं सुठकर बताता हूँ"
+   },
+   {
+    "i": 18,
+    "condition": "clean",
+    "heard": "3 side seal pouch में कितना खर्चा आएगा"
+   },
+   {
+    "i": 18,
+    "condition": "traffic 10 dB",
+    "heard": "3 side seal pouch में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 18,
+    "condition": "traffic 5 dB",
+    "heard": "3 side seal pouch में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 18,
+    "condition": "voices 10 dB",
+    "heard": "तीन साइड स्टील पाउच में कितना खर्चा आएगा"
+   },
+   {
+    "i": 18,
+    "condition": "voices 5 dB",
+    "heard": "मुझे मखाना के अंदर कितना खर्चा आएगा"
+   },
+   {
+    "i": 19,
+    "condition": "clean",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   },
+   {
+    "i": 19,
+    "condition": "traffic 10 dB",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   },
+   {
+    "i": 19,
+    "condition": "traffic 5 dB",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   },
+   {
+    "i": 19,
+    "condition": "voices 10 dB",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   },
+   {
+    "i": 19,
+    "condition": "voices 5 dB",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   }
+  ],
+  "audio_seconds": 428.9
+ },
+ "v4": {
+  "setup": {
+   "model": "saaras:v4",
+   "keyterms": ""
+  },
+  "rows": [
+   {
+    "i": 0,
+    "condition": "clean",
+    "heard": "हाँ जी। बोलिए।"
+   },
+   {
+    "i": 0,
+    "condition": "traffic 10 dB",
+    "heard": "हाँ जी, बोलिए।"
+   },
+   {
+    "i": 0,
+    "condition": "traffic 5 dB",
+    "heard": "हाँ जी, बोलिए।"
+   },
+   {
+    "i": 0,
+    "condition": "voices 10 dB",
+    "heard": "हाँ जी बोलिए।"
+   },
+   {
+    "i": 0,
+    "condition": "voices 5 dB",
+    "heard": "हमारी company का नाम The Holy League है।"
+   },
+   {
+    "i": 1,
+    "condition": "clean",
+    "heard": "हाँ जी।"
+   },
+   {
+    "i": 1,
+    "condition": "traffic 10 dB",
+    "heard": "हाँ जी।"
+   },
+   {
+    "i": 1,
+    "condition": "traffic 5 dB",
+    "heard": "हाँ जी।"
+   },
+   {
+    "i": 1,
+    "condition": "voices 10 dB",
+    "heard": "नहीं, अभी reply नहीं है।"
+   },
+   {
+    "i": 1,
+    "condition": "voices 5 dB",
+    "heard": "नहीं है।"
+   },
+   {
+    "i": 2,
+    "condition": "clean",
+    "heard": "आपका MOQ कितना है?"
+   },
+   {
+    "i": 2,
+    "condition": "traffic 10 dB",
+    "heard": "आपका MOQ कितना है?"
+   },
+   {
+    "i": 2,
+    "condition": "traffic 5 dB",
+    "heard": "आपका MOQ कितना है?"
+   },
+   {
+    "i": 2,
+    "condition": "voices 10 dB",
+    "heard": "आपका MOQ कितना है?"
+   },
+   {
+    "i": 2,
+    "condition": "voices 5 dB",
+    "heard": "आपका MOQ कितना है? Call कीजिए।"
+   },
+   {
+    "i": 3,
+    "condition": "clean",
+    "heard": "मुझे मखाना के लिए stand up pouch चाहिए।"
+   },
+   {
+    "i": 3,
+    "condition": "traffic 10 dB",
+    "heard": "मुझे मखाना के लिए stand-up pouch चाहिए।"
+   },
+   {
+    "i": 3,
+    "condition": "traffic 5 dB",
+    "heard": "मुझे मखाना के लिए stand-up pouch चाहिए।"
+   },
+   {
+    "i": 3,
+    "condition": "voices 10 dB",
+    "heard": "मुझे मखाना के लिए stand-up pouch चाहिए।"
+   },
+   {
+    "i": 3,
+    "condition": "voices 5 dB",
+    "heard": "मुझे मखाना के लिए stand up pouch चाहिए।"
+   },
+   {
+    "i": 4,
+    "condition": "clean",
+    "heard": "हमें हर महीने 1,00,000 pieces चाहिए।"
+   },
+   {
+    "i": 4,
+    "condition": "traffic 10 dB",
+    "heard": "हमें हर महीने 1,00,000 pieces चाहिए।"
+   },
+   {
+    "i": 4,
+    "condition": "traffic 5 dB",
+    "heard": "हमें हर महीने 1,00,000 pieces चाहिए।"
+   },
+   {
+    "i": 4,
+    "condition": "voices 10 dB",
+    "heard": "हमें हर महीने 1,00,000 pieces चाहिए।"
+   },
+   {
+    "i": 4,
+    "condition": "voices 5 dB",
+    "heard": "हमें हर महीने 1,00,000 pieces चाहिए।"
+   },
+   {
+    "i": 5,
+    "condition": "clean",
+    "heard": "हमारी company का नाम The Holy Nutty है।"
+   },
+   {
+    "i": 5,
+    "condition": "traffic 10 dB",
+    "heard": "हमारी company का नाम The Holy Nutty है।"
+   },
+   {
+    "i": 5,
+    "condition": "traffic 5 dB",
+    "heard": "हमारी company का नाम The Holy Nutty है।"
+   },
+   {
+    "i": 5,
+    "condition": "voices 10 dB",
+    "heard": "हमारी company का नाम The Holy Nutty है।"
+   },
+   {
+    "i": 5,
+    "condition": "voices 5 dB",
+    "heard": "हमारी company का नाम The Holy Nutty है।"
+   },
+   {
+    "i": 6,
+    "condition": "clean",
+    "heard": "क्या आप zipper pouch भी बनाते हैं?"
+   },
+   {
+    "i": 6,
+    "condition": "traffic 10 dB",
+    "heard": "क्या आप zipper pouch भी बनाते हैं?"
+   },
+   {
+    "i": 6,
+    "condition": "traffic 5 dB",
+    "heard": "क्या आप zipper pouch भी बनाते हैं?"
+   },
+   {
+    "i": 6,
+    "condition": "voices 10 dB",
+    "heard": "क्या आप zipper pouch भी बनाते हैं?"
+   },
+   {
+    "i": 6,
+    "condition": "voices 5 dB",
+    "heard": "क्या आप zipper pouch भी बनाते हैं?"
+   },
+   {
+    "i": 7,
+    "condition": "clean",
+    "heard": "हमें 10,000 pouch चाहिए 2 हफ़्ते में।"
+   },
+   {
+    "i": 7,
+    "condition": "traffic 10 dB",
+    "heard": "हमें 10,000 pouch चाहिए 2 हफ़्ते में।"
+   },
+   {
+    "i": 7,
+    "condition": "traffic 5 dB",
+    "heard": "हमें 10,000 pouch चाहिए 2 हफ़्ते में।"
+   },
+   {
+    "i": 7,
+    "condition": "voices 10 dB",
+    "heard": "हमें 10,000 pouch चाहिए 2 हफ्ते में।"
+   },
+   {
+    "i": 7,
+    "condition": "voices 5 dB",
+    "heard": "हमें 10,000 pouch चाहिए 2 हफ्ते में।"
+   },
+   {
+    "i": 8,
+    "condition": "clean",
+    "heard": "Sample kit मंगवाना है। WhatsApp पर भेज दीजिए।"
+   },
+   {
+    "i": 8,
+    "condition": "traffic 10 dB",
+    "heard": "Sample kit मंगवाना है। WhatsApp पर भेज दीजिए।"
+   },
+   {
+    "i": 8,
+    "condition": "traffic 5 dB",
+    "heard": "Sample kit मंगवाना है, WhatsApp पर भेज दीजिए।"
+   },
+   {
+    "i": 8,
+    "condition": "voices 10 dB",
+    "heard": "sample kit मंगवाना है, WhatsApp पर भेज दीजिए।"
+   },
+   {
+    "i": 8,
+    "condition": "voices 5 dB",
+    "heard": "sample kit मंगवाना है। WhatsApp पर भेज दीजिए।"
+   },
+   {
+    "i": 9,
+    "condition": "clean",
+    "heard": "Matte finish अच्छा रहेगा या gloss?"
+   },
+   {
+    "i": 9,
+    "condition": "traffic 10 dB",
+    "heard": "Matte finish अच्छा रहेगा या gloss?"
+   },
+   {
+    "i": 9,
+    "condition": "traffic 5 dB",
+    "heard": "Matte finish अच्छा रहेगा या gloss?"
+   },
+   {
+    "i": 9,
+    "condition": "voices 10 dB",
+    "heard": "Matte finish अच्छा रहेगा या gloss?"
+   },
+   {
+    "i": 9,
+    "condition": "voices 5 dB",
+    "heard": "Matte finish अच्छा रहेगा या gloss?"
+   },
+   {
+    "i": 10,
+    "condition": "clean",
+    "heard": "मेरा नमकीन का business है। Center seal pouch चाहिए।"
+   },
+   {
+    "i": 10,
+    "condition": "traffic 10 dB",
+    "heard": "मेरा नमकीन का business है। Center seal pouch चाहिए।"
+   },
+   {
+    "i": 10,
+    "condition": "traffic 5 dB",
+    "heard": "मेरा नमकीन का business है, center seal pouch चाहिए।"
+   },
+   {
+    "i": 10,
+    "condition": "voices 10 dB",
+    "heard": "हाँ जी, मेरा नमकीन का business है। center seal pouch चाहिए।"
+   },
+   {
+    "i": 10,
+    "condition": "voices 5 dB",
+    "heard": "मेरा नमकीन का business है। Center seal pouch चाहिए। हम"
+   },
+   {
+    "i": 11,
+    "condition": "clean",
+    "heard": "अभी हम spices के लिए किसी और company से packaging लेते हैं।"
+   },
+   {
+    "i": 11,
+    "condition": "traffic 10 dB",
+    "heard": "अभी हम spices के लिए किसी और company से packaging लेते हैं।"
+   },
+   {
+    "i": 11,
+    "condition": "traffic 5 dB",
+    "heard": "अभी हम spices के लिए किसी और company से packaging लेते हैं।"
+   },
+   {
+    "i": 11,
+    "condition": "voices 10 dB",
+    "heard": "अभी हम spices के लिए किसी और company से packaging लेते हैं।"
+   },
+   {
+    "i": 11,
+    "condition": "voices 5 dB",
+    "heard": "अभी हम Spical के लिए किसी और company से packaging लेते हैं। आप लोग कहाँ से हैं?"
+   },
+   {
+    "i": 12,
+    "condition": "clean",
+    "heard": "नहीं अभी design ready नहीं है।"
+   },
+   {
+    "i": 12,
+    "condition": "traffic 10 dB",
+    "heard": "नहीं, अभी design ready नहीं है।"
+   },
+   {
+    "i": 12,
+    "condition": "traffic 5 dB",
+    "heard": "नहीं, अभी design ready नहीं है।"
+   },
+   {
+    "i": 12,
+    "condition": "voices 10 dB",
+    "heard": "नहीं, अभी design ready नहीं है।"
+   },
+   {
+    "i": 12,
+    "condition": "voices 5 dB",
+    "heard": "नहीं, अभी design ready नहीं है।"
+   },
+   {
+    "i": 13,
+    "condition": "clean",
+    "heard": "शाम को 5 बजे call कीजिए।"
+   },
+   {
+    "i": 13,
+    "condition": "traffic 10 dB",
+    "heard": "शाम को 5 बजे call कीजिए।"
+   },
+   {
+    "i": 13,
+    "condition": "traffic 5 dB",
+    "heard": "शाम को 5 बजे call कीजिए।"
+   },
+   {
+    "i": 13,
+    "condition": "voices 10 dB",
+    "heard": "शाम को 5 बजे call कीजिए।"
+   },
+   {
+    "i": 13,
+    "condition": "voices 5 dB",
+    "heard": "शाम को 5 बजे call में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 14,
+    "condition": "clean",
+    "heard": "Price per piece कितना पड़ेगा?"
+   },
+   {
+    "i": 14,
+    "condition": "traffic 10 dB",
+    "heard": "Price per piece कितना पड़ेगा?"
+   },
+   {
+    "i": 14,
+    "condition": "traffic 5 dB",
+    "heard": "Price per piece कितना पड़ेगा?"
+   },
+   {
+    "i": 14,
+    "condition": "voices 10 dB",
+    "heard": "Price per piece कितना पड़ेगा?"
+   },
+   {
+    "i": 14,
+    "condition": "voices 5 dB",
+    "heard": "price पर piece कितना पड़ेगा?"
+   },
+   {
+    "i": 15,
+    "condition": "clean",
+    "heard": "हम dry fruits और cashews pack करते हैं।"
+   },
+   {
+    "i": 15,
+    "condition": "traffic 10 dB",
+    "heard": "हम dry fruits और cashews pack करते हैं।"
+   },
+   {
+    "i": 15,
+    "condition": "traffic 5 dB",
+    "heard": "हम dry fruits और cashews pack करते हैं।"
+   },
+   {
+    "i": 15,
+    "condition": "voices 10 dB",
+    "heard": "हम dry fruits और cashews pack करते हैं।"
+   },
+   {
+    "i": 15,
+    "condition": "voices 5 dB",
+    "heard": "हम dry fruits और cashews pack करते हैं।"
+   },
+   {
+    "i": 16,
+    "condition": "clean",
+    "heard": "आप लोग कहाँ से हो? अहमदाबाद के पास।"
+   },
+   {
+    "i": 16,
+    "condition": "traffic 10 dB",
+    "heard": "आप लोग कहाँ से हो? अहमदाबाद के पास।"
+   },
+   {
+    "i": 16,
+    "condition": "traffic 5 dB",
+    "heard": "आप लोग कहाँ से हो? अहमदाबाद के पास।"
+   },
+   {
+    "i": 16,
+    "condition": "voices 10 dB",
+    "heard": "आप लोग कहाँ से हो? Ahmedabad के पास।"
+   },
+   {
+    "i": 16,
+    "condition": "voices 5 dB",
+    "heard": "हमें 10,000 pouch चाहिए Ahmedabad से 2 हफ़्ते में।"
+   },
+   {
+    "i": 17,
+    "condition": "clean",
+    "heard": "ठीक है। मैं सोचकर बताता हूँ।"
+   },
+   {
+    "i": 17,
+    "condition": "traffic 10 dB",
+    "heard": "ठीक है। मैं सोचकर बताता हूँ।"
+   },
+   {
+    "i": 17,
+    "condition": "traffic 5 dB",
+    "heard": "ठीक है, मैं सोचकर बताता हूँ।"
+   },
+   {
+    "i": 17,
+    "condition": "voices 10 dB",
+    "heard": "ठीक है, मैं स्पष्ट करता हूँ।"
+   },
+   {
+    "i": 17,
+    "condition": "voices 5 dB",
+    "heard": "ठीक है, मैं सोचकर बताता हूँ।"
+   },
+   {
+    "i": 18,
+    "condition": "clean",
+    "heard": "3 side seal pouch में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 18,
+    "condition": "traffic 10 dB",
+    "heard": "3 side seal pouch में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 18,
+    "condition": "traffic 5 dB",
+    "heard": "3 side seal pouch में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 18,
+    "condition": "voices 10 dB",
+    "heard": "3 side seal pouch में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 18,
+    "condition": "voices 5 dB",
+    "heard": "मुझे मखाना के 3 pouch में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 19,
+    "condition": "clean",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   },
+   {
+    "i": 19,
+    "condition": "traffic 10 dB",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   },
+   {
+    "i": 19,
+    "condition": "traffic 5 dB",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   },
+   {
+    "i": 19,
+    "condition": "voices 10 dB",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   },
+   {
+    "i": 19,
+    "condition": "voices 5 dB",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   }
+  ],
+  "audio_seconds": 428.9
+ },
+ "v4+terms": {
+  "setup": {
+   "model": "saaras:v4",
+   "keyterms": "MOQ, pouch, standup pouch, zipper pouch, center seal pouch, 3 side seal pouch, quad seal bag, spout pouch, vacuum pouch, Pouch Wale, namkeen, makhana, dry fruits, spices, masala, matte, gloss, sample kit, WhatsApp, SKU, packaging, laminated, Hybrid LED, per piece, quotation"
+  },
+  "rows": [
+   {
+    "i": 0,
+    "condition": "clean",
+    "heard": "हाँ जी। बोलिए।"
+   },
+   {
+    "i": 0,
+    "condition": "traffic 10 dB",
+    "heard": "हाँ जी, बोलिए।"
+   },
+   {
+    "i": 0,
+    "condition": "traffic 5 dB",
+    "heard": "हाँ जी, बोलिए।"
+   },
+   {
+    "i": 0,
+    "condition": "voices 10 dB",
+    "heard": "हाँ जी बोलिए।"
+   },
+   {
+    "i": 0,
+    "condition": "voices 5 dB",
+    "heard": "हमारी company का नाम The Holy Name है।"
+   },
+   {
+    "i": 1,
+    "condition": "clean",
+    "heard": "हाँ जी।"
+   },
+   {
+    "i": 1,
+    "condition": "traffic 10 dB",
+    "heard": "हाँ जी।"
+   },
+   {
+    "i": 1,
+    "condition": "traffic 5 dB",
+    "heard": "हाँ जी।"
+   },
+   {
+    "i": 1,
+    "condition": "voices 10 dB",
+    "heard": "नहीं अभी requirement नहीं है।"
+   },
+   {
+    "i": 1,
+    "condition": "voices 5 dB",
+    "heard": "नहीं है। हां जी, क्या?"
+   },
+   {
+    "i": 2,
+    "condition": "clean",
+    "heard": "आपका MOQ कितना है?"
+   },
+   {
+    "i": 2,
+    "condition": "traffic 10 dB",
+    "heard": "आपका MOQ कितना है?"
+   },
+   {
+    "i": 2,
+    "condition": "traffic 5 dB",
+    "heard": "आपका MOQ कितना है?"
+   },
+   {
+    "i": 2,
+    "condition": "voices 10 dB",
+    "heard": "आपका MOQ कितना है?"
+   },
+   {
+    "i": 2,
+    "condition": "voices 5 dB",
+    "heard": "आपका MOQ कितना है? call कीजिए।"
+   },
+   {
+    "i": 3,
+    "condition": "clean",
+    "heard": "मुझे मखाना के लिए standup pouch चाहिए।"
+   },
+   {
+    "i": 3,
+    "condition": "traffic 10 dB",
+    "heard": "मुझे मखाना के लिए standup pouch चाहिए।"
+   },
+   {
+    "i": 3,
+    "condition": "traffic 5 dB",
+    "heard": "मुझे मखाना के लिए standup pouch चाहिए।"
+   },
+   {
+    "i": 3,
+    "condition": "voices 10 dB",
+    "heard": "मुझे मखाना के लिए standup pouch चाहिए।"
+   },
+   {
+    "i": 3,
+    "condition": "voices 5 dB",
+    "heard": "मुझे मखाना के लिए standup pouch चाहिए।"
+   },
+   {
+    "i": 4,
+    "condition": "clean",
+    "heard": "हमें हर महीने 1,00,000 pieces चाहिए।"
+   },
+   {
+    "i": 4,
+    "condition": "traffic 10 dB",
+    "heard": "हमें हर महीने 1,00,000 pieces चाहिए।"
+   },
+   {
+    "i": 4,
+    "condition": "traffic 5 dB",
+    "heard": "हमें हर महीने 1,00,000 pieces चाहिए।"
+   },
+   {
+    "i": 4,
+    "condition": "voices 10 dB",
+    "heard": "हमें हर महीने 1,00,000 pieces चाहिए।"
+   },
+   {
+    "i": 4,
+    "condition": "voices 5 dB",
+    "heard": "हमें हर महीने 1,00,000 pieces चाहिए।"
+   },
+   {
+    "i": 5,
+    "condition": "clean",
+    "heard": "हमारी company का नाम The Holy Nutty है।"
+   },
+   {
+    "i": 5,
+    "condition": "traffic 10 dB",
+    "heard": "हमारी company का नाम The Holy Nutty है।"
+   },
+   {
+    "i": 5,
+    "condition": "traffic 5 dB",
+    "heard": "हमारी company का नाम The Holy Nutty है।"
+   },
+   {
+    "i": 5,
+    "condition": "voices 10 dB",
+    "heard": "हमारी company का नाम The Holy Nutty है।"
+   },
+   {
+    "i": 5,
+    "condition": "voices 5 dB",
+    "heard": "हमारी company का नाम The Holy Nutty है।"
+   },
+   {
+    "i": 6,
+    "condition": "clean",
+    "heard": "क्या आप zipper pouch भी बनाते हैं?"
+   },
+   {
+    "i": 6,
+    "condition": "traffic 10 dB",
+    "heard": "क्या आप zipper pouch भी बनाते हैं?"
+   },
+   {
+    "i": 6,
+    "condition": "traffic 5 dB",
+    "heard": "क्या आप zipper pouch भी बनाते हैं?"
+   },
+   {
+    "i": 6,
+    "condition": "voices 10 dB",
+    "heard": "क्या आप zipper pouch भी बनाते हैं?"
+   },
+   {
+    "i": 6,
+    "condition": "voices 5 dB",
+    "heard": "क्या आप zipper pouch भी बनाते हैं?"
+   },
+   {
+    "i": 7,
+    "condition": "clean",
+    "heard": "हमें 10,000 pouch चाहिए 2 हफ्ते में।"
+   },
+   {
+    "i": 7,
+    "condition": "traffic 10 dB",
+    "heard": "हमें 10,000 pouch चाहिए 2 हफ्ते में।"
+   },
+   {
+    "i": 7,
+    "condition": "traffic 5 dB",
+    "heard": "हमें 10,000 pouch चाहिए 2 हफ़्ते में।"
+   },
+   {
+    "i": 7,
+    "condition": "voices 10 dB",
+    "heard": "हमें 10,000 pouch चाहिए 2 हफ्ते में।"
+   },
+   {
+    "i": 7,
+    "condition": "voices 5 dB",
+    "heard": "हमें 10,000 pouch चाहिए 2 हफ्ते में।"
+   },
+   {
+    "i": 8,
+    "condition": "clean",
+    "heard": "sample kit मंगवाना है। WhatsApp पर भेज दीजिए।"
+   },
+   {
+    "i": 8,
+    "condition": "traffic 10 dB",
+    "heard": "sample kit मंगवाना है। WhatsApp पर भेज दीजिए।"
+   },
+   {
+    "i": 8,
+    "condition": "traffic 5 dB",
+    "heard": "sample kit मंगवाना है। WhatsApp पर भेज दीजिए।"
+   },
+   {
+    "i": 8,
+    "condition": "voices 10 dB",
+    "heard": "मेरी sample kit मंगवाना है। WhatsApp पर भेज दीजिए।"
+   },
+   {
+    "i": 8,
+    "condition": "voices 5 dB",
+    "heard": "sample kit मंगवाना है। WhatsApp पर भेज दीजिए।"
+   },
+   {
+    "i": 9,
+    "condition": "clean",
+    "heard": "matte finish अच्छा रहेगा या gloss?"
+   },
+   {
+    "i": 9,
+    "condition": "traffic 10 dB",
+    "heard": "Matte finish अच्छा रहेगा या gloss?"
+   },
+   {
+    "i": 9,
+    "condition": "traffic 5 dB",
+    "heard": "matte finish अच्छा रहेगा या gloss?"
+   },
+   {
+    "i": 9,
+    "condition": "voices 10 dB",
+    "heard": "Matte finish अच्छा रहेगा या gloss?"
+   },
+   {
+    "i": 9,
+    "condition": "voices 5 dB",
+    "heard": "matte finish अच्छा रहेगा या gloss?"
+   },
+   {
+    "i": 10,
+    "condition": "clean",
+    "heard": "मेरा नमकीन का business है। center seal pouch चाहिए।"
+   },
+   {
+    "i": 10,
+    "condition": "traffic 10 dB",
+    "heard": "मेरा नमकीन का business है। center seal pouch चाहिए।"
+   },
+   {
+    "i": 10,
+    "condition": "traffic 5 dB",
+    "heard": "मेरा नमकीन का business है। center seal pouch चाहिए।"
+   },
+   {
+    "i": 10,
+    "condition": "voices 10 dB",
+    "heard": "हाँ जी, मेरा नमकीन का business है। center seal pouch चाहिए।"
+   },
+   {
+    "i": 10,
+    "condition": "voices 5 dB",
+    "heard": "हाँ मेरा नमकीन का business है। center seal pouch चाहिए।"
+   },
+   {
+    "i": 11,
+    "condition": "clean",
+    "heard": "अभी हम spices के लिए किसी और company से packaging लेते हैं।"
+   },
+   {
+    "i": 11,
+    "condition": "traffic 10 dB",
+    "heard": "अभी हम spices के लिए किसी और company से packaging लेते हैं।"
+   },
+   {
+    "i": 11,
+    "condition": "traffic 5 dB",
+    "heard": "अभी हम spices के लिए किसी और company से packaging लेते हैं।"
+   },
+   {
+    "i": 11,
+    "condition": "voices 10 dB",
+    "heard": "अभी हम spices के लिए किसी और company से packaging लेते हैं।"
+   },
+   {
+    "i": 11,
+    "condition": "voices 5 dB",
+    "heard": "अभी हम spout pouch के लिए किसी और company से packaging लेते हैं। आप लोग कहाँ से हैं?"
+   },
+   {
+    "i": 12,
+    "condition": "clean",
+    "heard": "नहीं अभी design ready नहीं है।"
+   },
+   {
+    "i": 12,
+    "condition": "traffic 10 dB",
+    "heard": "नहीं, अभी design ready नहीं है।"
+   },
+   {
+    "i": 12,
+    "condition": "traffic 5 dB",
+    "heard": "नहीं, अभी design ready नहीं है।"
+   },
+   {
+    "i": 12,
+    "condition": "voices 10 dB",
+    "heard": "नहीं, अभी design ready नहीं है।"
+   },
+   {
+    "i": 12,
+    "condition": "voices 5 dB",
+    "heard": "नहीं, अभी design ready नहीं है।"
+   },
+   {
+    "i": 13,
+    "condition": "clean",
+    "heard": "शाम को 5 बजे call कीजिए।"
+   },
+   {
+    "i": 13,
+    "condition": "traffic 10 dB",
+    "heard": "शाम को 5:00 बजे call कीजिए।"
+   },
+   {
+    "i": 13,
+    "condition": "traffic 5 dB",
+    "heard": "शाम को 5:00 बजे call कीजिए।"
+   },
+   {
+    "i": 13,
+    "condition": "voices 10 dB",
+    "heard": "शाम को 5 बजे call कीजिए।"
+   },
+   {
+    "i": 13,
+    "condition": "voices 5 dB",
+    "heard": "शाम को 5 बजे pouch वाले में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 14,
+    "condition": "clean",
+    "heard": "price per piece कितना पड़ेगा?"
+   },
+   {
+    "i": 14,
+    "condition": "traffic 10 dB",
+    "heard": "price per piece कितना पड़ेगा?"
+   },
+   {
+    "i": 14,
+    "condition": "traffic 5 dB",
+    "heard": "price per piece कितना पड़ेगा?"
+   },
+   {
+    "i": 14,
+    "condition": "voices 10 dB",
+    "heard": "price per piece कितना पड़ेगा?"
+   },
+   {
+    "i": 14,
+    "condition": "voices 5 dB",
+    "heard": "price पर piece कितना पड़ेगा?"
+   },
+   {
+    "i": 15,
+    "condition": "clean",
+    "heard": "हम dry fruits और cashews pack करते हैं।"
+   },
+   {
+    "i": 15,
+    "condition": "traffic 10 dB",
+    "heard": "हम dry fruits और cashews pack करते हैं।"
+   },
+   {
+    "i": 15,
+    "condition": "traffic 5 dB",
+    "heard": "हम dry fruits और cashews pack करते हैं।"
+   },
+   {
+    "i": 15,
+    "condition": "voices 10 dB",
+    "heard": "हम dry fruits और cashews pack करते हैं।"
+   },
+   {
+    "i": 15,
+    "condition": "voices 5 dB",
+    "heard": "हम dry fruits और cashews pack करते हैं।"
+   },
+   {
+    "i": 16,
+    "condition": "clean",
+    "heard": "आप लोग कहाँ से हो? Ahmedabad के पास।"
+   },
+   {
+    "i": 16,
+    "condition": "traffic 10 dB",
+    "heard": "आप लोग कहाँ से हो? Ahmedabad के पास।"
+   },
+   {
+    "i": 16,
+    "condition": "traffic 5 dB",
+    "heard": "आप लोग कहाँ से हो? Ahmedabad के पास।"
+   },
+   {
+    "i": 16,
+    "condition": "voices 10 dB",
+    "heard": "आप लोग कहाँ से हो? Ahmedabad के पास।"
+   },
+   {
+    "i": 16,
+    "condition": "voices 5 dB",
+    "heard": "हमें 10,000 pouch चाहिए, Ahmedabad से, 2 हफ्ते में।"
+   },
+   {
+    "i": 17,
+    "condition": "clean",
+    "heard": "ठीक है। मैं सोचकर बताता हूँ।"
+   },
+   {
+    "i": 17,
+    "condition": "traffic 10 dB",
+    "heard": "ठीक है। मैं सोचकर बताता हूँ।"
+   },
+   {
+    "i": 17,
+    "condition": "traffic 5 dB",
+    "heard": "ठीक है, मैं सोचकर बताता हूँ।"
+   },
+   {
+    "i": 17,
+    "condition": "voices 10 dB",
+    "heard": "ठीक है, मैं standup pouch वाला quotation आपको WhatsApp पर मंगवाना है।"
+   },
+   {
+    "i": 17,
+    "condition": "voices 5 dB",
+    "heard": "ठीक है, मैं सोचकर बताता हूँ।"
+   },
+   {
+    "i": 18,
+    "condition": "clean",
+    "heard": "3 side seal pouch में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 18,
+    "condition": "traffic 10 dB",
+    "heard": "3 side seal pouch में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 18,
+    "condition": "traffic 5 dB",
+    "heard": "3 side seal pouch में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 18,
+    "condition": "voices 10 dB",
+    "heard": "3 side seal pouch में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 18,
+    "condition": "voices 5 dB",
+    "heard": "मुझे मखाना के 3 side seal pouch में कितना खर्चा आएगा?"
+   },
+   {
+    "i": 19,
+    "condition": "clean",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   },
+   {
+    "i": 19,
+    "condition": "traffic 10 dB",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   },
+   {
+    "i": 19,
+    "condition": "traffic 5 dB",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   },
+   {
+    "i": 19,
+    "condition": "voices 10 dB",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   },
+   {
+    "i": 19,
+    "condition": "voices 5 dB",
+    "heard": "मेरी quantity लगभग 25,000 है।"
+   }
+  ],
+  "audio_seconds": 428.9
+ }
+}

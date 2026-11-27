@@ -316,13 +316,13 @@ def test_prompt_inbound_has_no_outbound_phrases():
     for phrase in ("You called them", "calling a business owner", "say why you called", "disturb",
                    "Outbound call to a business lead"):
         assert phrase not in inbound, phrase
-    assert "ANSWERING an INBOUND PHONE CALL in India: the customer called PouchWale's number and you picked up." in inbound
-    assert "answering a business owner who called PouchWale" in inbound
+    assert "ANSWERING an INBOUND PHONE CALL in India: the customer called Pouch Wale's number and you picked up." in inbound
+    assert "answering a business owner who called Pouch Wale" in inbound
     assert "Thank them for calling once, briefly, then help with what they asked" in inbound
     assert "offer to call them back at a time that suits them" in inbound
     assert 'first ask once "और कुछ जानना हो तो बताइए?"' in inbound
-    assert '"Call करने के लिए thank you जी! कभी भी कुछ चाहिए हो, तो PouchWale को ज़रूर याद कीजिए। [END_CALL]"' in inbound
-    assert "Your goodbye ALWAYS names PouchWale" in inbound
+    assert '"Call करने के लिए thank you जी! कभी भी कुछ चाहिए हो, तो Pouch Wale को ज़रूर याद कीजिए। [END_CALL]"' in inbound
+    assert "Your goodbye ALWAYS names Pouch Wale" in inbound
     assert fill_template(CFG["inbound_purpose"], CFG, None) in inbound
     assert "PRIVACY" in inbound and "only after the caller brings up the topic or confirms who they are" in inbound
     assert static_system_prompt(CFG, "inbound") == inbound  # purpose defaults to the direction
@@ -335,7 +335,7 @@ def test_prompt_inbound_has_no_outbound_phrases():
     assert static_system_prompt(CFG, "outbound", "outbound") == outbound
     # memory rules for every direction
     for sp in (inbound, outbound):
-        assert "Confirm instead of re-asking" in sp and "don't introduce PouchWale again" in sp
+        assert "Confirm instead of re-asking" in sp and "don't introduce Pouch Wale again" in sp
         assert 'If the memory shows "The call that just dropped"' in sp
         assert "Recordings: don't bring them up, but if they ask whether the call is recorded, answer honestly." in sp
         assert "between 09:30 and 19:30 IST" in sp and '"आपका नाम जान सकती हूँ?"' in sp
@@ -346,7 +346,7 @@ def test_prompt_tone_and_language_mix():
     keys = set()
     for speaking_tone, (adjectives, sound) in TONES.items():
         sp = static_system_prompt({**CFG, "speaking_tone": speaking_tone})
-        assert sound in sp and f"You are a {adjectives} tele-calling sales executive from PouchWale" in sp
+        assert sound in sp and f"You are a {adjectives} tele-calling sales executive from Pouch Wale" in sp
         assert not any(other in sp for t, (_, other) in TONES.items() if t != speaking_tone)
         keys.add(hashlib.sha1(sp.encode()).hexdigest())
     assert len(keys) == len(TONES)  # each tone is its own cached prompt
@@ -371,18 +371,18 @@ def test_prompt_tone_and_language_mix():
 
 def test_prompt_callback_purpose():
     cb = static_system_prompt(CFG, "outbound", "callback")
-    assert "you are calling back a customer who called PouchWale earlier and couldn't be answered" in cb
-    assert "calling back a business owner who called PouchWale earlier" in cb and "No cold pitch" in cb
+    assert "you are calling back a customer who called Pouch Wale earlier and couldn't be answered" in cb
+    assert "calling back a business owner who called Pouch Wale earlier" in cb and "No cold pitch" in cb
     assert fill_template(CFG["inbound_purpose"], CFG, None) in cb
     for phrase in ("Outbound call to a business lead", "say why you called", "You called them; they did not call you"):
         assert phrase not in cb, phrase
     assert cb not in (static_system_prompt(CFG), static_system_prompt(CFG, "inbound", "inbound"))
     lead = {"name": "Mr. Rahul Sharma"}
-    assert greeting_for(CFG, lead, purpose="callback").startswith("नमस्ते Rahul जी! PouchWale से बोल रही हूँ।")
+    assert greeting_for(CFG, lead, purpose="callback").startswith("नमस्ते Rahul जी! Pouch Wale से बोल रही हूँ।")
     assert "आपने हमें call किया था" in greeting_for(CFG, lead, purpose="callback")
-    assert greeting_for(CFG, lead, direction="inbound") == "नमस्ते Rahul जी! PouchWale से बोल रही हूँ, बताइए?"
+    assert greeting_for(CFG, lead, direction="inbound") == "नमस्ते Rahul जी! Pouch Wale से बोल रही हूँ, बताइए?"
     assert "फिर बात करके" in greeting_for(CFG, lead, direction="inbound", returning=True)
-    assert greeting_for(CFG, None, direction="inbound") == "नमस्ते जी! PouchWale से बोल रही हूँ, बताइए?"
+    assert greeting_for(CFG, None, direction="inbound") == "नमस्ते जी! Pouch Wale से बोल रही हूँ, बताइए?"
     assert greeting_for(CFG, lead) == fill_template(CFG["opening_line"], CFG, lead)
 
 
@@ -461,7 +461,7 @@ def test_inbound_greeting_no_hello_wait(monkeypatch):
 
     async def scenario():
         cfg = _cfg(silence_timeout_sec=30)
-        text = "नमस्ते जी! PouchWale से बोल रही हूँ, बताइए?"
+        text = "नमस्ते जी! Pouch Wale से बोल रही हूँ, बताइए?"
         s1, t1 = await _session("+919400000201", cfg, ScriptedLLM([]), monkeypatch, greeting_text=text,
                                 greeting_pcm=greeting)
         inbound = await first_audio_delay(s1, t1)
@@ -477,12 +477,12 @@ def test_inbound_greeting_no_hello_wait(monkeypatch):
     assert inbound < 0.7, inbound            # inbound: greet almost at once (0.3 s window)
     assert outbound >= 0.85, outbound        # outbound unchanged: room for the customer's "Hello?"
     assert talking >= 0.6, talking           # ...but never over a caller who is already speaking
-    assert _agent_turns(s1.uuid)[0] == "नमस्ते जी! PouchWale से बोल रही हूँ, बताइए?"
+    assert _agent_turns(s1.uuid)[0] == "नमस्ते जी! Pouch Wale से बोल रही हूँ, बताइए?"
 
 
 def test_inbound_session_prompt_and_memory_reach_the_llm(monkeypatch):
     memory = "# What we already know about this customer\n- yesterday (Thu 13 Jun), they called us: Needs spout pouches."
-    greeting = "नमस्ते Rahul जी! PouchWale से बोल रही हूँ, आपसे फिर बात करके अच्छा लगा। बताइए?"
+    greeting = "नमस्ते Rahul जी! Pouch Wale से बोल रही हूँ, आपसे फिर बात करके अच्छा लगा। बताइए?"
 
     async def scenario():
         cfg = _cfg(silence_timeout_sec=30)
@@ -513,9 +513,9 @@ def test_inbound_session_prompt_and_memory_reach_the_llm(monkeypatch):
     assert llm.cache_keys[0] == s.cache_key == twin.cache_key
     assert len({s.cache_key, outbound.cache_key, callback.cache_key}) == 3
     # defensive defaults when no greeting is passed in
-    assert outbound.greeting_text.startswith("नमस्ते Rahul जी! मैं PouchWale से बोल रही हूँ।")
+    assert outbound.greeting_text.startswith("नमस्ते Rahul जी! मैं Pouch Wale से बोल रही हूँ।")
     assert "आपने हमें call किया था" in callback.greeting_text
-    assert twin.greeting_text == "नमस्ते Rahul जी! PouchWale से बोल रही हूँ, बताइए?"
+    assert twin.greeting_text == "नमस्ते Rahul जी! Pouch Wale से बोल रही हूँ, बताइए?"
 
 
 def test_inbound_max_length_uses_inbound_closing(monkeypatch):
@@ -531,9 +531,9 @@ def test_inbound_max_length_uses_inbound_closing(monkeypatch):
     s1, s2, elapsed = asyncio.run(scenario())
     assert s1.end_reason == s2.end_reason == "max_duration" and elapsed < 5
     inbound_closing = fill_template(DEFAULT_AGENT_SETTINGS["inbound_closing_line"], CFG, s1.lead)
-    assert _agent_turns(s1.uuid)[-1] == inbound_closing and "PouchWale को call करने के लिए thank you" in inbound_closing
+    assert _agent_turns(s1.uuid)[-1] == inbound_closing and "Pouch Wale को call करने के लिए thank you" in inbound_closing
     outbound_closing = fill_template(DEFAULT_AGENT_SETTINGS["closing_line"], CFG, s2.lead)
-    assert _agent_turns(s2.uuid)[-1] == outbound_closing and "PouchWale को ज़रूर याद कीजिए" in outbound_closing
+    assert _agent_turns(s2.uuid)[-1] == outbound_closing and "Pouch Wale को ज़रूर याद कीजिए" in outbound_closing
 
 
 def test_inbound_session_never_heard_is_failed(monkeypatch):

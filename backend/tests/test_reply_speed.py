@@ -255,7 +255,7 @@ def test_each_answered_turn_logs_where_its_silence_went(monkeypatch, caplog):
     assert len(lines) == 1
     line = lines[0]
     for part in ("speech end", "final", "reply start", "first word", "(request 1)", "words to voice", "first audio",
-                 "filler -"):
+                 "filler -", "early reply none (", "voice socket ready"):
         assert part in line, part
 
 

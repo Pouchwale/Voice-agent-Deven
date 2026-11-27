@@ -104,10 +104,11 @@ def customer_field(value: Any, kind: str, cfg: dict) -> str | None:
         s = _tidy_case(s)
     if not s or _plain(s) is None:
         return None
-    low = s.casefold()
-    company = (cfg.get("company_name") or "").strip().casefold()
-    agent = (cfg.get("agent_name") or "").strip().casefold()
-    # our side of the call, not the customer's ("PouchWale", "PouchWale Packaging", the agent's own name)
+    # compared without spaces or hyphens: our name is "Pouch Wale", written "PouchWale" too (2026-11-25)
+    low = re.sub(r"[\s_-]+", "", s.casefold())
+    company = re.sub(r"[\s_-]+", "", (cfg.get("company_name") or "").casefold())
+    agent = re.sub(r"[\s_-]+", "", (cfg.get("agent_name") or "").casefold())
+    # our side of the call, not the customer's ("PouchWale", "Pouch Wale Packaging", the agent's own name)
     if (agent and low == agent) or (company and (low == company or (len(company) >= 4 and company in low))):
         return None
     return s[:_FIELD_CAPS[kind]]
